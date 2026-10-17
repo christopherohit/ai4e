@@ -1,0 +1,106 @@
+---
+import { CATEGORY_LIST, SITE } from '../lib/site';
+---
+
+<footer class="site-footer">
+  <div class="container site-footer__grid">
+    <section aria-labelledby="footer-about">
+      <h2 id="footer-about" class="site-footer__title">Về {SITE.name}</h2>
+      <p class="site-footer__text">
+        {SITE.name} là blog tiếng Việt giúp bạn học trí tuệ nhân tạo bằng cách <strong>nhìn thấy</strong> mô hình hoạt
+        động: mỗi bài viết đi kèm một trực quan hóa tương tác để bạn tự tay khám phá.
+      </p>
+      <p class="site-footer__text"><a href="/gioi-thieu/">Tìm hiểu thêm về dự án →</a></p>
+    </section>
+
+    <nav aria-labelledby="footer-categories">
+      <h2 id="footer-categories" class="site-footer__title">Chuyên mục</h2>
+      <ul class="site-footer__list">
+        {
+          CATEGORY_LIST.map((c) => (
+            <li>
+              <a href={c.href}>{c.label}</a>
+            </li>
+          ))
+        }
+        <li><a href="/chu-de/">Tất cả chủ đề</a></li>
+        <li><a href="/tim-kiem/">Tìm kiếm</a></li>
+      </ul>
+    </nav>
+
+    <section aria-labelledby="footer-learning">
+      <h2 id="footer-learning" class="site-footer__title">Khám phá và thực hành</h2>
+      <p class="site-footer__text">
+        Bắt đầu từ các nguyên lý trong mục Kiến thức, rồi khám phá bài toán ứng dụng trong mục Dự án.
+      </p>
+      <p class="site-footer__text"><a href="/du-an/">Khám phá các dự án →</a></p>
+    </section>
+  </div>
+  <div class="container site-footer__bottom">
+    <p>© {SITE.year} {SITE.name}. Học AI bằng cách nhìn thấy nó hoạt động.</p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    margin-top: var(--space-16);
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-2);
+    font-size: var(--text-sm);
+  }
+
+  .site-footer__grid {
+    display: grid;
+    gap: var(--space-8);
+    grid-template-columns: 1fr;
+    padding-block: var(--space-12) var(--space-8);
+  }
+
+  @media (min-width: 768px) {
+    .site-footer__grid {
+      grid-template-columns: 1.4fr 1fr 1.4fr;
+      gap: var(--space-12);
+    }
+  }
+
+  .site-footer__title {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text);
+    margin-bottom: var(--space-3);
+  }
+
+  .site-footer__text + .site-footer__text {
+    margin-top: var(--space-3);
+  }
+
+  .site-footer__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .site-footer a {
+    color: var(--color-text-2);
+  }
+
+  .site-footer a:hover {
+    color: var(--color-link);
+  }
+
+  .site-footer__text a {
+    color: var(--color-link);
+  }
+
+  .site-footer__bottom {
+    padding-block: var(--space-5);
+    border-top: 1px solid var(--color-border);
+    color: var(--color-muted);
+    font-size: var(--text-xs);
+  }
+</style>

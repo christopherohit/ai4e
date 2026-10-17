@@ -1,0 +1,103 @@
+---
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const bulma = readFileSync(resolve('public/vendor/cnn/bulma.min.css'), 'utf8');
+const globalStyles = readFileSync(resolve('public/viz/cnn-explainer/global.css'), 'utf8')
+  .replace(':root', '#cnn-tool-root')
+  .replace('html, body', '#cnn-tool-root')
+  .replace('body {', '#cnn-tool-root {');
+const bundleStyles = readFileSync(resolve('public/viz/cnn-explainer/bundle.css'), 'utf8');
+const styles = `${globalStyles}\n@scope (#cnn-tool-root) { ${bulma}\n${bundleStyles} }`;
+---
+
+  <style is:inline set:html={styles} />
+  <section class="tool-workspace" aria-labelledby="cong-cu">
+    <header class="tool-heading">
+      <div class="tool-title">
+        <span class="tool-indicator" aria-hidden="true"></span>
+        <h2 id="cong-cu">Phòng khám phá CNN</h2>
+        <span class="tool-badge">Tương tác trực tiếp</span>
+      </div>
+      <p>Ảnh đầu vào → Các lớp xử lý → Kết quả dự đoán</p>
+    </header>
+    <p id="cnn-status" class="tool-status" role="status">Đang tải công cụ và mô hình CNN…</p>
+    <section id="cnn-tool-root" aria-label="Công cụ CNN Explainer, có thể cuộn ngang trên màn hình nhỏ" aria-busy="true" tabindex="0"></section>
+    <ol class="tool-steps" aria-label="Cách khám phá mô hình">
+      <li><span class="step-number">1</span><div><strong>Chọn một ảnh</strong><span>Đổi ảnh mẫu để xem mạng phản hồi.</span></div></li>
+      <li><span class="step-number">2</span><div><strong>Khám phá từng lớp</strong><span>Nhấp một ô để mở phép tính chi tiết.</span></div></li>
+      <li><span class="step-number">3</span><div><strong>Nối với kiến thức</strong><span>Nhấp tên lớp để đọc phần giải thích.</span></div></li>
+    </ol>
+  </section>
+  <script is:inline>
+    (async function () {
+      const status = document.getElementById('cnn-status');
+      const root = document.getElementById('cnn-tool-root');
+      function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = src;
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Không tải được ' + src));
+          document.head.appendChild(script);
+        });
+      }
+      try {
+        await Promise.all([
+          loadScript('/vendor/cnn/d3.v5.js'),
+          loadScript('/vendor/cnn/tf.min.js'),
+          loadScript('/vendor/cnn/smooth-scroll.min.js'),
+          loadScript('/vendor/cnn/fontawesome.js'),
+        ]);
+        await loadScript('/viz/cnn-explainer/bundle.js');
+        const observer = new MutationObserver(() => {
+          if (root.querySelector('#cnn-svg .node-group')) {
+            status.hidden = true;
+            root.setAttribute('aria-busy', 'false');
+            observer.disconnect();
+          }
+        });
+        observer.observe(root, { childList: true, subtree: true });
+        setTimeout(() => {
+          if (root.getAttribute('aria-busy') === 'true') {
+            status.textContent = 'Mô hình chưa tải xong. Kiểm tra kết nối mạng và tải lại trang để thử lại.';
+            observer.disconnect();
+          }
+        }, 60000);
+      } catch (error) {
+        status.textContent = 'Không tải được công cụ. Kiểm tra kết nối mạng và tải lại trang để thử lại.';
+        root.setAttribute('aria-busy', 'false');
+      }
+    })();
+  </script>
+<script>
+  import { localizeCnn } from './runtime/cnn-locale';
+  const root = document.getElementById('cnn-tool-root');
+  if (root) localizeCnn(root);
+</script>
+
+<style>
+  .tool-workspace { width: calc(100% - 32px); max-width: 1800px; margin-inline: auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 16px; box-shadow: 0 8px 28px rgb(15 23 42 / .04); overflow: hidden; }
+  .tool-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem 1.5rem; padding: 1.1rem 1.5rem; border-bottom: 1px solid var(--color-border); }
+  .tool-title { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; }
+  .tool-heading h2 { margin: 0; font-size: 1rem; font-weight: 650; scroll-margin-top: 100px; }
+  .tool-heading p { font-size: .75rem; color: var(--color-muted); }
+  .tool-indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary); box-shadow: 0 0 0 4px var(--color-primary-soft); }
+  .tool-badge { padding: .2rem .5rem; border-radius: 5px; font-size: .65rem; font-weight: 600; color: var(--color-primary-soft-text); background: var(--color-primary-soft); }
+  .tool-status { padding: 1rem 1.5rem; color: var(--color-muted); font-size: .875rem; }
+  .tool-credit { width: calc(100% - 64px); max-width: 1440px; margin-inline: auto; padding-top: .75rem; color: var(--color-muted); font-size: .75rem; text-align: right; }
+  #cnn-tool-root { color-scheme: light; color: #333; background: #fafafa; font-family: Arial, sans-serif; overflow-x: auto; min-height: 590px; }
+  #cnn-tool-root :global(.overview) { min-width: 1100px; }
+  #cnn-tool-root :global(#cnn-svg) { width: 100%; min-width: 1100px; height: 540px; min-height: 540px; max-height: 540px; }
+  #cnn-tool-root :global(.control-container) { padding: 12px 18px; background: #fff; border-bottom: 1px solid #edf0f4; min-height: 68px; }
+  #cnn-tool-root :global(.image-container) { width: 38px; height: 38px; margin-right: 8px; }
+  #cnn-tool-root :global(.right-control) { gap: 8px; }
+  #cnn-tool-root :global(#detailed-button) { margin-right: 0; }
+  .tool-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; padding: 1.1rem 1.5rem; margin: 0; list-style: none; border-top: 1px solid var(--color-border); background: var(--color-surface); }
+  .tool-steps li { display: flex; align-items: flex-start; gap: .7rem; }
+  .step-number { display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; background: var(--color-surface-2); color: var(--color-muted); font-size: .75rem; font-weight: 600; }
+  .tool-steps strong { display: block; font-size: .8rem; margin-bottom: .2rem; }
+  .tool-steps div > span { display: block; font-size: .75rem; color: var(--color-muted); }
+  @media (max-width: 720px) { .tool-heading { align-items: flex-start; flex-direction: column; } .tool-steps { grid-template-columns: 1fr; gap: .8rem; } }
+  @media (max-width: 600px) { .tool-workspace, .tool-credit { width: calc(100% - 32px); } .tool-heading, .tool-steps { padding: 1rem; } .tool-badge { display: none; } .tool-credit { text-align: left; } }
+</style>

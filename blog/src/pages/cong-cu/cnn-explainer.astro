@@ -1,0 +1,17 @@
+---
+import { getCollection, render } from 'astro:content';
+import InteractivePostLayout from '../../layouts/InteractivePostLayout.astro';
+import CnnTool from '../../integrations/CnnTool.astro';
+import { relatedPosts } from '../../lib/posts';
+
+const posts = await getCollection('posts');
+const post = posts.find((entry) => entry.id === 'cnn-explainer');
+if (!post) throw new Error('Không tìm thấy bài viết CNN Explainer.');
+const { Content, headings } = await render(post);
+const related = relatedPosts(post, posts);
+---
+
+<InteractivePostLayout post={post} headings={headings} related={related}>
+  <CnnTool slot="tool" />
+  <Content />
+</InteractivePostLayout>

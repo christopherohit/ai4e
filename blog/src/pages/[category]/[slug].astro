@@ -1,0 +1,31 @@
+---
+import { getCollection, render } from 'astro:content';
+import type { GetStaticPaths, InferGetStaticPropsType } from 'astro';
+import PostLayout from '../../layouts/PostLayout.astro';
+import InteractivePostLayout from '../../layouts/InteractivePostLayout.astro';
+import CnnTool from '../../integrations/CnnTool.astro';
+import ToolWorkspace from '../../integrations/ToolWorkspace.astro';
+import LocalTool from '../../integrations/LocalTool.astro';
+import { nativeTools } from '../../../../tools/native-tools.mjs';
+import { relatedPosts } from '../../lib/posts';
+
+export const getStaticPaths = (async () => {
+  const posts = await getCollection('posts');
+  return posts.map(post => ({
+    params: { category: post.data.category, slug: post.id },
+    props: { post, related: relatedPosts(post, posts) },
+  }));
+}) satisfies GetStaticPaths;
+type Props = InferGetStaticPropsType<typeof getStaticPaths>;
+const { post, related } = Astro.props;
+const { Content, headings } = await render(post);
+---
+
+{post.data.viz ? (
+  <InteractivePostLayout post={post} headings={headings} related={related}>
+    <Fragment slot="tool">
+      {post.data.viz === 'cnn-explainer' ? <CnnTool /> : Object.hasOwn(nativeTools, post.data.viz) ? <LocalTool slug={post.data.viz} /> : <ToolWorkspace post={post} />}
+    </Fragment>
+    <Content />
+  </InteractivePostLayout>
+) : <PostLayout post={post} headings={headings} related={related}><Content /></PostLayout>}

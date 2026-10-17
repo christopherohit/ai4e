@@ -1,0 +1,62 @@
+---
+/**
+ * The read → propose → check → commit path of SDVX Modeler: what the LLM may touch at each layer, and what decides.
+ * Pure HTML/CSS; follows the light/dark theme and stacks on phones.
+ */
+const layers = [
+  { tone: 'llm', title: 'LLM', role: 'Chỉ đọc và đề xuất', items: ['Không có quyền ghi file', 'Thấy tool dưới tên mcp__sdvx__*', 'Bị loop guard dừng khi lặp vô ích'] },
+  { tone: 'read', title: 'AAL', role: 'Đọc có ngân sách', items: ['Mô hình ngữ nghĩa gắn revision SHA-256', '14 vai trò file theo nội dung', 'project_facts ≤ 3.000 ký tự'] },
+  { tone: 'def', title: 'BSWMD + invariant', role: 'Biết điều gì hợp lệ', items: ['9 loại tham số, 6 loại tham chiếu', '3 mức thẩm quyền định nghĩa', '8 họ invariant học từ baseline'] },
+  { tone: 'tx', title: 'Transaction', role: 'Dựng thay đổi trong overlay', items: ['Clone từ analog đã xác nhận', 'Closure + effect contract', 'ChangeSet DAG, preflight'] },
+  { tone: 'gate', title: '13 tầng kiểm tra', role: 'Quyết định có ghi hay không', items: ['XSD, tham chiếu, ECUC, invariant', 'Vi sai với baseline bẩn', 'Churn: giữ nguyên dialect'] },
+  { tone: 'disk', title: 'Journal → đĩa', role: 'Ghi đúng một lần', items: ['Lease trên revision', 'File tạm + rename', 'Baseline để diff và hoàn tác'] },
+];
+---
+<figure class="sl" aria-labelledby="sl-caption">
+  <ol class="sl-row">
+    {layers.map((layer, index) => (
+      <li class={`sl-card ${layer.tone}`}>
+        <span class="sl-step">{index + 1}</span>
+        <b>{layer.title}</b>
+        <span class="sl-role">{layer.role}</span>
+        <ul>{layer.items.map(item => <li>{item}</li>)}</ul>
+      </li>
+    ))}
+  </ol>
+  <div class="sl-bands" aria-hidden="true">
+    <span class="sl-band prob">xác suất: model đề xuất</span>
+    <span class="sl-band det">tất định: mã kiểm tra và quyết định</span>
+  </div>
+  <figcaption id="sl-caption">Từ yêu cầu đến đĩa. Chỉ bước 1 là xác suất; từ bước 2 trở đi mọi quyết định do mã tất định đưa ra và có thể kiểm chứng lại.</figcaption>
+</figure>
+
+<style>
+  .sl { --c-llm: #eb6834; --c-read: #2a78d6; --c-def: #7a5bd6; --c-tx: #0f8fa6; --c-gate: #c4304a; --c-disk: #1baf7a; margin: 2rem 0; padding: clamp(1rem, 3vw, 1.5rem); border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-surface); }
+  :global(:root[data-theme='dark']) .sl { --c-llm: #e07a4f; --c-read: #4b93e8; --c-def: #9a80ea; --c-tx: #34a9bd; --c-gate: #e0566c; --c-disk: #2cbf8a; }
+  @media (prefers-color-scheme: dark) { :global(:root:not([data-theme='light'])) .sl { --c-llm: #e07a4f; --c-read: #4b93e8; --c-def: #9a80ea; --c-tx: #34a9bd; --c-gate: #e0566c; --c-disk: #2cbf8a; } }
+  .sl .sl-row { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .6rem; }
+  .sl .sl-card { --c: var(--c-read); position: relative; margin: 0; display: grid; align-content: start; gap: .3rem; padding: .8rem .75rem .9rem; border-radius: var(--radius-lg); border-top: 4px solid var(--c); background: color-mix(in oklab, var(--c) 8%, var(--color-surface)); }
+  .sl .sl-card:not(:last-child)::after { content: '→'; position: absolute; right: -.5rem; top: 1.1rem; transform: translateX(50%); color: var(--color-muted); font-size: 13px; z-index: 1; }
+  .sl .llm { --c: var(--c-llm); } .sl .read { --c: var(--c-read); } .sl .def { --c: var(--c-def); } .sl .tx { --c: var(--c-tx); } .sl .gate { --c: var(--c-gate); } .sl .disk { --c: var(--c-disk); }
+  .sl .sl-step { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--c); color: #fff; font: 700 11px var(--font-mono); }
+  .sl b { font-size: var(--text-sm); color: var(--color-text); line-height: 1.25; }
+  .sl .sl-role { font-size: var(--text-xs); color: var(--color-text-2); font-weight: 600; }
+  .sl .sl-card ul { list-style: none; margin: .2rem 0 0; padding: 0; display: grid; gap: .25rem; }
+  .sl .sl-card ul li { margin: 0; padding-left: .7rem; position: relative; font-size: 11.5px; line-height: 1.4; color: var(--color-text-2); }
+  .sl .sl-card ul li::before { content: ''; position: absolute; left: 0; top: .5em; width: 4px; height: 4px; border-radius: 50%; background: var(--c); }
+  .sl-bands { display: grid; grid-template-columns: 1fr 5fr; gap: .6rem; margin-top: .6rem; }
+  .sl-band { padding: .3rem .6rem; border-radius: var(--radius-sm); font: 600 11px var(--font-sans); text-align: center; }
+  .sl-band { display: grid; place-items: center; line-height: 1.3; }
+  .sl-band.prob { background: color-mix(in oklab, var(--c-llm) 16%, transparent); color: var(--color-text); }
+  .sl-band.det { background: var(--color-surface-2); color: var(--color-text-2); }
+  .sl figcaption { margin-top: 1rem; color: var(--color-text-2); font-size: .85rem; line-height: 1.6; text-align: center; }
+  @media (max-width: 960px) {
+    .sl .sl-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .sl .sl-card:nth-child(3)::after { display: none; }
+    .sl-bands { display: none; }
+  }
+  @media (max-width: 560px) {
+    .sl .sl-row { grid-template-columns: 1fr; }
+    .sl .sl-card::after { display: none; }
+  }
+</style>

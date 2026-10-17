@@ -1,0 +1,87 @@
+---
+/** Breadcrumb trail. Last item is the current page (no link). Emits BreadcrumbList JSON-LD. */
+import Icon from './Icon.astro';
+
+export interface Crumb {
+  label: string;
+  href?: string;
+}
+
+interface Props {
+  items: Crumb[];
+}
+
+const { items } = Astro.props;
+const site = Astro.site ?? Astro.url;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: items.map((item, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: item.label,
+    ...(item.href ? { item: new URL(item.href, site).href } : {}),
+  })),
+};
+---
+
+<nav class="breadcrumb" aria-label="Đường dẫn">
+  <ol>
+    {
+      items.map((item, i) => {
+        const last = i === items.length - 1;
+        return (
+          <li>
+            {i > 0 && <Icon name="chevron-right" size={14} class="breadcrumb__sep" />}
+            {last || !item.href ? (
+              <span aria-current={last ? 'page' : undefined}>{item.label}</span>
+            ) : (
+              <a href={item.href}>{item.label}</a>
+            )}
+          </li>
+        );
+      })
+    }
+  </ol>
+</nav>
+<script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+<style>
+  .breadcrumb ol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .breadcrumb li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+  .breadcrumb a {
+    color: var(--color-text-2);
+  }
+  .breadcrumb a:hover {
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .breadcrumb [aria-current='page'] {
+    color: var(--color-text);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 60vw;
+  }
+  .breadcrumb :global(.breadcrumb__sep) {
+    opacity: 0.6;
+    flex: none;
+  }
+</style>

@@ -1,0 +1,360 @@
+---
+title: 'SDVX Modeler: Agent cấu hình AUTOSAR chỉ được ghi qua 13 tầng kiểm tra'
+description: 'Bên trong một agent ARXML: lớp trừu tượng AAL, ràng buộc BSWMD, invariant khai thác từ baseline, 13 tầng validation, cô lập đa dự án ở mức kernel và telemetry đo thật.'
+category: du-an
+topic: agent-ky-thuat
+order: 7
+tags: ['AI agent', 'LLM', 'MCP', 'AUTOSAR', 'An toàn AI']
+viz: sdvx-modeler
+cover: ../../../../assets/covers/sdvx-modeler.svg
+date: 2026-10-11
+---
+
+import { Image } from 'astro:assets';
+import Callout from '../../../../components/Callout.astro';
+import SdvxArchitecture from '../../../../components/SdvxArchitecture.astro';
+import SdvxLayers from '../../../../components/SdvxLayers.astro';
+import ShotPreflight from '../../../../assets/figures/sdvx/preflight-tool-call.webp';
+import ShotTrajectory from '../../../../assets/figures/sdvx/trajectory-commit.webp';
+import ShotDiff from '../../../../assets/figures/sdvx/diff-baseline-revert.webp';
+import ShotManage from '../../../../assets/figures/sdvx/project-manage.webp';
+import ShotSummary from '../../../../assets/figures/sdvx/commit-summary.webp';
+
+## SDVX là gì? Hãy hình dung một trợ lý sửa hồ sơ xe
+
+Hãy tưởng tượng bạn có một bộ hồ sơ xe rất lớn. Bạn nói: **“Thêm mã chẩn đoán `0xF1A0`, đặt tên `DID_REPAIR_DATE`, làm giống mã ngày sửa chữa đang có, xem trước rồi mới áp dụng.”** Một trợ lý thông thường có thể mở vài file XML, sửa theo mẫu rồi lưu lại. Với AUTOSAR, cách đó dễ bỏ sót liên kết và làm hỏng những phần tưởng như không liên quan.
+
+**SDVX Modeler** là trợ lý có phanh an toàn. Nó cho kỹ sư nói bằng ngôn ngữ tự nhiên, nhưng agent chỉ được đọc qua mô hình ngữ nghĩa, đề xuất thay đổi bằng tool có kiểu, rồi chờ một chuỗi kiểm tra trước khi ghi. LLM không có quyền tự ghi file.
+
+### Bốn vai trò trong một lượt làm việc
+
+```text
+Người dùng  ->  Agent  ->  Codeguard  ->  File ARXML
+     ^            |          |              |
+     |            +-- hỏi --+              |
+     +------ xem plan / receipt <-----------+
+```
+
+- **Người dùng** nêu ý định, chọn phương án khi có điểm chưa rõ và duyệt bản xem trước.
+- **Agent** đọc dữ kiện, tìm phần tử tương tự, tạo kế hoạch và giải thích kết quả. Agent không chạm đĩa.
+- **Codeguard** là lớp kiểm soát: kiểm tra quyền, ràng buộc, liên kết, diff và transaction.
+- **File ARXML** là dữ liệu cuối cùng. Chỉ Codeguard mới được ghi, sau khi mọi kiểm tra cần thiết đã đạt.
+
+### Flow bảy bước: từ câu hỏi đến receipt
+
+1. **Nhận yêu cầu và khoanh vùng.** Hệ thống gắn account, workspace, project và revision hiện tại.
+2. **Đọc có cấu trúc.** Agent dùng AAL để xem container, topology và các ví dụ tương tự; không grep XML thô.
+3. **Tìm điểm thiếu và hỏi lại.** Nếu yêu cầu nói “làm giống mẫu” nhưng mẫu không có backend NvM, agent phải hỏi chọn phương án.
+4. **Dựng preflight.** Codeguard tạo một overlay chỉ đọc: danh sách file dự kiến đổi, closure bắt buộc và effect contract.
+5. **Chạy các kiểm tra.** ChangeSet được kiểm tra theo thứ tự; lỗi nào cũng dừng trước khi có ghi đĩa.
+6. **Commit nguyên tử.** Sau khi người dùng duyệt, transaction lấy lease revision, ghi journal rồi đổi file bằng `rename` an toàn.
+7. **Trả receipt và xác minh.** Receipt chứa hash, file đổi, các stage và trạng thái. Agent đọc lại receipt, transaction và topology rồi mới tóm tắt.
+
+Một receipt có thể cho ba trạng thái độc lập: `COMMITTED` (đã ghi), `VERIFIED` (hash và topology khớp) và `CLEAN` (journal đã đóng). Vì vậy giao diện không phải tin vào một câu trả lời tự tin của model.
+
+## Những từ viết tắt cần biết
+
+- **AAL (ARXML Abstraction Layer)** là “mục lục có nghĩa” của workspace. Thay vì đưa cả XML vào prompt, AAL trả lời như “DID này nằm ở file nào, nối với port nào” và luôn kèm revision.
+- **BSWMD** là tài liệu hợp đồng của module phần mềm nền (Basic Software). Nó nói container nào được phép có, kiểu và giới hạn của từng tham số, cũng như tham chiếu phải trỏ tới đâu. Xem thêm bài [BSWMD: luồng từ định nghĩa đến validation](/du-an/bswmd/).
+- **ECUC** là phần cấu hình các module nền như Dcm, Dem, NvM, Rte. Có thể hiểu đây là bảng cài đặt mà BSWMD mô tả luật chơi.
+- **ARXML** là định dạng XML chuẩn của AUTOSAR. File chứa cây container, tham số và liên kết giữa các module; sửa một nút thường kéo theo nhiều nút liên quan.
+- **Transaction** là một lượt thay đổi “tất cả hoặc không gì cả”. Nếu một kiểm tra thất bại, file trở về nguyên trạng.
+- **DID** là mã định danh dữ liệu chẩn đoán, ví dụ mã đọc ngày sửa chữa xe.
+- **MCP** là giao thức để agent gọi các tool có kiểm soát.
+- **LLM** là mô hình ngôn ngữ tạo kế hoạch và lời gọi tool; nó không có quyền ghi file.
+- **Baseline** là ảnh chụp project trước khi thay đổi, dùng để biết chính xác điều gì mới bị sửa.
+- **Closure** là toàn bộ nhóm phần tử phải đi cùng một thay đổi để cấu hình không bị thiếu mảnh.
+- **Effect contract** là lời cam kết trước về file, phần tử và vai trò được phép thay đổi.
+
+## Một lượt thật trong app: thêm một DID
+
+Các ảnh dưới đây chụp từ bản triển khai nội bộ, trên một **project tổng hợp** lấy từ bộ fixture kiểm thử của dự án (5 file ARXML, UUID và tên DID là dữ liệu giả, không phải dữ liệu khách hàng). Kỹ sư gõ: *“Add DID 0xF1A0 named DID_REPAIR_DATE as an NvM-backed diagnostic DID, configured like DID_VEHICLE_ID. Preview the change first, then apply it.”*
+
+Agent mở đầu bằng các tool đọc của AAL (`read_container`, `query_workspace`, `describe_diag_operation`), rồi gọi `preflight_diag_change`. Kết quả preflight có `"read_only": true`, `"mutation_authorized": false` và gắn với `workspace_revision`: xem trước không bao giờ ghi.
+
+<figure class="article-diagram">
+  <a href={ShotPreflight.src} target="_blank" rel="noopener" aria-label="Mở ảnh ở kích thước đầy đủ">
+    <Image src={ShotPreflight} alt="Giao diện SDVX Modeler: danh sách tool call mcp__sdvx__*, lời gọi preflight_diag_change mở rộng với đầu vào add_did và đầu ra diag-preflight.v1." widths={[640, 960, 1400]} sizes="(min-width: 1024px) 900px, 100vw" loading="lazy" />
+  </a>
+  <figcaption>Preflight trả <code>diag-preflight.v1</code>: trạng thái READY, không có lý do chặn, chỉ đọc, gắn revision của workspace. Bên phải là cây file của project và danh sách “Changed in this chat”.</figcaption>
+</figure>
+
+Có hai chi tiết đáng chú ý ngay trong lượt này. Agent thử `grep` trên file ARXML và bị từ chối: *“ARXML content is unavailable through built-in file tools. Use mcp__sdvx__read_container…”*. Rồi nó phát hiện điều mà yêu cầu không biết: DID mẫu `DID_VEHICLE_ID` **không** được lưu bằng NvM, và project chưa có block NvM nào. Thay vì tự quyết, agent dừng lại hỏi kỹ sư chọn giữa “giữ cấu trúc như DID mẫu” và “thêm cả backend NvM”. Kỹ sư chọn phương án đầu.
+
+<figure class="article-diagram">
+  <a href={ShotTrajectory.src} target="_blank" rel="noopener" aria-label="Mở ảnh ở kích thước đầy đủ">
+    <Image src={ShotTrajectory} alt="Tab Trajectory của SDVX Modeler: dải thời gian lời gọi model và tool, chuỗi preflight, ask_user_question, commit_diag_change trả COMMITTED, inspect_diag_change_receipt trả VERIFIED, inspect_diag_transaction_status trả CLEAN." widths={[640, 960, 1400]} sizes="(min-width: 1024px) 900px, 100vw" loading="lazy" />
+  </a>
+  <figcaption>Tab Trajectory: sau câu trả lời của kỹ sư, <code>commit_diag_change</code> trả <code>COMMITTED</code>; agent đọc lại receipt (<code>VERIFIED</code>), trạng thái transaction (<code>CLEAN</code>) và topology của DID mới để tự kiểm chứng.</figcaption>
+</figure>
+
+Toàn bộ lượt gồm 26 bước, khoảng 2 phút thời gian LLM, 719K token đầu vào với 90% cache hit. Transaction sửa ba file và tạo chín đối tượng ARXML theo đúng closure: DID, dữ liệu, DidInfo, DataInfo, signal, ánh xạ Rte, runnable, provided port và event.
+
+<figure class="article-diagram">
+  <a href={ShotSummary.src} target="_blank" rel="noopener" aria-label="Mở ảnh ở kích thước đầy đủ">
+    <Image src={ShotSummary} alt="Câu trả lời cuối của agent liệt kê các đối tượng ARXML đã tạo và các file đã sửa; khung Changed in this chat bên phải hiện App.arxml, Dcm.arxml, Rte.arxml." widths={[640, 960, 1400]} sizes="(min-width: 1024px) 900px, 100vw" loading="lazy" />
+  </a>
+  <figcaption>Tóm tắt cuối lượt. Agent còn nhắc rằng DaVinci phải regenerate phần SWC: hệ thống không chạm vào file sinh tự động.</figcaption>
+</figure>
+
+Mỗi file đã đổi mở được thành diff so với baseline lúc upload. Kỹ sư có thể hoàn tác cả file hoặc từng hunk; mỗi yêu cầu hoàn tác mang theo hash của file, nên nếu file đã đổi trong lúc đó, server trả 409 thay vì ghi đè.
+
+<figure class="article-diagram">
+  <a href={ShotDiff.src} target="_blank" rel="noopener" aria-label="Mở ảnh ở kích thước đầy đủ">
+    <Image src={ShotDiff} alt="Hộp thoại xem file Config/ECUC/Dcm.arxml ở chế độ Diff, so baseline với hiện tại, có nút Revert file và Revert từng hunk; các dòng thêm hiển thị container DID_REPAIR_DATE." widths={[640, 960, 1400]} sizes="(min-width: 1024px) 900px, 100vw" loading="lazy" />
+  </a>
+  <figcaption>Diff của <code>Dcm.arxml</code>: một khối thêm mới, các dòng xung quanh giữ nguyên từng byte, kể cả indent và UUID của phần tử cũ.</figcaption>
+</figure>
+
+Ở mức workspace, **Project Manage** tổng hợp thay đổi so với baseline, token, số tool call và lịch sử sửa theo từng lượt, lấy từ dữ liệu telemetry mô tả ở phần 7.
+
+<figure class="article-diagram">
+  <a href={ShotManage.src} target="_blank" rel="noopener" aria-label="Mở ảnh ở kích thước đầy đủ">
+    <Image src={ShotManage} alt="Bảng Project Manage của workspace blog-demo: 1 project 5 file, 3 file thay đổi so với baseline, 723,6K token với 649,2K token cache, 25 tool call, biểu đồ token 14 ngày và vòng tròn tỉ lệ thay đổi." widths={[640, 960, 1400]} sizes="(min-width: 1024px) 900px, 100vw" loading="lazy" />
+  </a>
+  <figcaption>Project Manage cho workspace demo: 3 file đổi so với baseline, 723,6K token (649,2K từ cache), 25 tool call trong một lượt.</figcaption>
+</figure>
+
+### Flow end-to-end: từ câu hỏi đến receipt
+
+Một lượt SDVX không phải là chuỗi lệnh đọc rồi ghi nối tiếp. Nó là một giao thức có trạng thái, trong đó mỗi bước mang theo revision và bằng chứng của bước trước. Sơ đồ dưới đây là đường đi tối thiểu của yêu cầu DID trong lab; mũi tên quay lại chỉ xuất hiện khi agent nhận được câu hỏi cần kỹ sư trả lời.
+
+```text
+request (ý định tự nhiên)
+  |
+  v
+scope MCP {account, workspace, project, revision}
+  |
+  v
+AAL read: project_facts -> read_container -> query_workspace
+  |
+  v
+analyze_diag_requirements + analog/closure discovery
+  |\
+  | `-- NEEDS_INPUT -> ask_user_question -> cập nhật effect contract
+  v
+preflight_diag_change (overlay, read_only=true)
+  |
+  v
+ChangeSet DAG -> semantic diff -> 13 validation stages
+  |                         |
+  | FAIL/DEGRADED/SKIPPED    | PASS (hoặc SKIPPED theo policy)
+  v                         v
+typed refusal + repair   journal + atomic rename
+                              |
+                              v
+                    receipt (COMMITTED, hashes, stages)
+                              |
+                 inspect receipt + transaction status
+                              |
+                              v
+                       agent trả summary
+```
+
+`preflight_diag_change` chỉ dựng overlay. Bản thân lời gọi không cấp quyền ghi và không tạo receipt `COMMITTED`; nó trả plan, `workspace_revision`, danh sách file dự kiến đổi, closure bắt buộc và effect contract để người dùng duyệt. Chỉ `commit_diag_change` mới lấy lease revision, kiểm tra lại quyền ghi, chạy DAG và journal. Nếu một stage thất bại, transaction trả mã có kiểu, checkpoint dừng và không có file nào được thay.
+
+Receipt là bằng chứng máy đọc được, không phải log tự do. Một receipt tối thiểu gồm `transaction_id`, `workspace_revision_before/after`, `changeset_hash`, `changed_files[]` (đường dẫn, vai trò, hash trước/sau, byte delta), `created_nodes[]`, `closure_roles`, `stages[]` (outcome, code, duration), `journal_entry`, và `toolchain_status`. Vì vậy UI có thể hiển thị `COMMITTED`, `VERIFIED`, `CLEAN` một cách độc lập: đọc lại receipt kiểm tra hash; truy vấn transaction kiểm tra journal đã đóng; đọc AAL kiểm tra topology sau commit. Ba kiểm tra này không suy ra nhau.
+
+Trong trường hợp retry, `transaction_id` và `changeset_hash` là idempotency key. Cùng một ChangeSet trên cùng revision trả `NO_OP` nếu hash file đã đúng; khác revision trả lỗi xung đột để agent phải đọc lại AAL. Với revert, server yêu cầu `expected_file_hash`; hash không khớp trả `409` thay vì ghi đè thay đổi của người khác.
+
+<Callout type="note">
+
+Lab tương tác bên dưới mô phỏng chính hợp đồng này: từng đề xuất chạy qua các stage theo thứ tự trong `tools/du-an/sdvx-modeler/model.ts`. Nó không giả vờ chạy parser ARXML; mục tiêu là làm rõ điểm dừng, mã từ chối và phần còn lại của pipeline ở trạng thái `NOT_RUN`.
+
+</Callout>
+
+## Kỹ thuật nâng cao: project thật bẩn hơn mọi giả định
+
+<SdvxArchitecture />
+
+<SdvxLayers />
+
+Trước khi thiết kế, nhóm đo một project MICROSAR tham chiếu (*reality binding*, tài liệu 20 trong bộ thiết kế). Những con số này quyết định gần như mọi lựa chọn phía sau:
+
+| Đo được | Hệ quả thiết kế |
+| --- | --- |
+| 107 file `.arxml`, 14 MB, ~10.500 AR path, **37.622 tham chiếu** | Không thể để model đọc file thô; cần một lớp chỉ mục |
+| **788 AR path được định nghĩa hai lần** | Bộ giải tham chiếu phải trả `AMBIGUOUS_MULTIPLE_TARGETS`, không được chọn bừa |
+| 8 vai trò file khác nhau; 10/21 tên file mà wiki cũ khẳng định **không tồn tại** | Vai trò file phải nhận diện theo **nội dung**, không theo tên |
+| 3 gốc định nghĩa (`/MICROSAR` 22.422 ref, `/bplus` 777, `/AUTOSAR/EcucDefs` 34), **không cái nào đi kèm project** | Phải biết mình đang kiểm tra với định nghĩa thật hay chỉ với quan sát |
+| **6 dialect serializer** (83/19/2/1/1/1 file) | Không được chuẩn hóa khi ghi; sửa theo byte offset |
+| Baseline đã có **253 tham chiếu treo, 294 UUID trùng**, 9 lỗi miền | Kiểm tra phải là **vi sai**: chỉ chặn lỗi mới phát sinh |
+| Closure của một DID: 6 nút trong 1 file theo tham chiếu, nhưng thực tế liên quan **7 file** | Closure không suy được chỉ từ REF; cần hiểu quy ước nhà cung cấp |
+
+Điểm cuối cùng là lý do một agent "đọc XML rồi sửa" thất bại: phần lớn liên kết trong closure của DID không phải tham chiếu tường minh mà là quy ước đặt tên và cấu trúc. Một agent chỉ theo REF sẽ không bao giờ thấy nó bỏ sót điều gì.
+
+## 2. AAL: agent không đọc XML
+
+Mọi tool đọc của agent truy vấn **AAL** (*ARXML Abstraction Layer*): một mô hình ngữ nghĩa thường trú, gắn với **revision** của workspace (SHA-256 trên đường dẫn và nội dung mọi file ARXML). Mọi câu trả lời đều mang `workspace_revision`, nên một transaction biết chắc nó được lập kế hoạch trên đúng trạng thái nào.
+
+**Vai trò file theo nội dung.** `discovery.py` phân loại từng file qua một chuỗi ưu tiên: lỗi parse → bản sao lưu → output sinh tự động (`DaVinci_Project`) → export song song (`InitialEcuC`) → internal behavior của BSW (`*_ib_bswmd`) → SWC sinh tự động → ECUC đang dùng → định nghĩa ECUC → mô tả BSW → import hệ thống → workspace developer. Có 14 vai trò, mỗi vai trò kèm lý do, độ tin cậy (1,0 hoặc 0,95) và mức quyền ghi: `WRITABLE`, `POLICY_GATED` hoặc `READ_ONLY`. Nếu phát hiện một bản sao workspace lồng bên trong trùng từ 80% đường dẫn trở lên, hệ thống từ chối ghi (`MIRRORED_WORKSPACE_AMBIGUOUS`).
+
+**Tool đọc có ngân sách.** `project_facts` trả bản đồ module→file, profile DIAG (suy ra từ các leaf quan sát được), đơn vị kích thước, các mức session/security, histogram vai trò file, tất cả trong **3.000 ký tự**. `read_container` giới hạn 8.000 ký tự. `pattern_inventory` gom kết quả regex thành histogram giá trị với tối đa 3 ví dụ `file:line` mỗi giá trị, và **từ chối chạy trên file `.arxml` thô**: dữ kiện ARXML phải đến từ AAL. Inventory lớn hơn ngưỡng được cất thành một tham chiếu có thể đọc từng phần, thay vì đổ hết vào context.
+
+Lý do của các ngân sách này nằm ở telemetry (phần 7): **94,6% token là prompt**. Agent chủ yếu trả tiền cho việc đọc.
+
+**Phân tích coverage tất định.** `analyze_diag_requirements` nhận danh sách yêu cầu có cấu trúc (DID, DTC, service, routine) và phân loại từng mục `COVERED` / `DEVIATION` / `MISSING` / `AMBIGUOUS`, kèm khả năng thực hiện (`IMPLEMENTABLE` / `NEEDS_INPUT` / `NOT_SUPPORTED`), leaf bắt buộc còn thiếu theo BSWMD, và transaction nên gọi tiếp. Phần trăm coverage theo từng loại được **tính**, không phải LLM ước lượng. Một thuộc tính không kiểm chứng được thì không bị tính là sai lệch.
+
+## 3. BSWMD: ràng buộc đến từ nhà cung cấp, không từ trí nhớ của model
+
+Mỗi module BSW đi kèm một **BSWMD** (Basic Software Module Description) chứa định nghĩa ECUC: container nào được có, tham số nào, kiểu gì, MIN/MAX, literal, multiplicity, tham chiếu được trỏ tới loại nào. Đây là "hợp đồng" của module, và nó khác nhau giữa các nhà cung cấp.
+
+**Parser.** `conformance/definitions.py` đọc mọi file chứa `ECUC-MODULE-DEF`, dựng cây container và leaf cho **9 loại tham số** (integer, float, boolean, enumeration, string, multiline, linker-symbol, function-name, add-info) và **6 loại tham chiếu** (reference, choice, symbolic-name, foreign, instance, URI). Đây là phần được giải thích riêng trong bài [BSWMD: luồng từ định nghĩa đến validation](/du-an/bswmd/). Mỗi leaf giữ multiplicity dưới và trên, MIN/MAX/DEFAULT, literal, độ dài, regex, `DESTINATION-REF`, `REQUIRES-INDEX`, và config class theo từng variant. Facet phụ thuộc variant chỉ được áp khi điều kiện `SW-SYSCOND` là hằng đúng; nếu các facet mâu thuẫn, chúng được ghi lại là xung đột, không đoán.
+
+**Module nhà cung cấp.** `REFINED-MODULE-DEF-REF` cho biết module MICROSAR nào tinh chỉnh module chuẩn AUTOSAR nào. Một đích `/AUTOSAR/EcucDefs/...` chỉ được chấp nhận khi module khai báo đúng refinement đó và phần đường dẫn tương đối trùng khớp. Nếu nhiều file cùng định nghĩa một module, tất cả được giữ lại trong danh sách xung đột. Chú thích trong mã nói thẳng: *"chọn lặng lẽ giữa các file nhà cung cấp mâu thuẫn chính là loại lỗi mà package này tồn tại để phơi bày"*.
+
+**Ba mức thẩm quyền.** Mô hình định nghĩa được băm thành một revision và luôn báo rõ nó dựa trên gì:
+
+| Mức | Nghĩa |
+| --- | --- |
+| `SUPPLIED_ECUC_DEFINITIONS` | BSWMD do người dùng cung cấp |
+| `WORKSPACE_ECUC_DEFINITIONS` | Định nghĩa tìm thấy trong chính workspace |
+| `OBSERVED_CONGRUENCE` | Không có định nghĩa; chỉ suy từ các giá trị anh em quan sát được |
+
+Khi không có BSWMD cho một module, `validate_value` trả về *"chưa kiểm tra"* thay vì *"hợp lệ"*, và tầng `ECUC_CONSTRAINT` báo `DEGRADED`, không bao giờ `PASS`. Tool `ecuc_guidance` còn chèn thêm lời nhắc cho model: *"Chưa nạp BSWMD cho module này… đừng giả định ràng buộc của nhà cung cấp."*
+
+**Khai thác phần văn của BSWMD.** Phần mô tả (`DESC`) trong BSWMD chứa ràng buộc mà schema không biểu diễn được. `prose_relations.py` dùng mẫu câu như *"shall be a multiple of X"* để rút ra quan hệ `multiple_of` / `max` / `equal` giữa các leaf. `ownership.py` đánh dấu leaf có câu *"calculated by the tool"* là do công cụ sở hữu, agent không được tự đặt. Câu *"value shall be unique"* trở thành bằng chứng rằng leaf đó là định danh.
+
+**Một ràng buộc thay đổi hành vi agent thế nào.** Giả sử BSWMD nói `DcmDspSecurityLevel` là `ECUC-INTEGER-PARAM-DEF`, MIN 1, MAX 63, multiplicity trên 1. Agent gọi `configure_ecuc_container(action="add", value=0x41)`:
+
+1. Tham số đã có và chỉ được có một, nên lời gọi bị từ chối với `ECUC_EDIT_LEAF_ALREADY_PRESENT`, kèm một `corrected_call` đổi action sang `set`. Gợi ý này **không tự áp dụng**; agent phải chủ động gọi lại.
+2. Với `set`, `validate_value` trả *"65 is above MAX 63"* → `INVALID_VALUE`.
+3. Nếu đích của một tham chiếu không thỏa `DESTINATION-REF` → `REFERENCE_DESTINATION_MISMATCH`. Nếu hai file nhà cung cấp cùng định nghĩa module → `ECUC_EDIT_DEFINITION_AMBIGUOUS`. Nếu module nằm ngoài tập được phép sửa (Dcm, Dem, FiM, Det, NvM, Fee, MemIf, Rte) → `ECUC_EDIT_MODULE_NOT_ENABLED`.
+
+Mỗi lời từ chối là một mã có kiểu kèm sửa chữa có cấu trúc, không phải một câu tiếng Anh để model tự diễn giải.
+
+## 4. Conformance và invariant: học quy luật từ chính project
+
+Ngoài định nghĩa, project có những quy luật riêng: các NvM block id tăng đều, mỗi DID có đúng một ánh xạ Rte, các chu kỳ cùng đơn vị không vượt một ngưỡng… Không BSWMD nào ghi chúng. `invariants.py` khai thác **8 họ invariant** từ project: `UNIQUE`, `PROGRESSION`, `GROUPED_PROGRESSION`, `REFERENCE_COVERAGE`, `LEAF_IMPLICATION`, `SIBLING_CONGRUENCE`, `CYCLE_BOUND`, `LINKED_VALUES`.
+
+Hai quyết định làm cho cơ chế này đáng tin:
+
+- **Chỉ khai thác từ baseline.** Invariant không bao giờ được học từ trạng thái sau thay đổi, nên *một transaction không thể tự hợp thức hóa lỗi của chính nó*.
+- **Chỉ chặn khi đủ bằng chứng.** Một invariant chỉ chặn khi có ít nhất 3 lần ủng hộ (5 với `PROGRESSION`), **không có phản ví dụ nào**, và được định nghĩa xác định kiểu (ví dụ một định danh `INTEGER`, hay ngưỡng chu kỳ `FLOAT` cùng đơn vị). Thiếu một điều kiện, nó chỉ là cảnh báo.
+
+Kết quả được so **vi sai** với baseline: một vi phạm có sẵn không chặn một thay đổi không liên quan, nhưng một vi phạm *tệ hơn đo được* thì chặn. Với một baseline đã có 253 tham chiếu treo, đây là khác biệt giữa một công cụ dùng được và một công cụ báo đỏ mọi lúc.
+
+Lớp này còn có một **rule engine DCM/DEM** khoảng 11.000 dòng với 91 luật (74 ở mức ERROR). Mỗi luật mang `first_release` / `last_release`; trình chạy lọc theo phiên bản AUTOSAR mà project khai báo *trước khi* chạy, vì 14 luật ERROR mô tả tham số không tồn tại ở phiên bản của project tham chiếu. Quy ước đặt tên được đếm từ các DID có sẵn, không hard-code.
+
+## 5. Transaction: overlay, closure, effect contract, 13 tầng kiểm tra
+
+**Tool theo ý định.** Codeguard có khoảng 34 loại yêu cầu DIAG có kiểu: thêm/xóa/đổi tên DID, thêm DTC và họ sự kiện DEM, service và sub-service, routine, security row, session row, cặp lưu trữ NvM/Fee, ánh xạ Rte, FiM… Các tool thêm mới đều theo mẫu *"clone một phần tử anh em đã xác nhận"*: agent chỉ ra một **analog** quan sát được (ví dụ DID mẫu), tool nhân bản closure của nó và chỉ thay token tên chức năng. Định danh mới được lấy tiếp trong dãy quan sát được nếu dãy đều; nếu không, tool trả "không biết" thay vì bịa.
+
+**Closure và liên kết yếu.** Khi xóa, closure được tính trên đồ thị ngữ nghĩa, với cạnh có thẩm quyền khác nhau: tham chiếu AUTOSAR tường minh, provenance nhà cung cấp, hay chỉ là quy ước tên. Phần tử chỉ nối bằng tên (ví dụ `DID_FFD_<event>` của DaVinci) không bao giờ được coi là chắc chắn: chúng trả về dưới dạng `weak_candidates`, và kỹ sư quyết định giữ hay xóa từng cái.
+
+**Effect contract.** Mỗi transaction khai báo trước hiệu ứng `expected` / `optional` / `forbidden`, các file được phép đổi, và các vai trò closure bắt buộc. Sau khi dựng ứng viên, diff ngữ nghĩa phải khớp hợp đồng này.
+
+**ChangeSet.** Nhiều thao tác được gom thành một DAG, sắp topo (Kahn, ổn định theo thứ tự đầu vào), kiểm tra sau mỗi nút, và ghi **một lần** ở cuối. Chu trình hay phụ thuộc lạ bị từ chối trước khi làm gì.
+
+**Overlay và journal.** `WorkspaceTransaction` dựng mọi thay đổi trong một overlay bộ nhớ trên một revision đã biết. Khi commit: kiểm tra lại revision dưới một lease, ghi journal, rồi thay file. Nếu journal còn sót từ lần trước, hệ thống đòi phục hồi trước khi làm gì khác.
+
+**Serializer giữ nguyên dialect.** Thay đổi được áp dưới dạng script sửa theo byte offset, từ phải sang trái, giữ BOM. `dialect.py` ghi lại sáu trường của mỗi file (BOM, khai báo, comment đầu, EOL, indent, thứ tự thuộc tính gốc, chữ hoa UUID); `churn.py` từ chối nếu số byte đổi vượt mức khai báo hoặc nếu bất kỳ trường dialect nào thay đổi.
+
+**13 tầng kiểm tra**, theo thứ tự: workspace hợp lệ → round-trip nguyên vẹn → XSD → tham chiếu → ràng buộc ECUC → conformance → invariant miền → so với baseline → định danh trùng → diff hiệu ứng → kế toán closure → churn văn bản → toolchain ngoài. Chỉ lỗi được phân loại *mới phát sinh* hoặc *đổi ngoài phạm vi* mới làm một tầng thất bại.
+
+<Callout type="try">
+
+Trong lab phía trên, chọn lần lượt các đề xuất ở bước **13 tầng kiểm tra**. Mỗi đề xuất bị một tầng khác chặn, kèm mã từ chối thật trong mã nguồn. “Tham chiếu sai loại đích” đáng chú ý nhất: file vẫn là XML hợp lệ và qua XSD, nhưng dừng ở tầng tham chiếu vì đích không đúng meta-class.
+
+</Callout>
+
+## 6. Đa dự án: cô lập bằng kernel, không bằng prompt
+
+SDVX Modeler phục vụ nhiều khách hàng và nhiều loại công việc trên cùng một máy chủ. Có ba tầng lồng nhau:
+
+- **Account**: một người dùng, một tiến trình agent, một UID, một thư mục gốc.
+- **Workspace**: một thư mục trong account chứa các project ARXML đã upload, mỗi project có **baseline** lúc upload để xem diff và hoàn tác.
+- **Project** (tầng khách hàng/miền): một hồ sơ gồm skill, wiki, prompt, plugin và toolset được cấp.
+
+**Cấp quyền theo project.** Bảng `project_grants` gom ba loại quyền (skill, plugin, toolset) vào **một bảng** để chúng không trôi thành ba nhánh mã khác nhau. Toolset gồm `files` (11 tool), `skills` (3), `arxml` (58), `diagrams` (2); hai toolset đầu luôn bật. Một project review C++ chỉ thấy đúng 14 tool bắt buộc, không thấy tool ARXML nào. Hồ sơ hiệu lực của một người là hợp của mọi project họ là thành viên, tính lại **ở mỗi request MCP**: thu hồi một tool có hiệu lực ngay, không cần khởi động lại.
+
+**Prompt template bằng YAML.** Mỗi template (`autosar-classic`, `cpp-review`, `general-engineering`, `harness-engineering`) là danh sách section có tên, render bằng Jinja với biến cố định, giới hạn 8.000 ký tự. Điều kiện bám theo **mã** project, không theo tên hiển thị, nên một project khác tình cờ cùng tên không kích hoạt nhầm quy trình BSWMD. Khi lưu, hệ thống giữ một bản snapshot đã render: sửa YAML sau đó không âm thầm đổi prompt của project đang chạy.
+
+**Cô lập tiến trình.** Mỗi account chạy một tiến trình agent dưới UID riêng (20000 + cổng). Trình bọc `account-confine.c` (117 dòng) yêu cầu Landlock ABI ≥ 4 hoặc dừng, rồi hạ quyền, bật `NO_NEW_PRIVS`, đóng mọi file descriptor kế thừa, cài **seccomp** chặn socket Unix, và áp **Landlock** cho cả file system lẫn TCP: chỉ đọc thư viện runtime, bộ tài liệu riêng và workspace của chính mình; chỉ ghi home, thư mục tạm riêng và `/dev/null`; chỉ bind/connect cổng của mình và cổng LLM. Mọi thứ khác, kể cả `/proc` và home của người khác, bị kernel từ chối.
+
+Lớp này được thêm sau một lỗ hổng thật: một account chỉ thuộc project C++ vẫn đọc được `SKILL.md` của skill review mã qua lệnh đọc gốc của agent. Prompt nói "không được"; kernel thì chưa. Sau bản sửa, cùng thao tác trả `EACCES`, được xác minh bằng 8 test ở mức kernel.
+
+**Phạm vi MCP theo từng tool call.** Một account có nhiều workspace. Ban đầu MCP client lấy workspace từ ngữ cảnh xung quanh lúc SDK gọi `fetch`, và thông tin đó có thể rơi mất sau vài tầng `async`; một phiên ở workspace A từng nhận file từ workspace B. Bản sửa chụp `{ session id, cwd }` từ chính `ToolExecution.agent` vào một async scope riêng cho từng lời gọi. Phía server, `mcp_scope` xác minh token HMAC, đọc lại trạng thái account, chỉ chấp nhận tên workspace là con trực tiếp hợp lệ, và tính quyền tool/skill/wiki **cho từng request**. Thiếu workspace thì trả 409; tool không được cấp bị từ chối theo tên, không chỉ bị ẩn khỏi danh sách.
+
+**Thu hồi chặt.** Khi admin gỡ quyền, hệ thống yêu cầu tiến trình của account **dừng hẳn và xác nhận** trước khi commit vào cơ sở dữ liệu, rồi chuyển home sang khu lưu trữ để context cũ không thể bị phát lại. Nếu không xác nhận được việc dừng, thao tác lưu bị hủy với 503. Ngược lại, cấp thêm quyền được áp dụng mà không ngắt lượt đang chạy: hệ thống chờ account rảnh (kiểm tra 30 giây một lần, tối đa 30 phút), và cổng của account mới là cổng trống thấp nhất thay vì `3080 + chỉ số`, vì cách đánh số cũ làm thêm một người đẩy cổng của người khác.
+
+## 7. Telemetry: đo để biết tiền và thời gian đi đâu
+
+Plugin `sdvx-tracking` gửi sự kiện phiên về Codeguard theo lô (2 giây hoặc 200 sự kiện), thử lại tối đa 5 lần với backoff, không bao giờ chặn lượt của agent. Phía server lưu nguyên văn từng sự kiện (idempotent theo `session_id, seq`) rồi chiếu ra 8 loại bảng: tin nhắn, bước, lời gọi tool, lượt, file đã dùng, skill đã dùng… Một projector lỗi chỉ đánh dấu sự kiện đó; phần còn lại của lô vẫn được ghi và có thể chiếu lại sau.
+
+Ba chi tiết cho thấy telemetry này được thiết kế để ra quyết định, không chỉ để vẽ biểu đồ:
+
+- **Chi phí không đếm cache hai lần**: token cache được trừ khỏi token prompt trước khi tính giá; lời gọi chưa có bảng giá được đếm riêng thay vì coi là miễn phí.
+- **Ước lượng chất lượng có trọng số nghịch xác suất**: hệ thống xin feedback theo xác suất tăng theo kích thước diff, nên mẫu thiên về thay đổi lớn. Tỉ lệ "tốt" được tính với trọng số 1/p để khử thiên lệch đó.
+- **Dashboard theo project**: số file, số byte, file thêm/sửa/xóa so với baseline, token, file được sửa nhiều nhất và lịch sử sửa theo từng lượt.
+
+Snapshot telemetry của engine cũ (22/6 – 16/7/2026, 111 cuộc chat, 237 lượt, 2.049 lời gọi LLM) là lý do của nhiều thiết kế đã nói:
+
+| Chỉ số | Giá trị |
+| --- | --- |
+| Thời gian một lượt | p50 **55 s**, p90 709 s, p95 **1.582 s**, max 3.232 s |
+| Token | 67,07 M prompt + 3,84 M completion; **94,6% là prompt** |
+| Token mỗi lượt | trung vị 35.368; p95 **1,64 triệu** |
+| Thời gian | LLM **87,5%**, thực thi tool **0,53%** |
+| Tương quan | token với số lời gọi 0,958; với số bước 0,963 |
+
+Chi phí tăng theo **độ dài vòng lặp**, không theo độ khó của yêu cầu. Đó là lý do có loop guard (một lượt từng tiêu 329.022 token trong 15 bước lặp một lời gọi không có lối ra), ngân sách ký tự cho mọi tool đọc, và gợi ý cấu trúc khi tìm kiếm: các lượt hoàn thành giữ số lần tìm kiếm ở 3–4, còn các lượt cạn ngân sách tìm 53–63 lần bằng tên tag trần.
+
+## 8. Kết quả đo
+
+**Cùng 40 yêu cầu DID**, mỗi câu chạy trên một bản sao baseline riêng:
+
+| Engine | Câu đạt | Thời gian trung vị |
+| --- | --- | --- |
+| Engine cũ (vòng lặp ReAct tự viết) | 25/40 | 162 s |
+| Hiện tại (DeepSeek Harness + tool MCP của Codeguard) | **32/40** | **67,5 s** |
+
+Các câu engine cũ trượt chủ yếu vì thiếu ánh xạ Rte hoặc còn sót tên ở file khác: đúng loại lỗi closure mà tầng kế toán closure tồn tại để bắt.
+
+**Quy mô ChangeSet** (tài liệu 26): 1 DID 0,09 s; 10 DID 0,81 s; 25 DID 3,77 s; **52 DID 16,5 s** với bộ nhớ đỉnh 5,9 MiB. Chỉ mục workspace thật: 106 file, 35.285 quan hệ, 8,4 s, 60,5 MiB. Replay ChangeSet 52 DID cho `NO_OP`, giống từng byte; tiêm lỗi ở checkpoint 51 thì không file nào được ghi.
+
+**Kiểm thử.** Khoảng 3.000 test Python cho Codeguard, một benchmark 28 đột biến DCM (mỗi đột biến kỳ vọng BLOCK, QUIET hoặc ADVISE), và một catalog 90 tình huống lỗi về discovery, schema, định nghĩa, tham chiếu, closure đa file, rollback và churn. Mọi tình huống chạy được **không cần model**.
+
+## 9. Những sự cố đã định hình hệ thống
+
+| Sự cố đo được | Thiết kế sinh ra |
+| --- | --- |
+| 329.022 token trong 15 bước lặp một lời gọi | Loop guard ở ba điểm của vòng lặp |
+| Phiên báo "workspace trống" với project có 212 file ARXML | Workspace được đăng ký, không để agent tự tìm |
+| Baseline 292.561 byte còn 6 byte vì ghi xuyên hardlink `cp -al` | Ghi file tạm rồi `rename` |
+| Sửa 6 dòng thành diff 3.642 dòng vì CRLF bị đổi thành LF | Giữ kết thúc dòng của file trên đĩa; tầng churn chặn đổi dialect |
+| Phiên ở workspace A nhận file của workspace B | Định danh workspace theo từng tool call; server fail-closed |
+| Account chỉ thuộc project C++ đọc được skill của project khác | Landlock + seccomp + UID riêng |
+| Skill chỉ bị ẩn, `load_skill` vẫn đọc được | Từ chối theo tên, không chỉ ẩn |
+| Một file 232 kết quả chiếm hết ngân sách tìm kiếm | Hiển thị đến hết ngân sách nhưng vẫn đếm phần còn lại |
+
+## 10. Giới hạn hiện tại
+
+- **BSWMD chưa luôn có sẵn.** Khi thiếu, hệ thống rơi về `OBSERVED_CONGRUENCE` và báo `DEGRADED`; thời điểm và độ đầy đủ của việc nhập BSWMD vẫn là quyết định treo.
+- **Không có DaVinci headless**, nên tầng toolchain ngoài thường báo `SKIPPED`.
+- Không phải phần tử nào cũng có tool xóa chuyên biệt; agent được dặn dừng và báo thay vì xoay xở bằng tool khác.
+- Mỗi account một tiến trình chạy sẵn, nên bộ nhớ tăng theo số account.
+- Agent runtime là bản developer preview có patch cục bộ; nâng cấp là một lần merge.
+
+## Điều làm SDVX Modeler khác một agent sửa XML
+
+1. **Đọc qua mô hình ngữ nghĩa có revision**, với vai trò file theo nội dung và ngân sách cứng cho mọi câu trả lời.
+2. **Ràng buộc từ BSWMD của nhà cung cấp**, với thẩm quyền được nói rõ và "chưa kiểm tra" không bao giờ bị báo là "hợp lệ".
+3. **Invariant học từ baseline**, chỉ chặn khi đủ bằng chứng, kiểm tra vi sai trên một project vốn bẩn.
+4. **Transaction có effect contract và closure**, ghi một lần qua journal, giữ nguyên từng byte dialect.
+5. **Cô lập đa dự án ở mức kernel**, quyền tool tính lại ở mỗi request, thu hồi dừng tiến trình trước khi commit.
+6. **Telemetry dùng để quyết định**, với chi phí không đếm trùng và chất lượng được khử thiên lệch lấy mẫu.
+
+<Callout type="note">
+
+Lab phía trên dùng tên tầng, mã từ chối và số liệu lấy từ mã nguồn và tài liệu thiết kế của dự án; các đề xuất ở bước 1 là ví dụ minh họa điển hình, không phải bản ghi một lượt thật. Tên khách hàng và project của khách hàng được lược bỏ.
+
+</Callout>
+
+## Đọc tiếp
+
+- [BSWMD: luồng từ định nghĩa đến validation](/du-an/bswmd/): parser, provenance, facet, `PASS`/`FAIL`/`DEGRADED` và các lỗi `DESTINATION-REF`.
+- [Model Context Protocol](https://modelcontextprotocol.io/): giao thức nối agent với tool.
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): agent runtime làm nền.
+- [AUTOSAR Classic Platform](https://www.autosar.org/standards/classic-platform): chuẩn phần mềm ô tô, ARXML và ECUC.
+- [Landlock](https://docs.kernel.org/userspace-api/landlock.html): cơ chế sandbox không cần quyền root của Linux.

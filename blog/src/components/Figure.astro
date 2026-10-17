@@ -1,0 +1,71 @@
+---
+/**
+ * Figure with caption. `src` may be an imported image (optimized via astro:assets)
+ * or a string URL (e.g. "/viz/cnn-explainer/assets/…").
+ * `credit` is appended to the caption in muted text.
+ */
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+
+interface Props {
+  src: ImageMetadata | string;
+  alt: string;
+  caption?: string;
+  credit?: string;
+  width?: number;
+  height?: number;
+  /** Let the figure break out to the full content width (no prose max-width). */
+  wide?: boolean;
+}
+
+const { src, alt, caption, credit, width, height, wide = false } = Astro.props;
+const isRemote = typeof src === 'string';
+const hasCaption = Boolean(caption || credit || Astro.slots.has('default'));
+---
+
+<figure class:list={['figure', { 'figure--wide': wide }]}>
+  {
+    isRemote ? (
+      <img src={src} alt={alt} width={width} height={height} loading="lazy" decoding="async" />
+    ) : (
+      <Image src={src} alt={alt} widths={[480, 800, 1200]} sizes="(min-width: 900px) 760px, 100vw" />
+    )
+  }
+  {
+    hasCaption && (
+      <figcaption>
+        {caption}
+        <slot />
+        {credit && <span class="figure__credit"> Nguồn: {credit}</span>}
+      </figcaption>
+    )
+  }
+</figure>
+
+<style>
+  .figure {
+    margin: 1.75em 0;
+  }
+  .figure img {
+    display: block;
+    margin-inline: auto;
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-border);
+    background: #fff; /* diagrams are drawn for light backgrounds */
+  }
+  .figure figcaption {
+    margin-top: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    text-align: center;
+  }
+  .figure__credit {
+    opacity: 0.85;
+    font-style: italic;
+  }
+  .figure--wide {
+    max-width: none;
+  }
+</style>

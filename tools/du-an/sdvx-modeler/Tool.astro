@@ -1,0 +1,17 @@
+---
+import Lab from '../../_shared/sequence-lab/Lab.astro';
+import './sdvx.css';
+---
+<Lab id="sdvx-modeler" title="SDVX Modeler · cổng kiểm tra và số liệu thật" label="Pipeline kiểm tra và số liệu đo của SDVX Modeler"
+  steps={['13 tầng kiểm tra', 'Project thật', 'Hiệu quả đo được', 'Token đi đâu']}
+  scope="Tên tầng, mã từ chối và mọi con số lấy từ mã nguồn và tài liệu thiết kế của SDVX Modeler: workspace/validation.py, write_policy.py, conformance/*, tài liệu 20 (reality binding), 26 (production scale), benchmark eval40 và snapshot telemetry 2026-06-22 → 2026-07-16. Các đề xuất ở bước 1 là ví dụ minh họa điển hình, phát lại theo đúng thứ tự tầng; lab không chạy model hay project nào. Tên khách hàng được lược bỏ.">
+  <Fragment slot="controls">
+    <fieldset class="segmented scenario-list" data-proposal-field><legend>Agent đề xuất</legend><div data-proposals class="scenario-grid"></div></fieldset>
+    <div class="actions"><button type="button" data-reset>Đặt lại</button></div>
+    <p class="hint">Mỗi đề xuất bị một tầng khác chặn. Thử “Tham chiếu sai loại đích”: XML hợp lệ, qua XSD, nhưng dừng ở tầng tham chiếu.</p>
+  </Fragment>
+</Lab>
+<script>
+  import { initSdvxModelerLab } from './render';
+  initSdvxModelerLab();
+</script>

@@ -1,0 +1,159 @@
+---
+title: 'Neural Radiance Field: Học một cảnh 3D từ những bức ảnh'
+description: 'Đi theo một ray để hiểu NeRF: camera, positional encoding, volume rendering, hierarchical sampling và cách học cảnh từ ảnh.'
+category: kien-thuc
+topic: thi-giac-may-tinh
+tags: ['NeRF', '3D', 'Volume rendering', 'Thị giác máy tính']
+viz: nerf-explainer
+cover: ../../../../assets/covers/nerf.webp
+order: 5
+date: 2026-10-06
+---
+
+## Từ một album ảnh đến một góc nhìn chưa từng chụp
+
+Hãy đặt một món đồ lên bàn, đi vòng quanh và chụp nhiều ảnh. Mỗi ảnh chỉ cho thấy mặt hướng về camera. Nếu muốn nhìn từ một vị trí nằm giữa hai ảnh, việc trộn hai bức ảnh thường tạo bóng đôi: đồ vật không thật sự quay, chỉ hai lớp ảnh đè lên nhau.
+
+**NeRF học một mô tả của không gian**, rồi dùng mô tả đó để tạo ảnh từ camera mới. Không phải mỗi pixel chứa một điểm 3D duy nhất; một pixel nhận ánh sáng dọc một đường đi xuyên qua cảnh. Ta sẽ theo đường ấy để hiểu thuật toán.
+
+Demo phía trên là **một NeRF đã train thật**: nerfacto (nerfstudio) học 30.000 bước từ 175 ảnh drone của một khu phố có trạm phát sóng. 25 ảnh còn lại không dùng khi train và chỉ dùng để chấm điểm: PSNR 22,48 dB, SSIM 0,682, LPIPS 0,261. Vòng quay 36 góc nhìn được render sẵn trên GPU từ model. Với mỗi góc, 360 ray được lưu lại toàn bộ sample: vị trí $t$, density $\sigma$, alpha, transmittance và weight. Bấm vào ảnh để mở ray gần nhất và xem các con số này.
+
+## Field: Hỏi một vị trí và một hướng, nhận density và màu
+
+Một field giống bản đồ thời tiết: hỏi tọa độ nào thì biết tình trạng tại đó. NeRF trả lời hai câu hỏi: vị trí này có cản ánh sáng không, và nhìn từ hướng này thì thấy màu gì?
+
+$$
+F_\theta:(\mathbf{x},\mathbf{d})\longmapsto
+(\sigma,\mathbf{c}),\qquad
+\mathbf{x}\in\mathbb{R}^3,\quad \|\mathbf{d}\|_2=1.
+$$
+
+$\theta$ là các weights của mạng; $\sigma\geq0$ là **volume density**, còn $\mathbf{c}=(r,g,b)$ là màu. Khi tọa độ đo bằng mét, density có đơn vị nghịch đảo mét để tích $\sigma\,dt$ không có đơn vị. Scene thường được chuẩn hóa nên “một đơn vị” không nhất thiết là một mét.
+
+NeRF gốc dùng MLP: từ positional encoding của $\mathbf{x}$ tạo density và feature; feature kết hợp hướng nhìn để tạo màu. **Density không phụ thuộc hướng**, nhưng màu có thể phụ thuộc hướng. Nhờ vậy phản xạ trên bề mặt bóng có thể thay đổi khi camera di chuyển. Đây không phải mô hình vật lý đầy đủ của ánh sáng, BRDF hay nguồn sáng có thể chỉnh tùy ý.
+
+## Camera: Một pixel tương ứng với một ray
+
+Với tâm camera $\mathbf{o}$ và hướng đã chuẩn hóa $\mathbf{d}$:
+
+$$
+\mathbf{r}(t)=\mathbf{o}+t\mathbf{d},\qquad t\in[t_n,t_f].
+$$
+
+$t_n,t_f$ giới hạn phần không gian ta render. Hướng của ray được suy ra từ pixel, camera intrinsics và camera extrinsics. Trong pinhole camera:
+
+$$
+\tilde{\mathbf{d}}_c=K^{-1}[u,v,1]^\top,\qquad
+\mathbf{d}=\frac{R\tilde{\mathbf{d}}_c}{\|R\tilde{\mathbf{d}}_c\|_2}.
+$$
+
+$K$ chứa focal length và principal point; $R$ ở đây là camera-to-world rotation. Nếu dataset dùng world-to-camera thì phải đảo phép biến đổi, không được dùng cùng một ma trận cho hai quy ước. Camera sai giống như ghi nhầm nơi chụp ảnh: mạng sẽ cố giải thích mâu thuẫn bằng geometry hoặc density sai.
+
+## Volume rendering: Vì sao điểm ở sau bị che?
+
+Hãy tưởng tượng ray đi qua sương. Một vùng sương mỏng để nhiều ánh sáng đi tiếp, vùng dày làm phần phía sau khó nhìn hơn. Khả năng ray còn đi tới độ sâu $t$ là **transmittance**:
+
+$$
+T(t)=\exp\left(-\int_{t_n}^{t}\sigma(\mathbf{r}(s))\,ds\right).
+$$
+
+Màu tích lũy:
+
+$$
+\hat{\mathbf{C}}(\mathbf{r})=
+\int_{t_n}^{t_f}T(t)\sigma(\mathbf{r}(t))
+\mathbf{c}(\mathbf{r}(t),\mathbf{d})\,dt
++T(t_f)\mathbf{c}_{bg}.
+$$
+
+Đây là absorption-emission rendering: mỗi vùng đóng góp màu và làm suy giảm phần phía sau. Hạng background dùng khi scene có nền; không phải mọi implementation đều xử lý background giống nhau.
+
+Máy tính không tính tích phân liên tục trực tiếp. Với sample $t_i$, khoảng $\delta_i=t_{i+1}-t_i$, và density gần như không đổi trong từng đoạn:
+
+$$
+\alpha_i=1-e^{-\sigma_i\delta_i},\qquad
+T_i=e^{-\sum_{j<i}\sigma_j\delta_j}
+=\prod_{j<i}(1-\alpha_j),
+$$
+
+$$
+w_i=T_i\alpha_i,\qquad
+\hat{\mathbf{C}}=\sum_{i=1}^{N}w_i\mathbf{c}_i
++\left(\prod_{i=1}^{N}(1-\alpha_i)\right)\mathbf{c}_{bg}.
+$$
+
+**Density, alpha và weight là ba thứ khác nhau.** Density mô tả tại vị trí; alpha còn phụ thuộc chiều dài đoạn; weight còn phụ thuộc tất cả đoạn nằm trước nó. Tổng weights cộng phần nền bằng một nếu tính nhất quán. Tăng density không có nghĩa màu của mọi điểm đều sáng lên: điểm trước có thể che điểm sau.
+
+### Ví dụ tính tay
+
+Hai đoạn có $\delta_1=\delta_2=1$ và $\sigma_1=\sigma_2=\ln2$ nên mỗi alpha bằng $0.5$. Đoạn đầu đỏ $(1,0,0)$, đoạn sau xanh $(0,1,0)$, nền đen:
+
+$$
+w_1=0.5,\quad w_2=(1-0.5)0.5=0.25,\quad
+T_{\mathrm{end}}=0.25,\quad
+\hat{\mathbf{C}}=(0.5,0.25,0).
+$$
+
+Không phải $(0.5,0.5,0)$: màu xanh đã bị phần phía trước che. Pixel inspector cho thấy density, weight và transmittance riêng biệt. Density và weight được chuẩn hóa theo peak riêng để vẽ; các readout vẫn là số thật.
+
+## Positional encoding: Cho mạng biết chi tiết ở nhiều tần số
+
+MLP thông thường có xu hướng học các biến thiên trơn trước. Để biểu diễn chi tiết nhỏ, NeRF gốc biến đổi mỗi tọa độ vô hướng $p$:
+
+$$
+\gamma(p)=\left(\sin(2^0\pi p),\cos(2^0\pi p),\ldots,
+\sin(2^{L-1}\pi p),\cos(2^{L-1}\pi p)\right).
+$$
+
+Áp dụng cho từng thành phần của vị trí và hướng. Các tần số thấp mô tả hình lớn, tần số cao cho phép mô tả cạnh và texture nhỏ. NeRF gốc dùng $L=10$ cho vị trí và $L=4$ cho hướng. Đây là đặc trưng đầu vào cố định, không phải ảnh thêm vào dataset và cũng không bảo đảm chi tiết chưa được quan sát sẽ được khôi phục đúng.
+
+## Hierarchical sampling: Dành phép tính cho nơi đóng góp nhiều
+
+Nếu ray phần lớn đi qua không khí trống, chia đều hàng trăm sample gây lãng phí. NeRF gốc dùng hai mạng: **coarse** ước lượng vùng quan trọng; **fine** dùng cả sample cũ và sample mới lấy theo phân phối suy ra từ coarse weights.
+
+Ở mức nguyên lý:
+
+$$
+p_i=\frac{w_i+\varepsilon}{\sum_j(w_j+\varepsilon)},\qquad
+t_{\mathrm{new}}\sim p(t).
+$$
+
+Trong implementation, weights tạo piecewise-constant PDF trên các bin; inverse-transform sampling lấy vị trí trong bin, không đơn giản chọn lại đúng tọa độ sample cũ. $\varepsilon$ tránh trường hợp mọi weight bằng không. Coarse thường dùng stratified sampling:
+
+$$
+t_i\sim\mathcal{U}\left[
+t_n+\frac{i-1}{N}(t_f-t_n),
+t_n+\frac{i}{N}(t_f-t_n)\right].
+$$
+
+Hai bước giúp mạng tìm bề mặt nhưng không loại bỏ mọi lỗi: coarse bỏ sót chi tiết mảnh thì fine cũng có thể thiếu sample tại đó. Model trong demo (nerfacto) thay mạng coarse bằng *proposal network* nhỏ hơn, nhưng ý tưởng giữ nguyên: sample dồn vào vùng có vật thể. Mở bước Ray sampling rồi bấm vào một mái nhà. Trong bảng, khoảng cách giữa các sample rất dày quanh bề mặt và thưa ở vùng trời trống.
+
+## Training: So màu render với ảnh thật
+
+Mỗi bước chọn rays từ ảnh đã biết camera, render màu, rồi cập nhật weights:
+
+$$
+\mathcal{L}=
+\sum_{\mathbf{r}\in\mathcal{R}}
+\left(
+\|\hat{\mathbf{C}}_c(\mathbf{r})-\mathbf{C}_{gt}(\mathbf{r})\|_2^2
++\|\hat{\mathbf{C}}_f(\mathbf{r})-\mathbf{C}_{gt}(\mathbf{r})\|_2^2
+\right).
+$$
+
+Subscript $c,f$ là coarse và fine. Gradient truyền ngược qua màu, alpha và transmittance tới mạng. Training không bắt buộc có depth ground truth: nhiều góc nhìn tạo ràng buộc cho cùng một field. Nhưng nhiều cách sắp xếp geometry có thể giải thích một số ít ảnh, nên có ảnh render đẹp không đồng nghĩa geometry hoàn toàn đúng.
+
+## Tự thử và đọc kết quả
+
+1. Đặt Density multiplier về 0: weight biến mất, pixel trở thành màu nền.
+2. Giữ ray cố định, tăng density: vùng gần camera chiếm đóng góp lớn hơn.
+3. Giảm sample xuống 8, rồi tăng lên 96: vùng density hẹp dễ bị bỏ sót khi sampling thưa.
+4. Click các pixel khác nhau, hoặc kéo để xoay camera: ray đi qua phần khác của scene, không phải mạng đổi weights.
+
+Nếu chia một đoạn density không đổi thành nhiều đoạn nhỏ, tổng transmittance vẫn giữ nguyên. Với density biến thiên, kết quả có thể thay đổi do xấp xỉ lấy sample.
+
+## Khi nào NeRF khó hoạt động?
+
+Scene tĩnh là giả định quan trọng của NeRF gốc. Người đang nói, cây lay động, ánh sáng đổi giữa các ảnh hoặc camera calibration sai phá vỡ giả định này. Vùng không thấy trong ảnh có thể bị suy diễn sai. Render tốn nhiều network queries; các hướng phát triển như hash encoding, occupancy grids và dynamic fields giải quyết từng hạn chế, nhưng không phải mọi biến thể vẫn dùng kiến trúc NeRF gốc.
+
+Để đọc tiếp: [NeRF, ECCV 2020](https://arxiv.org/abs/2003.08934); [3D Gaussian Splatting](/kien-thuc/gaussian-splatting/) thay field ngầm bằng primitive tường minh; [SyncTalk](/du-an/synctalk/) thêm điều kiện audio, expression và pose cho portrait động.

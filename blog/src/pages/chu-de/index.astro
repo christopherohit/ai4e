@@ -1,0 +1,71 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
+import { collectTags, tagHref } from '../../lib/tags';
+
+const tags = collectTags(await getCollection('posts'));
+---
+
+<BaseLayout title="Chủ đề" description="Tất cả chủ đề AI trên AI4E, kèm số bài viết cho từng chủ đề.">
+  <section class="container section">
+    <Breadcrumb items={[{ label: 'Trang chủ', href: '/' }, { label: 'Chủ đề' }]} />
+    <header class="tags-header">
+      <h1>Chủ đề</h1>
+      <p class="section-desc">{tags.length} chủ đề giúp bạn tìm nhanh các bài viết và trực quan hóa liên quan.</p>
+    </header>
+    {tags.length > 0 ? (
+      <ul class="tag-grid">
+        {tags.map((tag) => (
+          <li>
+            <a class="card card--hover tag-card" href={tagHref(tag.name)}>
+              <span class="tag-card__name"><span aria-hidden="true">#</span>{tag.name}</span>
+              <span class="tag-card__count">{tag.count} bài viết</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <p class="muted">Chưa có chủ đề nào.</p>
+    )}
+  </section>
+</BaseLayout>
+
+<style>
+  .tags-header {
+    margin: var(--space-6) 0 var(--space-8);
+  }
+  .tags-header h1 {
+    font-size: clamp(2rem, 5vw, 2.75rem);
+  }
+  .tag-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .tag-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    height: 100%;
+    padding: var(--space-5);
+    color: inherit;
+    text-decoration: none;
+  }
+  .tag-card__name {
+    color: var(--color-text);
+    font-size: var(--text-lg);
+    font-weight: 600;
+  }
+  .tag-card__name span {
+    color: var(--color-primary);
+    margin-right: 0.1em;
+  }
+  .tag-card__count {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+</style>

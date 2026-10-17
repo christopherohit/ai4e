@@ -1,0 +1,164 @@
+---
+title: '3D Gaussian Splatting: Dựng cảnh bằng những đám màu có hình dạng'
+description: 'Hiểu Gaussian 3D, covariance, perspective projection, SH, alpha compositing và adaptive density control qua demo tương tác.'
+category: kien-thuc
+topic: thi-giac-may-tinh
+tags: ['3D Gaussian Splatting', '3D', 'Rendering', 'Thị giác máy tính']
+viz: gaussian-splatting-explainer
+cover: ../../../../assets/covers/gaussian-splatting.webp
+order: 6
+date: 2026-10-06
+---
+
+## Không phải mesh, cũng không phải những chấm phẳng
+
+Hãy tưởng tượng dựng một tượng bằng rất nhiều đám màu mềm. Mỗi đám có vị trí, hướng, độ dài theo các trục, opacity và màu. Nhìn từ camera, đám 3D thành một ellipse mềm trên ảnh. Nhiều ellipse chồng lên nhau tạo thành cảnh.
+
+Đó là trực giác của **3D Gaussian Splatting**, thường gọi 3DGS. Khác NeRF cần truy vấn mạng tại nhiều điểm trên mỗi ray, 3DGS giữ một tập primitive tường minh và rasterize chúng lên màn hình. “Splatting” là chiếu các primitive này thành footprints rồi compositing, không phải ném ngẫu nhiên màu vào ảnh.
+
+Demo là **một scene 3DGS đã train thật** trên cùng bộ ảnh drone với bài NeRF: 1,25 triệu Gaussian, SH bậc 3, PSNR 22,48 dB trên 25 ảnh không dùng khi train. Code train là bản gốc của Inria. Ngưỡng densify được nâng lên 0,0006 để model đủ nhẹ cho trình duyệt: bản đầy đủ có 6,1 triệu Gaussian, nặng 1,5 GB và đạt 22,85 dB. Trình duyệt render live bằng WebGL nên bạn có thể kéo để xoay và cuộn để zoom. Ở bước Footprint, hãy thu nhỏ σ để thấy từng Gaussian riêng lẻ. Khi chọn một test view, Pixel Inspector liệt kê các Gaussian phủ lên pixel theo thứ tự depth, kèm alpha, T và weight. Màu tính lại từ danh sách này khớp CUDA rasterizer với sai số dưới 0,001.
+
+## Anatomy của một Gaussian
+
+Một primitive gồm:
+
+$$
+\theta_i=\{\boldsymbol{\mu}_i,\mathbf{s}_i,\mathbf{q}_i,
+o_i,\mathbf{h}_i\}.
+$$
+
+$\boldsymbol{\mu}\in\mathbb{R}^3$ là tâm; $\mathbf{s}$ là scale theo ba trục; quaternion $\mathbf{q}$ tạo rotation; $o$ là opacity; $\mathbf{h}$ chứa spherical harmonic coefficients dùng tính màu theo hướng. Không nhầm **opacity parameter $o$** với alpha tại một pixel: alpha còn phụ thuộc vị trí pixel so với tâm ellipse.
+
+Kernel không chuẩn hóa:
+
+$$
+G(\mathbf{x})=
+\exp\left[-\frac12(\mathbf{x}-\boldsymbol{\mu})^\top
+\Sigma^{-1}(\mathbf{x}-\boldsymbol{\mu})\right].
+$$
+
+Không có hệ số $1/\sqrt{(2\pi)^3|\Sigma|}$ như probability density chuẩn hóa. 3DGS dùng footprint có giá trị 1 ở tâm trước khi nhân opacity, không yêu cầu tích phân kernel bằng một.
+
+## Covariance: Vì sao đám màu có thể nghiêng và dẹt?
+
+Covariance $\Sigma$ là ma trận $3\times3$ mô tả độ trải và hướng. Để nó không thành ma trận vô nghĩa, 3DGS parameterize:
+
+$$
+S=\operatorname{diag}(s_x,s_y,s_z),\qquad
+\Sigma=R(\mathbf{q})SS^\top R(\mathbf{q})^\top.
+$$
+
+Scale dương và quaternion chuẩn hóa tạo covariance positive definite khi các scale đều khác không. Implementation thường tối ưu log-scales rồi dùng exponential; opacity thường đi qua sigmoid. Cộng thẳng số âm vào scale hoặc bỏ chuẩn hóa quaternion có thể phá điều kiện này.
+
+Nếu ba scale bằng nhau thì Gaussian isotropic: không có trục dài nổi bật. Khi một scale lớn hơn, nó anisotropic: có thể ôm bề mặt như một lớp màu mỏng thay vì cần quá nhiều quả cầu nhỏ.
+
+**Ví dụ:** $s_x=0.2,s_y=0.1,s_z=0.05$ và không xoay thì $\Sigma=\operatorname{diag}(0.04,0.01,0.0025)$. Scale là độ dài, covariance là độ dài bình phương. Một giá trị covariance 0.04 không có nghĩa Gaussian dài 0.04 đơn vị.
+
+## Perspective projection: Đưa covariance vào ảnh
+
+Đổi từ world sang camera:
+
+$$
+\boldsymbol{\mu}_c=W\boldsymbol{\mu}+\mathbf{t},\qquad
+\Sigma_c=W\Sigma W^\top.
+$$
+
+$W$ là phần rotation world-to-camera. Với tâm $(x,y,z)$ phía trước camera:
+
+$$
+\pi(x,y,z)=
+\begin{bmatrix}f_x x/z+c_x\\ f_y y/z+c_y\end{bmatrix},
+\qquad
+J=
+\begin{bmatrix}
+f_x/z&0&-f_xx/z^2\\
+0&f_y/z&-f_yy/z^2
+\end{bmatrix}.
+$$
+
+Xấp xỉ projection cục bộ bằng Jacobian:
+
+$$
+\Sigma_{2D}=J\Sigma_cJ^\top
+=JW\Sigma W^\top J^\top.
+$$
+
+Camera projection phi tuyến nên đây là **xấp xỉ affine quanh tâm Gaussian**, không phải phép biến đổi chính xác mọi điểm của một đám rất lớn. Covariance 2D có đơn vị pixel bình phương. Renderer thực còn có lọc footprint tối thiểu và các biện pháp ổn định số; demo không triển khai toàn bộ các heuristic GPU.
+
+### Ví dụ đọc số
+
+Tại tâm trục nhìn $x=y=0$, focal $f=100$ px và $z=2$, một trục có covariance 0.04 trở thành $(100/2)^2\cdot0.04=100$ px²: standard deviation là 10 px. Nếu đưa nó tới $z=4$, standard deviation còn 5 px. Đây là lý do vật ở xa nhìn nhỏ hơn.
+
+## Alpha compositing: Pixel thấy màu nào trước?
+
+Gọi $\mathbf{p}$ là pixel và $\mathbf{m}=\pi(\boldsymbol{\mu}_c)$:
+
+$$
+a_i(\mathbf{p})=o_i
+\exp\left[-\frac12(\mathbf{p}-\mathbf{m}_i)^\top
+\Sigma_{2D,i}^{-1}(\mathbf{p}-\mathbf{m}_i)\right].
+$$
+
+Sau khi sắp theo depth gần đến xa:
+
+$$
+\mathbf{C}(\mathbf{p})=
+\sum_i\mathbf{c}_i a_i
+\prod_{j<i}(1-a_j)
++\mathbf{c}_{bg}\prod_i(1-a_i).
+$$
+
+Nếu đỏ ở trước và xanh ở sau, cả hai alpha tại pixel đều 0.5, kết quả trên nền đen là $(0.5,0.25,0)$. Đổi thứ tự sẽ thành $(0.25,0.5,0)$. **Compositing không giao hoán.**
+
+3DGS gốc dùng tile-based rasterization và depth sorting để xử lý hiệu quả nhiều Gaussian. Gaussian chồng lấn lớn hay depth gần nhau có thể tạo artifacts vì sắp theo tâm không giải quyết chính xác mọi tương tác hình học. Đừng hiểu “real-time” là cam kết rằng mọi scene, độ phân giải và thiết bị đều đạt cùng FPS.
+
+## Spherical harmonics: Màu có thể đổi theo hướng
+
+Để mô tả view-dependent appearance:
+
+$$
+\mathbf{c}_i(\mathbf{d})=
+\sum_{\ell=0}^{L}\sum_{m=-\ell}^{\ell}
+\mathbf{h}_{i,\ell m}Y_{\ell m}(\mathbf{d}).
+$$
+
+$Y_{\ell m}$ là các basis trên hình cầu, còn $\mathbf{h}_{i,\ell m}$ là coefficients RGB được học. Bậc thấp mô tả biến thiên mềm; nhiều bậc cho phép biến thiên phức tạp hơn. 3DGS gốc dùng tối đa bậc 3. Đây không phải phép thay đổi nguồn sáng vật lý tùy ý: appearance vẫn gắn với dữ liệu quan sát.
+
+## Training: Primitive được học, không chỉ đặt bằng tay
+
+Pipeline gốc khởi tạo từ sparse point cloud của Structure-from-Motion cùng camera poses, rồi tối ưu các parameters qua differentiable rendering:
+
+$$
+\mathcal{L}=(1-\lambda)\mathcal{L}_1+
+\lambda\mathcal{L}_{D\text{-}SSIM}.
+$$
+
+$\mathcal{L}_1$ đo sai số màu tuyệt đối; D-SSIM đo bất tương đồng cấu trúc. Trong cấu hình gốc $\lambda=0.2$. Gradient cho biết cần dịch tâm, đổi scale, rotation, opacity hoặc SH thế nào để ảnh gần ảnh thật hơn.
+
+SfM không chỉ cung cấp vị trí chấm khởi tạo: nó còn ước lượng camera. Camera sai gây vấn đề giống NeRF. Không có một công thức magic bảo đảm một bức ảnh duy nhất luôn đủ để dựng cảnh 3D đúng.
+
+## Adaptive density control: Thêm ở nơi thiếu, bỏ nơi thừa
+
+Nếu chỉ tối ưu một số Gaussian cố định, scene có thể thiếu độ phân giải ở vùng chi tiết. 3DGS theo dõi positional gradients trong view space và kích thước primitive:
+
+- **Clone:** Gaussian nhỏ nhưng gradient lớn gợi ý vùng thiếu coverage; thêm bản sao để tăng khả năng biểu diễn.
+- **Split:** Gaussian quá lớn ở vùng cần chi tiết được tách thành các Gaussian nhỏ hơn.
+- **Prune:** bỏ primitive opacity quá thấp; implementation còn kiểm soát những primitive lớn không phù hợp.
+- **Opacity reset:** định kỳ hạ opacity để hạn chế việc các primitive sớm trở nên che kín và cản học.
+
+Đây là các thao tác adaptive trên tập primitive, không phải loss duy nhất có đạo hàm. Threshold, lịch chạy và giới hạn scale phụ thuộc implementation. Tăng số Gaussian thường tăng memory và chi phí render; không có quy luật “càng nhiều càng đúng”.
+
+## Bài thực hành trong demo
+
+1. Ở bước Gaussian 3D, scene chỉ còn những chấm nhỏ: footprint bị cắt ở 0,6σ nên mỗi Gaussian hiện gần như một điểm.
+2. Chuyển sang bước Footprint, kéo σ từ 1 lên 3: các ellipse loang ra và lấp kín khoảng trống giữa nhau, dù số Gaussian không đổi.
+3. Chọn Camera *Test view 0118* rồi bấm vào cột anten và vào mái tôn phía dưới. Ở cột anten, Gaussian có weight lớn nằm gần camera và T tụt nhanh. Ở mái tôn, nhiều Gaussian mờ chồng lên nhau trước khi T về 0.
+4. Kéo để xoay quanh cột anten: các mảng tường và mái đổi sắc nhẹ theo hướng nhìn. Đó là SH bậc 3 đã học, không phải nguồn sáng thay đổi.
+
+So với bài NeRF trên cùng bộ ảnh, hai model có PSNR test gần như nhau (22,48 dB). Khác biệt nằm ở cách render: 3DGS vẽ được live trên GPU của trình duyệt, còn NeRF phải tính sẵn từng góc.
+
+## Từ scene tĩnh tới nhân vật số
+
+3DGS gốc tái dựng scene tĩnh. Muốn portrait chuyển động, cần thêm deformation field và điều kiện audio/expression, như [InsTaG](/du-an/instag/). Mặt trong miệng, vật mảnh, gương, scene ít góc nhìn và vùng bị che vẫn khó. Một video render đẹp từ camera training không chứng minh mô hình đúng ở góc quay chưa từng thấy.
+
+Đọc phương pháp gốc: [3D Gaussian Splatting, SIGGRAPH 2023](https://arxiv.org/abs/2308.04079). So sánh cách tích lũy ánh sáng với [NeRF](/kien-thuc/nerf/): hai phương pháp có compositing tương tự, nhưng một bên sample field dọc ray, một bên rasterize primitive đã chiếu.

@@ -1,0 +1,307 @@
+---
+title: 'Qwen3.8-Flash-Next: Giải phẫu kiến trúc hybrid cho ngữ cảnh dài'
+description: 'Khám phá 48 layer của Qwen3.8-Flash-Next: Gated DeltaNet, Qwen Sparse Attention, MoE, gated residual, n-gram embedding, vision encoder và MTP.'
+category: kien-thuc
+topic: xu-ly-ngon-ngu
+tags: ['Qwen', 'Transformer', 'MoE', 'Sparse attention', 'Xử lý ngôn ngữ']
+viz: qwen3-8-flash-next-explainer
+cover: ../../../../assets/figures/qwen3-8-flash-next-architecture.png
+order: 8
+date: 2026-10-09
+---
+
+import { Image } from 'astro:assets';
+import Diagram from '../../../../assets/figures/qwen3-8-flash-next-architecture.png';
+
+import Callout from '../../../../components/Callout.astro';
+import QwenPipeline from '../../../../components/QwenPipeline.astro';
+
+## Từ Transformer đến một mô hình có nhiều loại bộ nhớ
+
+Trong [bài Transformer trước](/kien-thuc/transformer-explainer/), ta theo một chuỗi token qua embedding, attention, MLP và đầu dự đoán token tiếp theo. **Qwen3.8-Flash-Next vẫn là mô hình sinh tự hồi quy**, nhưng thay đổi cách lưu ngữ cảnh, truy xuất thông tin và truyền đặc trưng giữa các layer.
+
+Hãy hình dung bạn đang đọc một repository dài. Bạn cần nhớ ý chính của các file đã đọc, tìm lại chính xác một định nghĩa cách hàng chục nghìn token, nhận diện nhanh những cụm mã quen thuộc và chọn phép xử lý phù hợp cho đoạn hiện tại. Một cơ chế duy nhất khó tối ưu cả bốn việc. Qwen kết hợp **[bộ nhớ trạng thái của Gated DeltaNet](/kien-thuc/gated-delta-net/)**, **[truy xuất token bằng Sparse Attention](/kien-thuc/sparse-attention/)**, **bảng tra cứu n-gram** và **các expert của MoE**. Gated Residual điều phối thông tin giữa các phép xử lý này qua chiều sâu.
+
+Bài viết dựa trên [model card](https://huggingface.co/Qwen/Qwen3.8-Flash-Next), [config.json](https://huggingface.co/Qwen/Qwen3.8-Flash-Next/blob/main/config.json) và [báo cáo kỹ thuật ngày 26/08/2026](https://github.com/QwenLM/Qwen3.8-Flash-Next/blob/main/tech_report.pdf), đối chiếu ngày 09/10/2026. Nhóm Qwen mô tả đây là bản xem trước kiến trúc dự kiến dùng cho Qwen4; tên lớp `Qwen4ExpForConditionalGeneration` trong config phù hợp với định hướng ấy. Không nên lấy thông số Qwen3-Next hay Qwen3.5 thay cho checkpoint này.
+
+<Callout type="note">
+
+Visualization phía trên là **mô phỏng giáo dục, không chạy trọng số Qwen**. Lịch layer, thông số kiến trúc và phép tính bộ nhớ lấy từ nguồn chính thức; expert được chọn, gate và vector residual là dữ liệu minh họa. Chúng giúp kiểm tra luồng tính toán, không thể dùng để kết luận model thật chú ý vào từ nào hoặc trả lời ra sao.
+
+</Callout>
+
+## Bản đồ kiến trúc: Theo một token từ đầu vào đến đầu ra
+
+<figure class="article-diagram">
+  <a href={Diagram.src} target="_blank" rel="noopener" aria-label="Mở sơ đồ ở kích thước đầy đủ">
+    <Image src={Diagram} alt="Kiến trúc Qwen3.8-Flash-Next gồm GDN/QSA, MoE, gated residual, n-gram embedding và MTP." widths={[640, 960, 1400]} sizes="(min-width: 1024px) 900px, 100vw" loading="lazy" />
+  </a>
+  <figcaption>Hình 1 từ <a href="https://github.com/QwenLM/Qwen3.8-Flash-Next/blob/main/tech_report.pdf">báo cáo kỹ thuật của Qwen Team</a>. Nhấp hình để xem đầy đủ.</figcaption>
+</figure>
+
+
+Luồng văn bản bắt đầu bằng tokenizer: văn bản được biến thành token ID, mỗi ID tra một vector embedding. Nếu có ảnh hoặc video, nhánh thị giác tạo các đặc trưng tương thích với chiều rộng của decoder. Backbone xử lý chuỗi đa phương thức và cuối cùng tạo phân phối cho token văn bản tiếp theo.
+
+<QwenPipeline />
+
+GDN là **[Gated DeltaNet](/kien-thuc/gated-delta-net/)**; QSA là **Qwen Sparse Attention**, một biến thể của **[Sparse Attention](/kien-thuc/sparse-attention/)**; GR là **Gated Residual**; MoE là **Mixture of Experts**; MTP là **Multi-Token Prediction**. Trong sơ đồ, một layer gồm hai sublayer: token mixer và MoE. Vì vậy 48 layer chứa 48 token mixer và 48 MoE, không phải 48 phép xử lý đơn lẻ.
+
+| Thành phần | Cấu hình checkpoint | Ý nghĩa |
+| --- | --- | --- |
+| Backbone ngôn ngữ | 125B, khoảng 6B active/token | Nhiều trọng số tồn tại nhưng chỉ một phần tham gia tính cho mỗi token |
+| N-gram / MTP | Thêm 51B / 4B tham số | Được công bố riêng ngoài backbone 125B |
+| Hidden size | 2560 | Chiều vector mà mỗi sublayer xử lý |
+| Lịch 48 layer | 36 GDN + 12 QSA | Ba GDN rồi một QSA, lặp 12 lần |
+| Residual stream | 4 nhánh, rank 320 | Mỗi token mang 4 vector 2560 chiều giữa các sublayer |
+| Vocabulary | 248.320, đã padding | Kích thước bảng embedding và đầu logit |
+| MoE mỗi layer | 512 routed expert; chọn 10, thêm 1 shared | Expert intermediate size 640 |
+| Context native | 262.144 token | Model card nêu có thể mở rộng tới 1.000.000 |
+
+**6B active là thông số về lượng tính toán, không phải dung lượng model.** Expert chưa được chọn vẫn có trọng số cần lưu hoặc chuyển từ nơi khác tới. Chỉ cộng các phần công bố riêng đã được khoảng 180B tham số; đây không phải phép kiểm kê đầy đủ mọi tensor của model đa phương thức. Ở 2 byte/tham số, 180B tương ứng khoảng 360 GB trọng số trước KV cache, trạng thái GDN, activation và overhead. Quantization/offloading thay đổi yêu cầu bộ nhớ nhưng không biến checkpoint thành model 6B.
+
+## Token embedding và n-gram embedding: Hai phép tra cứu khác nhau
+
+### Token embedding: Một ID, một vector
+
+Token embedding thông thường ánh xạ $x_t$ thành $E[x_t]\in\mathbb{R}^{2560}$. Token có thể là mảnh từ, dấu câu hoặc một phần mã nguồn. Vocabulary đã padding 248.320 không có nghĩa có đúng từng ấy từ tiếng Việt, cũng không phải số token tối đa của prompt. Config đặt `tie_word_embeddings: false`: bảng đầu vào và trọng số đầu ra không được buộc dùng chung.
+
+### N-gram embedding: Tra theo cụm token gần nhất
+
+Một token như `bank` có thể xuất hiện trong nhiều ngữ cảnh. N-gram lookup bổ sung biểu diễn phụ thuộc cụm token ngay trước nó. Tại vị trí $t$, bigram là $(x_{t-1},x_t)$ và trigram là $(x_{t-2},x_{t-1},x_t)$; đây là **cụm token, không nhất thiết là cụm từ**.
+
+Có thể viết sơ đồ khái niệm như sau:
+
+$$
+u_t=\operatorname{Lookup}_{2}(x_{t-1},x_t)
+\mathbin{\Vert}\operatorname{Lookup}_{3}(x_{t-2},x_{t-1},x_t).
+$$
+
+$\Vert$ chỉ việc ghép các phần tra cứu trong biểu diễn khái niệm, không khẳng định đây là toàn bộ forward code. Config công bố `ngram_size=3`, `heads_per_ngram=8`, `ngram_vocab_size_base=20000000`, `ple_embed_dim=2560` và `ple_layer_ids=[2]`. Model card mô tả bigram/trigram tại layer 2. Con số 20 triệu là cấu hình không gian tra cứu, không phải 20 triệu từ trong tokenizer hay toàn bộ mọi tổ hợp của vocabulary.
+
+Bảng tra có **51B tham số bổ sung**, nhưng mỗi token chỉ đọc một số hàng. Địa chỉ tra cứu được xác định từ token ID nên hệ thống có thể biết trước dữ liệu cần lấy, giữ bảng ở bộ nhớ host và prefetch bất đồng bộ trong lúc layer đầu đang tính. Đó là lý do layer 2 có ích về triển khai. Khả năng chồng lấp truyền dữ liệu còn phụ thuộc engine, băng thông và batching.
+
+Bảng này được học khi train; nó không phải một kho tài liệu có đoạn văn và nguồn trích dẫn như RAG. Nó cũng không thay thế bộ nhớ ngữ cảnh xa của attention. Kết quả ablation trong báo cáo cho thấy tăng vocabulary n-gram có thể giảm loss mà điểm tác vụ đã bão hòa: thêm tham số chưa tự động bảo đảm thêm năng lực.
+
+## Gated DeltaNet: Nén lịch sử thành trạng thái có thể cập nhật
+
+### Vì sao dùng trạng thái thay vì đọc lại mọi token?
+
+Dense causal [attention](/kien-thuc/transformer-explainer/) cho vị trí $t$ truy xuất trực tiếp các token từ đầu đến $t$. Với chuỗi dài $L$, số cặp query–key ở prefill tăng theo $O(L^2)$. Khi decode, mỗi token mới vẫn phải đọc một KV cache dài dần.
+
+GDN duy trì **ma trận trạng thái cố định theo độ dài chuỗi** cho mỗi head. Mỗi token cập nhật trạng thái rồi đọc từ đó. Nó giống một bảng liên kết key–value liên tục, nơi thông tin cũ có thể bị suy giảm và thông tin mới sửa lại liên kết đã có. Kích thước trạng thái không tăng theo $L$, nhưng trạng thái hữu hạn không thể giữ nguyên mọi chi tiết lịch sử như KV cache.
+
+### Các component trong một GDN sublayer
+
+Đầu vào $x_t$ đã được GR read chuẩn hóa và phối trộn. Ba phép chiếu tuyến tính tạo Q, K và V. Chúng đi qua **depthwise convolution nhân quả ngắn**, kích thước kernel 4 trong config, rồi SiLU. Q và K được L2-normalize; V giữ biểu diễn giá trị. Convolution thêm ngữ cảnh cục bộ trước khi thông tin được nén vào trạng thái.
+
+GDN có 16 head Q/K và 48 head V; chiều key và value đều là 128. Không nên đồng nhất các head này với 24 query head của QSA. Phép chia head cho phép nhiều kênh lưu thông tin trong trạng thái với cùng nhóm Q/K.
+
+Theo quy ước của báo cáo, $S_t\in\mathbb{R}^{d_k\times d_v}$, $q_t,k_t\in\mathbb{R}^{d_k}$ và $v_t\in\mathbb{R}^{d_v}$:
+
+$$
+\widetilde S_{t-1}=\alpha_t S_{t-1},\qquad
+e_t=v_t-\widetilde S_{t-1}^{\top}k_t,
+$$
+
+$$
+S_t=\widetilde S_{t-1}+\beta_t k_t e_t^{\top},\qquad
+y_t=S_t^{\top}q_t.
+$$
+
+Ở đây $\alpha_t\in(0,1)$ là **decay gate**: quyết định giữ bao nhiêu trạng thái cũ. $\beta_t\in(0,1)$ là **write gate**: quyết định sửa liên kết hiện tại mạnh đến đâu. $\widetilde S^{\top}k_t$ là giá trị bộ nhớ đang dự đoán cho key ấy; $e_t$ là sai số so với value mới. GDN ghi phần sai số, thay vì cộng value mới vô điều kiện. Nếu cùng key lặp lại, phép cập nhật có thể sửa liên kết cũ.
+
+Ví dụ thu nhỏ một ô trạng thái: $S_{t-1}=0{,}8$, $k_t=1$, $v_t=0{,}2$, $\alpha_t=0{,}9$, $\beta_t=0{,}5$. Sau decay ta có $0{,}72$; sai số là $-0{,}52$; trạng thái mới là $0{,}46$. Ghi thông tin mới có thể **giảm** giá trị cũ. [Lab Gated DeltaNet](/kien-thuc/gated-delta-net/#cong-cu) chạy đúng phép cập nhật này trên một ma trận 4×4; model thật dùng nhiều head và gate phụ thuộc dữ liệu.
+
+### Output gate và normalization
+
+Sau khi đọc bộ nhớ, GDN dùng zero-centered RMSNorm, nhân một sigmoid output gate rồi chiếu về hidden size:
+
+$$
+o_t=W_o\left[\sigma(W_zx_t)\odot\operatorname{RMSNorm}(y_t)\right].
+$$
+
+$\odot$ là nhân theo từng phần tử. **Output gate khác decay gate và write gate**: nó điều chỉnh lượng thông tin được gửi ra sublayer, không trực tiếp quyết định cập nhật trạng thái. Qwen dùng sigmoid bị chặn trong khoảng $(0,1)$ cho output gate. Zero-centered RMSNorm thường tham số hóa gain quanh 1 thông qua $1+w$; “zero-centered” không có nghĩa trừ trung bình đầu vào như LayerNorm.
+
+Tính theo chiều dài chuỗi với kích thước head cố định, recurrence có chi phí tuyến tính. Kernel huấn luyện có thể xử lý theo chunk để tận dụng GPU, dù mô tả toán học được viết tuần tự. Ba layer GDN liên tiếp xử lý thông tin hiệu quả; layer QSA kế tiếp bổ sung khả năng tìm lại token cụ thể mà bộ nhớ nén khó giữ nguyên.
+
+## Qwen Sparse Attention: Chọn micro-block rồi mới đọc token
+
+### Hai hệ thống Q/K có hai nhiệm vụ
+
+QSA gồm **lightweight indexer** và **core attention**. Indexer tìm các vùng ngữ cảnh đáng đọc; core attention tính đầu ra thực tế trên các token được giữ. Q/K của indexer có trọng số và kích thước riêng, không phải Q/K của core được lấy dùng lại.
+
+| Nhánh | Query head | Key/value head | Head dimension | RoPE dimension |
+| --- | --- | --- | --- | --- |
+| Indexer, MQA | 4 | 1 key head dùng chung | 128 | 64 |
+| Core, GQA | 24 | 2 KV head | 256 | 64 |
+
+Trong core, 12 query head dùng chung một KV head; chia sẻ K/V giảm bộ nhớ cache so với mỗi query head giữ K/V riêng. Partial RoPE chỉ xoay 64 chiều: 25% head core và 50% head indexer. RoPE đưa vị trí vào phép so khớp, còn những chiều khác giữ biểu diễn không xoay.
+
+### Bước 1: Nén key thành micro-block 4 token
+
+Indexer chiếu hidden states thành key rồi average-pool từng nhóm 4 token không chồng lấn. Key đã nén được RMS-normalize và áp dụng RoPE theo **vị trí bắt đầu block**. Average pooling thực hiện **trước RoPE**, tránh trung bình các vector đã bị xoay với những pha vị trí khác nhau.
+
+Với $r=4$, block $b$ bắt đầu ở $p_b=4b$. Một query tại $i$ chỉ chấm điểm block đã xuất hiện đầy đủ: $p_b+r-1\le i$. Như vậy bộ chọn không nhìn token tương lai.
+
+### Bước 2: Indexer chấm điểm và chọn top-k block
+
+Điểm block là tổng similarity qua 4 query head sau ReLU:
+
+$$
+I_{ib}=\sum_{h=1}^{4}\operatorname{ReLU}
+\left(\langle q_{ih}^{\mathrm{idx}},\bar k_b^{\mathrm{idx}}\rangle\right).
+$$
+
+Những block chưa hoàn chỉnh không được đưa vào tập này. Checkpoint dùng budget $K=2048$ token và compression ratio $r=4$, tương ứng tối đa **512 complete block**. Nếu prefix ngắn, số block có thể ít hơn 512.
+
+### Bước 3: Mở block về token và thực hiện attention
+
+Các block được chọn mở lại thành chỉ số token gốc. Phần đuôi chưa đủ một block luôn được giữ: với block 4, có thể thêm tối đa 3 token ngoài budget 2048 complete-block token. Đừng hiểu 2048 là độ dài context hay giới hạn cứng của toàn bộ tập token core đọc.
+
+Core vẫn dùng softmax attention trên tập $\mathcal S_i$ được chọn:
+
+$$
+a_{ij}=\frac{\exp(q_i^{\top}k_j/\sqrt{d_h})}
+{\sum_{u\in\mathcal S_i}\exp(q_i^{\top}k_u/\sqrt{d_h})},
+\qquad y_i=\sum_{j\in\mathcal S_i}a_{ij}v_j.
+$$
+
+Công thức mô tả một core head, lược bỏ phép chuẩn hóa Q/K và chiếu. Sau core, sigmoid output gate điều chỉnh đầu ra trước phép chiếu tuyến tính. Điểm indexer dùng để **chọn vùng**; trọng số $a_{ij}$ dùng để **trộn value**. Chúng không phải cùng một đại lượng.
+
+<Callout type="try">
+
+Mở [lab Sparse Attention](/kien-thuc/sparse-attention/#cong-cu), chọn bước **QSA: chọn block** và đặt query ở vị trí 15: chỉ ba block hoàn chỉnh trước query được chấm điểm, còn token 13–15 là đuôi luôn giữ. Chuyển sang vị trí 16: block chứa token 13–16 đã hoàn chỉnh nên phải tham gia cạnh tranh top-k. Mở bước **Bộ nhớ ngữ cảnh dài** ở lab phía trên để thấy QSA giới hạn số token đọc chứ không làm KV cache ngừng tăng.
+
+</Callout>
+
+### QSA giảm chi phí ở đâu?
+
+Indexer phải so query với khoảng $L/4$ key block, nên prefill indexing vẫn có thành phần **$O(L^2/4)$**. Core attention tính trên khoảng $K$ token mỗi query, chi phí theo $O(LK)$ khi budget cố định. Khi decode, indexer vẫn cần chấm điểm lịch sử đã nén và core đọc các token được chọn. **Toàn bộ QSA không trở thành recurrence có trạng thái cố định**, cũng không thể kết luận cache chỉ còn 2048 token: token cũ có thể được chọn ở bước tương lai.
+
+Báo cáo nêu kernel QSA tại context 1M nhanh hơn dense attention 7,6 lần ở prefill và 4,9 lần ở decode trong thiết lập thử nghiệm. Đây là **số đo kernel**, không phải cam kết tốc độ toàn model, mọi GPU hay toàn bộ một tác vụ agent. MoE, truyền trọng số, batch size và framework còn quyết định latency.
+
+QSA được đưa vào continued pretraining ở context 256K: trước hết distill phân phối attention dense sang indexer, rồi train backbone thích nghi với mask sparse. Teacher distribution được **max-pool** theo block để bảo toàn tín hiệu token nổi bật; việc này khác average-pool key khi xây indexer. Báo cáo mô tả 1.000 bước warm-up riêng indexer, sau đó 8.000 bước sparse training. Các vị trí tên `full_attention` trong config của checkpoint là vị trí mixer QSA theo báo cáo, không nên diễn giải rằng checkpoint phát hành vẫn chạy dense attention ở đó.
+
+## Mixture of Experts: Chọn mạng feed-forward theo token
+
+Sau token mixer, mỗi layer dùng MoE thay MLP dense. Attention/GDN trao đổi thông tin qua **các vị trí token**; MoE biến đổi **đặc trưng của một token** qua các mạng expert.
+
+Router nhận biểu diễn token và chấm điểm 512 routed expert. Mỗi token chọn 10 expert và kết hợp đầu ra của chúng với một shared expert. Có thể mô tả khái niệm:
+
+$$
+\operatorname{MoE}(x)=\sum_{e\in\operatorname{Top10}(r(x))}
+p_e(x)\operatorname{Expert}_e(x)+\operatorname{Shared}(x).
+$$
+
+Biểu thức lược bỏ chi tiết gate/chuẩn hóa của từng implementation. Dạng feed-forward gated thường dùng với activation SiLU trong config là:
+
+$$
+\operatorname{Expert}(x)=W_{\mathrm{down}}
+\left[\operatorname{SiLU}(W_{\mathrm{gate}}x)
+\odot W_{\mathrm{up}}x\right].
+$$
+
+Các expert có intermediate size 640 và trả vector 2560 chiều. **Shared expert không nằm trong 10 expert top-k**. Nó cung cấp nhánh xử lý dùng chung, bên cạnh các nhánh được router chọn.
+
+Expert không nhất thiết có nhãn sẵn “toán”, “code”, “tiếng Việt”. Sự chuyên biệt được học; một token có thể gọi nhiều expert và một expert có thể xử lý nhiều loại dữ liệu. Để train hiệu quả, router cần tránh dồn hầu hết token vào vài expert; config có `router_aux_loss_coef=0.001`. Triển khai nhiều GPU còn chịu chi phí chuyển token đến thiết bị giữ expert và gom kết quả.
+
+Bước **MoE routing** của visualization giữ đúng lưới 512 expert và chọn 10, kèm shared expert riêng. Đổi token mẫu hoặc layer ở bước 1 làm thay đổi tập được tô, vì mỗi layer có router riêng; đây là routing có seed cố định cho bài học, không phải expert ID đo từ model.
+
+## Gated Residual: Bốn nhánh nhớ, đọc theo kênh và ghi theo nhánh
+
+### Từ kết nối tắt đến nhiều đường truyền
+
+Transformer pre-norm thường có $R'=R+F(\operatorname{Norm}(R))$. Kết nối tắt giúp truyền tín hiệu qua nhiều layer, nhưng mọi đặc trưng phải đi chung một residual stream. Qwen mở rộng thành bốn vector $R_1,\dots,R_4$, mỗi vector vẫn rộng 2560.
+
+Điều này không biến mọi expert thành mạng rộng 10.240, cũng không phải bốn model chạy độc lập. Sublayer vẫn nhận một vector 2560; GR quyết định cách tạo vector ấy từ bốn nhánh, rồi phân phối output trở lại.
+
+### GR read: Chuẩn hóa riêng và gate từng phần tử
+
+Trước một sublayer, GR RMS-normalize từng nhánh với gain riêng. Từ toàn bộ bốn nhánh đã normalize, bottleneck hai phép chiếu có rank 320 tạo sigmoid gate cho mỗi cặp **nhánh × channel**:
+
+$$
+\widehat R_i=\operatorname{RMSNorm}_i(R_i),\qquad
+x=\frac{1}{4}\sum_{i=1}^{4}G_i\odot\widehat R_i.
+$$
+
+$G_i\in(0,1)^{2560}$, nên một nhánh có thể được đọc mạnh ở channel này và yếu ở channel khác. $\frac14$ là phép lấy trung bình có hệ số cố định; các gate **không cần cộng thành 1** như softmax. Rank 320 giảm chi phí dự đoán gate so với một ma trận full-rank trên toàn bộ stream.
+
+### GR write: Một hệ số cho mỗi nhánh
+
+Sublayer tính $y=F(x)$. Write operator dùng các nhánh đã normalize để dự đoán bốn scalar:
+
+$$
+s=2\sigma\left(\tfrac14W_w\operatorname{vec}(\widehat R)\right),
+\qquad R'_i=R_i+s_i y.
+$$
+
+Read gate nằm trong $(0,1)$; write gate này nằm trong $(0,2)$ và có thể lớn hơn 1. Khi ghi, toàn bộ vector $y$ được nhân cùng scalar $s_i$ cho nhánh $i$. Đây là khác biệt giữa **elementwise read** và **scalar write**.
+
+GR bỏ toán tử trộn nhánh $H_{\mathrm{res}}$ của thiết kế Hyper-Connections tổng quát. Mỗi nhánh giữ accumulator riêng; các nhánh tương tác qua phép read và output sublayer được write trở lại. Báo cáo dùng GR riêng cho token mixer và MoE của mỗi layer. Do read đã normalize, không cần chèn thêm một pre-norm độc lập như trong sơ đồ Transformer cũ.
+
+<Callout type="try">
+
+Mở bước **Gated Residual** và kéo hệ số đọc của R3 về 0: hàng $x$ thay đổi ở những channel mà R3 đang được gate đọc mạnh. Sau đó kéo $s_4$: chỉ hàng R4 trong bảng “Sau GR write” đổi, vì cùng output $y$ được ghi vào mỗi nhánh với một hệ số riêng. Hình dùng 8 channel thay cho 2560; trong model thật, read gate do mạng dự đoán, thanh trượt chỉ giúp thấy tác dụng của nó.
+
+</Callout>
+
+## Vision encoder: Đưa ảnh và video vào cùng decoder
+
+Checkpoint là **causal language model có vision encoder**, không chỉ text-only. Config công bố encoder 27 block, hidden size 1152, 16 head và intermediate size 4304. Patch size không gian là 16, temporal patch size là 2, spatial merge size là 2; đầu ra được ánh xạ sang hidden size **2560** của decoder.
+
+Về luồng chức năng: processor chuẩn bị pixel/khung hình và các vị trí token thị giác; encoder biến patch thành feature; bước merge/projection đưa feature tới không gian của language model. Chuỗi văn bản và vị trí feature thị giác cùng đi qua backbone hybrid. Các token đặc biệt đánh dấu đầu/cuối vùng vision và loại ảnh/video giúp processor tổ chức chuỗi.
+
+Ở mức khái niệm, merge 2×2 giảm số vị trí không gian sau mã hóa. Không nên lấy kích thước ảnh tùy ý rồi suy ra chính xác số visual token chỉ từ `patch_size`: preprocessing, resizing, padding và cách đóng gói video cũng tham gia. `temporal_patch_size=2` không nói rằng engine luôn lấy video ở 2 FPS. Config có `deepstack_visual_indexes=[]`; vì vậy bài không gán thêm đường DeepStack injection từ model Qwen khác.
+
+Visualization không có phần vision và không chạy nhận diện ảnh. Bài không đưa ảnh dataset hay video của người thật vào demo.
+
+## Đầu dự đoán, sampling và Multi-Token Prediction
+
+Sau backbone, phép đọc residual cuối tạo hidden state cho prediction head. Đầu này chiếu sang 248.320 logits. Softmax chuyển logits thành phân phối; temperature, top-k hoặc top-p điều chỉnh cách lấy mẫu như trong bài Transformer. Token đã chọn được nối vào chuỗi để sinh tiếp; EOS hoặc giới hạn sinh có thể kết thúc.
+
+**MTP là module phụ với 1 layer và khoảng 4B tham số được công bố riêng**, train cho nhiều bước dự đoán. Một layer MTP không có nghĩa chỉ sinh một token nháp hay chỉ có thể dự đoán một bước. Nó có thể được dùng nhiều bước trong speculative decoding.
+
+Luồng speculative decoding là: MTP đề xuất một chuỗi draft → backbone kiểm tra → chấp nhận một prefix phù hợp → xử lý phần bị từ chối theo thuật toán của engine. Muốn bảo toàn phân phối target cần cơ chế acceptance/correction đúng; chọn token nháp trùng top-1 đơn thuần không thay thế thuật toán này.
+
+Báo cáo thay attention của MTP bằng QSA và tái sử dụng top-k index qua các bước draft. Chia sẻ này diễn ra **giữa các bước MTP**, không có nghĩa tất cả QSA layer backbone dùng chung index. Framework cần hỗ trợ và bật MTP thì mới tận dụng được; tốc độ tăng phụ thuộc acceptance rate và chi phí kiểm tra.
+
+## Khi ghép các component: Prefill và decode khác nhau
+
+**Prefill** xử lý prompt đã biết. Token embedding và n-gram address có thể chuẩn bị cho nhiều token; GDN dựng trạng thái qua chuỗi; QSA indexer chọn block cho các query; MoE xử lý các token theo expert. Prompt dài khiến công việc attention và indexing nổi bật.
+
+**Decode** nối từng token mới. GDN cập nhật trạng thái cùng bộ nhớ convolution ngắn. QSA cập nhật K/V và key block nén, rồi chọn lại ngữ cảnh cho query mới. N-gram lookup dùng token mới và lịch sử cục bộ. MoE chỉ gọi expert được chọn cho token ấy. Khi batch nhỏ, đọc trọng số và truyền dữ liệu thường trở thành nút thắt; số FLOPs thấp chưa đủ bảo đảm latency thấp.
+
+| Cơ chế | Lưu hoặc truy xuất gì? | Có thể bỏ sót điều gì? |
+| --- | --- | --- |
+| GDN | Liên kết được nén trong trạng thái | Chi tiết token cũ có thể bị ghi đè/suy giảm |
+| QSA | Token gốc ở block được indexer chọn | Block quan trọng có thể không vào top-k |
+| N-gram | Vector học từ cụm token ngắn | Không cung cấp truy xuất toàn bộ prompt |
+| MoE | Các phép biến đổi tham số hóa | Routing không lý tưởng; giao tiếp expert tốn chi phí |
+| GR | Đặc trưng truyền qua các layer | Bốn nhánh không phải bốn bản sao lịch sử nguyên vẹn |
+
+Ngữ cảnh native là 262.144 token; model card nói mở rộng tới 1M. Dịch vụ **Qwen3.8-Flash** được mô tả có 1M mặc định và thêm tính năng production. Không nên mặc định checkpoint mở, engine local và dịch vụ cloud có cùng cấu hình context, công cụ hoặc latency.
+
+## Training recipe: Kiến trúc và optimizer được thiết kế cùng nhau
+
+Báo cáo dùng **Muon** cho trọng số hai chiều đóng vai trò linear map; embedding đầu vào, n-gram table, output head, MoE router và low-rank projection của GR tiếp tục dùng **AdamW**. Những ma trận gộp cần tách phù hợp trước bước orthogonalization của Muon. Đây là quyết định train, không phải một layer xuất hiện trong forward inference.
+
+Nhóm refit scaling laws cho kiến trúc mới để chọn learning rate và batch size lớn hơn. Họ bỏ **batch-size warm-up**, bắt đầu ngay tại batch mục tiêu; điều này không đồng nghĩa bỏ mọi warm-up của learning rate hay warm-up distillation indexer QSA. Các stress test và ablation được thực hiện ở những scale, dữ liệu và thiết lập riêng. Bài học hữu ích là cần xem đồng thời loss, benchmark, hiệu suất và độ ổn định, thay vì coi một chỉ số duy nhất chứng minh mọi cải tiến.
+
+## Tự kiểm tra sau khi khám phá
+
+1. Ở layer 4, token mixer là gì? **QSA**; layer 1–3 là GDN, và cả bốn đều có MoE.
+2. Tăng decay gate GDN có khiến bộ nhớ chắc chắn giữ nguyên? **Không**: delta write vẫn có thể sửa liên kết.
+3. QSA chọn 512 block có nghĩa đọc 512 token? **Không**: mỗi block có 4 token, thêm đuôi chưa hoàn chỉnh.
+4. Có 512 expert thì mỗi token chạy cả 512? **Không**: 10 routed expert cộng 1 shared.
+5. Bốn nhánh residual có làm hidden size của expert thành 10.240? **Không**: GR read đưa về 2560.
+6. N-gram table 51B có phải RAG? **Không**: đó là bảng vector học, tra theo cụm token.
+
+Khi quay lại bản đồ tổng quan, hãy phân biệt ba trục: **token mixer truyền thông tin qua vị trí**, **GR truyền thông tin qua layer**, còn **MoE chọn phép biến đổi đặc trưng**. N-gram và vision cung cấp biểu diễn bổ sung; prediction head và MTP phục vụ sinh token. Phân biệt các nhiệm vụ ấy giúp đọc kiến trúc mà không đánh đồng mọi chữ “gate”, “head” hay “memory”.
+
+## Nguồn để đọc tiếp
+
+- [Qwen3.8-Flash-Next model card](https://huggingface.co/Qwen/Qwen3.8-Flash-Next): overview, thông số công bố, context và hướng dẫn serving.
+- [Cấu hình checkpoint](https://huggingface.co/Qwen/Qwen3.8-Flash-Next/blob/main/config.json): text/vision dimensions, lịch layer, indexer, MoE, GR và MTP.
+- [On the Design of Qwen3.8-Next Architecture: Evaluation, Efficiency, and Training Stability](https://github.com/QwenLM/Qwen3.8-Flash-Next/blob/main/tech_report.pdf): §2.1 GDN/QSA, §2.2 GR, §2.3 n-gram, §3 training recipe; hình 1–3 và phương trình 1–20, 29–34.
+- [Bài công bố của Qwen](https://qwen.ai/blog?id=qwen3.8-flash-next): bối cảnh và định hướng kiến trúc.
+- [Transformer Explainer trên AI4E](/kien-thuc/transformer-explainer/): ôn token, Q/K/V, causal attention, logits và sampling trước khi thử kiến trúc hybrid.

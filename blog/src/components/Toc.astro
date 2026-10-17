@@ -1,0 +1,209 @@
+---
+/**
+ * Table of contents from render() headings (depth 2–3).
+ *   variant="sidebar"  → sticky list for the desktop right column (scrollspy).
+ *   variant="inline"   → collapsible "Mục lục" disclosure for mobile/tablet.
+ * Scrollspy uses IntersectionObserver and marks the active link with aria-current="location".
+ */
+import type { MarkdownHeading } from 'astro';
+import Icon from './Icon.astro';
+
+interface Props {
+  headings: MarkdownHeading[];
+  variant?: 'sidebar' | 'inline';
+  minDepth?: number;
+  maxDepth?: number;
+}
+
+const { headings, variant = 'sidebar', minDepth = 2, maxDepth = 3 } = Astro.props;
+const items = headings.filter((h) => h.depth >= minDepth && h.depth <= maxDepth && h.slug);
+const titleId = `toc-title-${variant}`;
+---
+
+{
+  items.length > 0 &&
+    (variant === 'sidebar' ? (
+      <nav class="toc toc--sidebar" aria-labelledby={titleId} data-toc>
+        <p class="toc__title" id={titleId}>
+          <Icon name="list" size={16} /> Mục lục
+        </p>
+        <ol class="toc__list">
+          {items.map((h) => (
+            <li class:list={['toc__item', `toc__item--d${h.depth}`]}>
+              <a href={`#${h.slug}`} data-toc-link={h.slug}>{h.text}</a>
+            </li>
+          ))}
+        </ol>
+      </nav>
+    ) : (
+      <details class="toc toc--inline" data-toc>
+        <summary class="toc__summary">
+          <span id={titleId}>
+            <Icon name="list" size={16} /> Mục lục
+          </span>
+          <Icon name="chevron-down" size={18} class="toc__chevron" />
+        </summary>
+        <nav aria-labelledby={titleId}>
+          <ol class="toc__list">
+            {items.map((h) => (
+              <li class:list={['toc__item', `toc__item--d${h.depth}`]}>
+                <a href={`#${h.slug}`} data-toc-link={h.slug}>{h.text}</a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      </details>
+    ))
+}
+
+<style>
+  .toc {
+    font-size: var(--text-sm);
+  }
+  .toc__title,
+  .toc__summary span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 700;
+    font-size: var(--text-xs);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text);
+  }
+  .toc__list {
+    margin: var(--space-3) 0 0;
+    padding: 0;
+    list-style: none;
+    border-left: 2px solid var(--color-border);
+  }
+  .toc__item a {
+    display: block;
+    margin-left: -2px;
+    padding: 0.3rem 0.75rem;
+    border-left: 2px solid transparent;
+    color: var(--color-text-2);
+    line-height: 1.45;
+    transition:
+      color var(--dur) var(--ease),
+      border-color var(--dur) var(--ease);
+  }
+  .toc__item--d3 a {
+    padding-left: 1.6rem;
+    font-size: 0.8125rem;
+  }
+  .toc__item a:hover {
+    color: var(--color-link);
+  }
+  .toc__item a[aria-current='location'] {
+    color: var(--color-primary-soft-text);
+    border-left-color: var(--color-primary);
+    font-weight: 600;
+  }
+
+  /* Sidebar */
+  .toc--sidebar {
+    position: sticky;
+    top: calc(var(--header-h) + var(--space-6));
+    max-height: calc(100vh - var(--header-h) - var(--space-12));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: var(--space-2);
+  }
+
+  /* Inline (mobile) */
+  .toc--inline {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+  .toc__summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    min-height: 44px;
+    padding: var(--space-2) var(--space-4);
+    cursor: pointer;
+    list-style: none;
+    border-radius: var(--radius-lg);
+  }
+  .toc__summary::-webkit-details-marker {
+    display: none;
+  }
+  .toc__summary :global(.toc__chevron) {
+    color: var(--color-muted);
+    transition: transform var(--dur) var(--ease);
+  }
+  .toc--inline[open] .toc__summary :global(.toc__chevron) {
+    transform: rotate(180deg);
+  }
+  .toc--inline nav {
+    padding: 0 var(--space-4) var(--space-4);
+  }
+  .toc--inline .toc__list {
+    margin-top: 0;
+  }
+</style>
+
+<script>
+  function initToc() {
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('[data-toc-link]'));
+    if (links.length === 0 || !('IntersectionObserver' in window)) return;
+
+    const slugs = [...new Set(links.map((a) => a.dataset.tocLink!))];
+    const targets = slugs
+      .map((slug) => document.getElementById(slug))
+      .filter((el): el is HTMLElement => el !== null);
+    if (targets.length === 0) return;
+
+    const visible = new Set<string>();
+    let active = '';
+
+    const setActive = (slug: string) => {
+      if (slug === active) return;
+      active = slug;
+      for (const a of links) {
+        if (a.dataset.tocLink === slug) a.setAttribute('aria-current', 'location');
+        else a.removeAttribute('aria-current');
+      }
+      // Keep the active sidebar link in view without moving the page.
+      const sidebarLink = document.querySelector<HTMLElement>(`.toc--sidebar [data-toc-link="${CSS.escape(slug)}"]`);
+      const sidebar = sidebarLink?.closest<HTMLElement>('.toc--sidebar');
+      if (sidebarLink && sidebar) {
+        const top = sidebarLink.offsetTop - sidebar.clientHeight / 2;
+        sidebar.scrollTo({ top: Math.max(0, top) });
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) visible.add(entry.target.id);
+          else visible.delete(entry.target.id);
+        }
+        // Topmost visible heading wins; otherwise the last heading above the viewport.
+        const firstVisible = targets.find((t) => visible.has(t.id));
+        if (firstVisible) {
+          setActive(firstVisible.id);
+          return;
+        }
+        const above = targets.filter((t) => t.getBoundingClientRect().top < 0);
+        const last = above[above.length - 1];
+        if (last) setActive(last.id);
+      },
+      { rootMargin: '-72px 0px -60% 0px', threshold: 0 },
+    );
+    targets.forEach((t) => observer.observe(t));
+
+    // Close the mobile disclosure after choosing a section.
+    document.querySelectorAll<HTMLDetailsElement>('details.toc--inline').forEach((details) => {
+      details.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('a[data-toc-link]')) details.open = false;
+      });
+    });
+  }
+
+  initToc();
+</script>

@@ -1,0 +1,8 @@
+{
+  "extends": "../../../blog/tsconfig.json",
+  "compilerOptions": {
+    "paths": { "astro": ["../../../blog/node_modules/astro"], "astro/*": ["../../../blog/node_modules/astro/*"] }
+  },
+  "include": ["../../../blog/.astro/types.d.ts", "**/*.ts", "**/*.astro"],
+  "exclude": ["node_modules"]
+}

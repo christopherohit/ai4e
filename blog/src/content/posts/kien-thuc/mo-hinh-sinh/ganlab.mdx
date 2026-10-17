@@ -1,0 +1,186 @@
+---
+title: 'GAN Lab: Nhìn hai mạng nơ-ron học cách tạo dữ liệu'
+description: 'Khám phá GAN qua các điểm dữ liệu 2D: theo dõi bộ sinh, bộ phân biệt và gradient để hiểu vì sao huấn luyện đối nghịch cần sự cân bằng.'
+category: kien-thuc
+topic: mo-hinh-sinh
+order: 4
+tags: ['GAN', 'Học sâu', 'Mô hình sinh', 'Trực quan hóa']
+viz: ganlab
+vizHeight: 900
+cover: ../../../../assets/covers/ganlab.webp
+date: 2026-10-03
+---
+
+import Callout from '../../../../components/Callout.astro';
+import KeyTerm from '../../../../components/KeyTerm.astro';
+
+## Mở đầu: Học tạo dữ liệu mà không có đáp án mẫu
+
+Một mô hình phân loại nhìn ảnh và trả lời “đây là mèo”. Một <KeyTerm vi="mô hình sinh" en="generative model" /> làm việc theo hướng khác: tạo ra dữ liệu mới có những đặc điểm giống dữ liệu đã quan sát. Nhưng làm sao dạy mô hình tạo dữ liệu khi ta không có một đáp án duy nhất cho mỗi đầu vào?
+
+<KeyTerm vi="Mạng sinh đối nghịch" en="Generative Adversarial Network, GAN" /> giải quyết bài toán bằng hai mạng cùng học. Một mạng tạo mẫu; mạng còn lại tìm cách phân biệt mẫu đó với dữ liệu thật. Phản hồi từ mạng thứ hai trở thành tín hiệu để mạng thứ nhất cải thiện. Ý tưởng giống một người tập vẽ và một người nhận xét, nhưng ở đây cả hai đều thay đổi sau mỗi lượt học.
+
+GAN Lab đưa cuộc tương tác ấy lên màn hình. Thay vì ảnh khuôn mặt, công cụ dùng các điểm trong mặt phẳng hai chiều. Bạn có thể nhìn vị trí mẫu, vùng đánh giá thật–giả và hướng cập nhật cùng lúc. Mục tiêu không phải tìm một cấu hình “đẹp nhất”, mà hiểu vì sao hai mạng có lúc hỗ trợ nhau, có lúc khiến việc học dao động.
+
+## Khái niệm cốt lõi: Hai mạng, hai mục tiêu
+
+### Bộ sinh biến nhiễu thành mẫu
+
+<KeyTerm vi="Bộ sinh" en="generator" />, ký hiệu $G$, nhận một đầu vào ngẫu nhiên $z$ từ <KeyTerm vi="không gian tiềm ẩn" en="latent space" /> và biến nó thành mẫu $G(z)$. Trong GAN Lab, mẫu đầu ra là một cặp tọa độ. Các điểm thật màu xanh lá mô tả <KeyTerm vi="phân phối dữ liệu" en="data distribution" /> cần học; điểm sinh màu tím là kết quả hiện tại của $G$.
+
+Đích đến không phải ghép từng điểm tím với một điểm xanh cố định. Bộ sinh cần học cả hình dạng lẫn cách dữ liệu tập trung: nơi có nhiều mẫu thật nên có nhiều mẫu sinh, nơi trống không nên bị lấp đầy tùy tiện. Một đám điểm tím đúng hình nhưng sai mật độ vẫn chưa tái hiện đúng phân phối.
+
+### Bộ phân biệt tạo tín hiệu học
+
+<KeyTerm vi="Bộ phân biệt" en="discriminator" />, ký hiệu $D$, nhận một điểm và xuất ra giá trị trong khoảng từ 0 đến 1, dùng để đánh giá điểm đó giống dữ liệu thật đến đâu. Nó được học từ hai nguồn: dữ liệu thật và mẫu do bộ sinh tạo ra.
+
+Nền xanh trong biểu đồ thể hiện nơi $D$ đánh giá thiên về thật; nền tím thể hiện nơi thiên về giả. Đó là đánh giá của mô hình đang học, không phải một bản đồ chân lý bất biến. Khi $D$ cập nhật, bề mặt đánh giá đổi; khi $G$ cập nhật, các điểm sinh đổi. Vì thế, bộ sinh luôn học dựa trên một người chấm đang thay đổi.
+
+### Hàm mất mát và đường đi của gradient
+
+<KeyTerm vi="Hàm mất mát" en="loss function" /> diễn tả điều mỗi mạng muốn cải thiện. Mục tiêu GAN nguyên bản thường được viết dưới dạng một trò chơi cực tiểu–cực đại:
+
+$$
+\min_G\max_D V(D,G)=\mathbb{E}_{x\sim p_{\mathrm{data}}}[\log D(x)]+\mathbb{E}_{z\sim p_z}[\log(1-D(G(z)))]
+$$
+
+Ở đây, $p_{\mathrm{data}}$ là phân phối thật và $p_z$ là phân phối nhiễu. Bộ phân biệt muốn chấm cao cho mẫu thật, chấm thấp cho mẫu sinh. Bộ sinh muốn đầu ra của mình được chấm như mẫu thật. Trong thực hành, cách viết mục tiêu có thể khác để việc tối ưu thuận lợi hơn.
+
+Với tùy chọn **Log loss**, GAN Lab dùng mục tiêu bộ sinh dạng không bão hòa:
+
+$$
+L_G=-\mathbb{E}_{z\sim p_z}[\log D(G(z))]
+$$
+
+Mã nguồn cũng nhân thành phần $\log D(x)$ của mất mát bộ phân biệt với hệ số $0{,}95$:
+
+$$
+L_D=-0{,}95\,\mathbb{E}_{x\sim p_{\mathrm{data}}}[\log D(x)]-\mathbb{E}_{z\sim p_z}[\log(1-D(G(z)))]
+$$
+
+Đây là việc giảm trọng số của hạng dành cho mẫu thật, không phải thay nhãn thật bằng $0{,}95$. Với **LeastSq loss**, hai mạng tối thiểu hóa:
+
+$$
+L_D^{\mathrm{LS}}=\mathbb{E}_{x\sim p_{\mathrm{data}}}[(D(x)-1)^2]+\mathbb{E}_{z\sim p_z}[D(G(z))^2]
+$$
+
+$$
+L_G^{\mathrm{LS}}=\mathbb{E}_{z\sim p_z}[(D(G(z))-1)^2]
+$$
+
+Triển khai lấy trung bình trên từng lô mẫu, không thêm hệ số $1/2$ cho các hạng bình phương. Bộ phân biệt vẫn dùng đầu ra sigmoid ở cả hai lựa chọn. Vì vậy, đừng xem công thức GAN nguyên bản là bản sao toàn bộ mã nguồn hoặc so trực tiếp độ lớn mất mát giữa hai lựa chọn.
+
+<KeyTerm vi="Gradient" en="gradient" /> là vector đạo hàm riêng, chỉ hướng tăng nhanh nhất của một hàm tại một điểm. Cụ thể, GAN Lab tính $\nabla_u D(u)$ tại mẫu sinh $u=G(z)$ để vẽ các mũi chỉ hướng màu hồng. Đây là hướng tăng điểm đánh giá của bộ phân biệt, không phải gradient mất mát theo trọng số bộ sinh.
+
+Với **Log loss**, hướng giảm mất mát theo tọa độ mẫu là $-\nabla_u[-\log D(u)]=\nabla_u D(u)/D(u)$. Hướng này cùng chiều với mũi màu hồng, nhưng độ lớn khác. Với **LeastSq loss**, hướng giảm là $2(1-D(u))\nabla_u D(u)$. Các mũi không nối mỗi điểm tím tới một điểm xanh được chỉ định sẵn; chúng phụ thuộc bề mặt đánh giá hiện tại của $D$.
+
+Khi cập nhật $G$, gradient truyền qua $D$ nhưng các tham số của $D$ được giữ cố định trong lượt đó. Điều được thay đổi là tham số bộ sinh, dùng chung cho nhiều đầu vào nhiễu. Bởi vậy, chuyển động thật của các điểm sau cập nhật không nhất thiết trùng khít với từng đoạn chỉ hướng trên màn hình.
+
+## Khám phá GAN Lab từng bước
+
+### 1. Nhận diện ba vùng trước khi chạy
+
+**Model Overview Graph** bên trái mô tả đường đi từ **Noise** qua **Generator**, rồi tới **Discriminator** và các nhánh mất mát. **Layered Distributions** ở giữa chồng mẫu thật, mẫu sinh, nền đánh giá và gradient. **Metrics** bên phải theo dõi các đại lượng trong quá trình học. Trên màn hình hẹp, dùng nút **Toàn màn hình** hoặc **Mở tab mới** của khung nhúng để dễ quan sát bố cục rộng.
+
+Ở hàng **Data Distribution**, các hình thu nhỏ có tên khi rê chuột: **Simple line**, **Mixture of Gaussians**, **Ring**, **3 disjoint regions**. Chọn hình nào là đổi bài toán cần học. Hộp **Use pre-trained model** quyết định bắt đầu từ mô hình đã huấn luyện hay khởi tạo mới. Khi chọn một phân phối khác, mã nguồn tự bỏ chọn hộp này; bạn có thể bật lại để tải mô hình tương ứng.
+
+<Callout type="try">
+
+Chọn **Simple line** trong **Data Distribution**, bỏ chọn **Use pre-trained model**, rồi nhấp nút tam giác có chú giải **Run/Pause training**. Quan sát các điểm tím so với đường điểm xanh và bộ đếm **Epoch**. Nhấp lại cùng nút để dừng: các điểm đã tiến gần đường thật hay vẫn tập trung sai chỗ?
+
+</Callout>
+
+Đừng dùng trạng thái mở đầu của mô hình huấn luyện sẵn để suy ra mạng học nhanh đến mức nào. Nó đã có một lịch sử học trước khi bạn bấm chạy. Ngược lại, chạy từ đầu giúp thấy bước biến đổi ban đầu nhưng các lần khởi tạo ngẫu nhiên có thể cho diễn biến khác nhau.
+
+### 2. Làm chậm để thấy hai lượt cập nhật
+
+Nút biểu tượng vòng tròn có chú giải **Slow-motion mode** làm chậm hoạt ảnh và hiện giải thích từng công đoạn. Đường đi được tô nổi giúp phân biệt lượt học của hai mạng: bộ phân biệt nhận cả mẫu thật lẫn mẫu sinh; bộ sinh được cập nhật từ đánh giá trên mẫu sinh.
+
+<Callout type="try">
+
+Nhấp **Slow-motion mode**, rồi **Run/Pause training**. Theo dõi nhánh **Discriminator loss** trước và nhánh **Generator loss** sau. Khi lượt cập nhật bộ phân biệt diễn ra, hãy nhìn nền màu; khi bộ sinh cập nhật, hãy nhìn điểm tím. Dừng lại khi bạn giải thích được vì sao hai lớp hình thay đổi ở những thời điểm khác nhau.
+
+</Callout>
+
+### 3. Tách việc học của từng mạng
+
+Nút có chú giải **Train for one epoch** mở chế độ bước thủ công, hiện ba nút **Generator**, **Discriminator**, **Both**. Chú giải của biểu tượng dễ gây hiểu nhầm: thao tác nhấp đầu tiên mở chế độ; bạn chọn một trong ba nút vừa hiện để thực hiện lượt cập nhật.
+
+<Callout type="try">
+
+Dừng chạy, nhấp **Train for one epoch**, rồi nhấp **Discriminator** vài lần. Quan sát nền đánh giá đổi trong khi bộ sinh chưa được cập nhật. Tiếp theo nhấp **Generator** và xem điểm tím đổi dựa trên người chấm hiện tại. Cuối cùng chọn **Both** để trở lại một lượt có cả hai phía.
+
+</Callout>
+
+Nhãn **Epoch** ở đây là bộ đếm lượt huấn luyện của công cụ, không phải số lần quét hết dữ liệu. GAN Lab tạo sẵn các tập mẫu từ phân phối rồi lấy các lô trong những tập đó. Trong chế độ thủ công, **Discriminator** và **Generator** mỗi nút thực hiện một cập nhật của mạng tương ứng; **Both** dùng số **update(s) per epoch** đã cấu hình cho mỗi mạng.
+
+### 4. Thay một tham số, giữ các tham số khác
+
+Nút bút chì cạnh **Model Overview Graph** có chú giải **Show/hide hyperparameters**. Nó hiện hoặc ẩn các tùy chỉnh, trong đó mỗi mạng có **Optimizer:** và **Learning rate:**. <KeyTerm vi="Tốc độ học" en="learning rate" /> điều chỉnh quy mô bước cập nhật; giá trị lớn hơn không đồng nghĩa với học tốt hơn. Các lựa chọn bộ tối ưu là **SGD** và **Adam**.
+
+<Callout type="try">
+
+Dừng chạy và chọn **Ring**. Nếu các tùy chỉnh đang ẩn, nhấp **Show/hide hyperparameters**. Đặt **Learning rate:** của **Generator** lần lượt thành **0.03** rồi **0.3**, giữ cấu hình bộ phân biệt như cũ và chạy bằng **Run/Pause training** sau mỗi lần đổi. Quan sát độ dao động của điểm tím và **Generator loss**; đừng kết luận tốc độ học nào tốt hơn chỉ từ một lần chạy.
+
+</Callout>
+
+Đổi tốc độ học áp dụng cho mô hình hiện tại, không tự đưa trọng số về ban đầu. Nếu muốn so hai lần chạy từ đầu, bỏ chọn **Use pre-trained model**, đặt cấu hình rồi nhấp biểu tượng có chú giải **Reset the model** trước mỗi lần chạy. Việc đặt lại vẫn khởi tạo ngẫu nhiên, nên đây chưa phải so sánh với cùng một trạng thái xuất phát. Đổi số lớp hoặc số nơ-ron cũng tạo lại thí nghiệm, thay vì giữ nguyên mạng đã học.
+
+### 5. Tách các lớp hình để đọc đúng tín hiệu
+
+Dưới **Layered Distributions**, các nhãn **real samples**, **fake samples**, **discriminator**, **generator** và **gradients** đều có thể nhấp để bật hoặc tắt lớp tương ứng. Đây là thao tác hiển thị: ẩn một lớp không có nghĩa là ngừng huấn luyện mạng tạo ra lớp đó.
+
+<Callout type="try">
+
+Sau khi chạy vài lượt, dừng bằng **Run/Pause training**. Nhấp **discriminator** dưới **Layered Distributions** để ẩn nền, rồi nhấp **generator** để bật lớp **Manifold**. So sánh các ô lưới biến dạng với **fake samples**. Bật lại **discriminator** và bảo đảm **gradients** đang bật để xem hình dạng do bộ sinh tạo ra khác với bề mặt đánh giá và hướng tăng điểm của bộ phân biệt thế nào.
+
+</Callout>
+
+Với nhiễu hai chiều, lớp Manifold biểu diễn cách bộ sinh biến lưới đầu vào thành lưới đầu ra bị uốn và co giãn. Bài giải thích trong ứng dụng dùng độ đậm màu tím để gợi mật độ: vùng đậm hơn tương ứng nhiều mẫu bị dồn vào diện tích nhỏ hơn. Đây là một cách biểu diễn phép biến đổi, không phải ảnh thứ ba mà mô hình đang cố sao chép.
+
+## Góc nhìn sâu hơn: Đẹp trên màn hình chưa đủ
+
+### Khớp hình dạng khác với bao phủ phân phối
+
+Với **Mixture of Gaussians** hoặc **3 disjoint regions**, hãy kiểm tra xem các điểm tím có xuất hiện ở mọi cụm xanh không. <KeyTerm vi="Sụp đổ mode" en="mode collapse" /> mô tả tình trạng bộ sinh chỉ tạo ra một phần nhỏ các kiểu mẫu cần có. Một cụm tím trông hợp lý vẫn có thể bỏ sót phần lớn phân phối thật. Đây là hiện tượng cần tìm, không phải kết quả chắc chắn của mỗi lần chạy.
+
+Ngược lại, vài điểm tím rải khắp các vùng chưa chứng minh mật độ đã đúng. Hãy quan sát cả mức tập trung lẫn những vùng bị bỏ trống qua nhiều lượt học. Mũi gradient chỉ phản ánh tín hiệu hiện tại; nó không đảm bảo một bước cập nhật sẽ cải thiện mọi vùng cùng lúc.
+
+### Mất mát không phải điểm chất lượng tuyệt đối
+
+Trong **Metrics**, hai đường mất mát thuộc hai mục tiêu khác nhau. Bộ phân biệt tốt hơn có thể khiến mất mát bộ sinh tăng dù trọng số bộ sinh chưa đổi. Không nên coi mọi đoạn đi lên là lỗi hoặc yêu cầu cả hai đường cùng giảm về không.
+
+Với mục tiêu GAN nguyên bản và hai phân phối khớp nhau, bộ phân biệt tối ưu cho giá trị $1/2$ tại nơi có dữ liệu. Nhưng từ hệ số $0{,}95$ trong **Log loss** của GAN Lab, ta suy ra giá trị tối ưu tương ứng là $0{,}95/(1+0{,}95)\approx0{,}487$. Do đó, nền gần màu trung tính chỉ là một dấu hiệu, không phải phép kiểm tra chính xác rằng mô hình đã hội tụ. Vùng không có mẫu cũng không được bảo đảm mang cùng màu.
+
+Biểu đồ còn có **KL Divergence (by grid)** và **JS Divergence (by grid)**. Mã đánh giá gom mẫu vào các ô và cộng một lượng nhỏ để làm trơn trước khi tính các biểu thức độ phân kỳ. Đây là chỉ số phụ thuộc cách chia lưới và mẫu, không phải phép đo chính xác trên toàn bộ phân phối liên tục. Hãy đọc chúng cùng hình ảnh thay vì lấy một con số làm bằng chứng cuối cùng.
+
+### Công cụ đơn giản hóa điều gì?
+
+GAN Lab dùng mạng truyền thẳng kết nối đầy đủ với ReLU ở các lớp ẩn; bộ sinh có đầu ra tanh gồm hai tọa độ, bộ phân biệt có đầu ra sigmoid. Huấn luyện chạy trong trình duyệt bằng TensorFlow.js, chứ không chỉ phát lại một hoạt ảnh có sẵn. Mô hình huấn luyện trước là điểm xuất phát tùy chọn, không thay thế việc cập nhật tiếp theo.
+
+<Callout type="note">
+
+Thí nghiệm hai chiều giúp thấy cơ chế, nhưng không chứng minh cấu hình đó sẽ hoạt động tốt khi sinh ảnh. Nó không đánh giá chất lượng cảm nhận, tính đa dạng ngữ nghĩa hay sự phù hợp của dữ liệu cho một ứng dụng thực tế.
+
+</Callout>
+
+## Tóm tắt: Đọc cuộc tương tác, không chỉ đọc điểm số
+
+Hãy dùng ba câu hỏi để đọc mỗi lần chạy: bộ sinh đang tạo gì, bộ phân biệt đang đánh giá thế nào, và cập nhật của mạng nào vừa diễn ra? Trả lời được chúng giúp bạn hiểu hình ảnh trên màn hình thay vì chỉ chờ các điểm tím phủ lên điểm xanh.
+
+<Callout type="key">
+
+- Bộ sinh học phân phối, không ghép từng mẫu sinh với một đáp án cố định.
+- Bộ phân biệt cung cấp tín hiệu thay đổi trong quá trình huấn luyện.
+- Mũi màu hồng biểu diễn gradient theo tọa độ mẫu của bộ phân biệt, không phải bước cập nhật trọng số bộ sinh.
+- So sánh cấu hình cần phân biệt chạy từ đầu với tiếp tục mô hình huấn luyện sẵn.
+- Kiểm tra độ bao phủ, mật độ và diễn biến qua nhiều lượt; không kết luận chỉ từ màu nền hoặc một đường mất mát.
+
+</Callout>
+
+## Nguồn tham khảo
+
+- [Bài báo GAN Lab — Kahng và cộng sự](https://doi.org/10.1109/TVCG.2018.2864500), *IEEE Transactions on Visualization and Computer Graphics*, 25(1), tháng 1/2019; công trình tại VIS 2018.
+- [Mã nguồn poloclub/ganlab](https://github.com/poloclub/ganlab), giấy phép Apache-2.0. Các công thức và hướng dẫn ở đây được đối chiếu với phần giải thích trong ứng dụng, mã mô hình, mã huấn luyện và giao diện.
+- [Demo chính thức của GAN Lab](https://poloclub.github.io/ganlab/).
+- [Bài báo GAN gốc — Goodfellow và cộng sự (2014)](https://arxiv.org/abs/1406.2661), nguồn của trò chơi cực tiểu–cực đại và mục tiêu bộ sinh không bão hòa.

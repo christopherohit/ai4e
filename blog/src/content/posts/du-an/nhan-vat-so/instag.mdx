@@ -1,0 +1,207 @@
+---
+title: 'InsTaG: Học nhân vật nói chuyện từ video ngắn bằng motion prior'
+description: 'Đi sâu vào identity-free pretraining, Gaussian deformation, motion alignment, face-mouth hook và geometry regularization của InsTaG.'
+category: du-an
+topic: nhan-vat-so
+tags: ['InsTaG', '3D Gaussian Splatting', 'Talking head', 'Few-shot adaptation']
+viz: instag
+cover: ../../../../assets/covers/instag.webp
+order: 6
+date: 2026-10-06
+---
+
+## Video vài giây không chứa mọi cách một người chuyển động
+
+Nếu chỉ xem một người nói ba giây, ta không thấy mọi phoneme, mọi góc đầu hoặc mọi kiểu biểu cảm. Một model học từ đầu có thể ghi nhớ đoạn ngắn ấy nhưng không biết miệng cần làm gì ở audio mới.
+
+**InsTaG dùng kiến thức chuyển động đã pretrain**, sau đó học appearance và căn chỉnh chuyển động cho người mới. “Few-second video” là dữ liệu adaptation cho target identity, **không phải toàn bộ dữ liệu để train từ đầu**. Đây là khác biệt cần nhớ trước mọi so sánh.
+
+Bài theo [InsTaG, CVPR 2025](https://github.com/Fictionarry/InsTaG). Demo chạy **đúng quy trình của paper bằng code gốc**. Đầu tiên, motion prior được pretrain trên video của 5 người khác. Sau đó model adapt sang Obama chỉ với 250 frame, tức 10 giây. Trên 727 frame test, kết quả là PSNR 33,63 dB, LPIPS 0,027, LMD 2,93. Model gồm 10.546 Gaussian cho khuôn mặt và 858 Gaussian cho khoang miệng. Ở bước Motion field, mỗi vạch vàng là dịch chuyển $\Delta\boldsymbol{\mu}$ mà motion network đã train dự đoán cho một Gaussian. Vạch được chiếu qua đúng camera của frame test; các vạch hồng thuộc nhánh miệng. Clip 10 giây so render với video gốc tại cùng thời điểm.
+
+## Hai field: Giữ hình dạng và dự đoán chuyển động
+
+InsTaG dựa trên 3DGS, không phải volume-rendered NeRF. **Structure field** giữ Gaussian primitives:
+
+$$
+\theta=\{\boldsymbol{\mu},\mathbf{s},\mathbf{q},\alpha,\mathbf{f}\}.
+$$
+
+$\boldsymbol{\mu}$ là tâm, $\mathbf{s}$ scale, $\mathbf{q}$ quaternion, $\alpha$ opacity parameter, $\mathbf{f}$ appearance coefficients. Một scene là tập nhiều bộ parameters như vậy.
+
+**Motion field** nhận vị trí primitive và điều kiện $\mathbf{C}$:
+
+$$
+\delta=D(\boldsymbol{\mu},\mathbf{C})=
+\operatorname{MLP}\left(\mathcal{H}(\boldsymbol{\mu})\oplus\mathbf{C}\right),
+\qquad
+\delta=\{\Delta\boldsymbol{\mu},\Delta\mathbf{s},\Delta\mathbf{q}\}.
+$$
+
+$\mathcal{H}$ là tri-plane hash encoding; $\mathbf{C}$ chứa audio feature $\mathbf{a}$ và upper-face expression $\mathbf{e}$, với region attention để điều kiện có tác động theo vùng. $\oplus$ là concatenation. Deformation không chỉ dịch tâm: shape/orientation cũng có thể thay đổi.
+
+Sau deformation, primitives được render từ pose $[R,t]$ bằng Gaussian rasterization. Để hiểu covariance projection và alpha compositing, xem [bài 3DGS](/kien-thuc/gaussian-splatting/).
+
+## Identity-Free Pretraining: Tách cái chung khỏi nét riêng
+
+Hai người cùng phát một âm nhưng cằm, môi và thói quen nói khác nhau. Nếu ép một motion field vừa học chuyển động chung vừa giữ mọi nét riêng, hai nhiệm vụ có thể xung đột.
+
+InsTaG dùng một **Universal Motion Field** $\mathcal{U}$ chia sẻ giữa nhiều video:
+
+$$
+\delta_U=\mathcal{U}(\boldsymbol{\mu},\mathbf{C})=
+\operatorname{MLP}\left(\mathcal{H}_U(\boldsymbol{\mu})\oplus\mathbf{C}\right).
+$$
+
+Mỗi identity $i$ có Personalized Field, gồm structure $\theta_P^i$ và motion field nhỏ hơn:
+
+$$
+\delta_P^i=D_P^i(\boldsymbol{\mu}_P^i,\mathbf{C}),\qquad
+\tilde{\theta}_P^i=\theta_P^i+\delta_U+\delta_P^i,
+$$
+
+$$
+\mathcal{R}\left([R,t],\tilde{\theta}_P^i\right)\longrightarrow I.
+$$
+
+Phép cộng là shorthand theo các parameter có deformation tương ứng; opacity và appearance không tự nhận một delta không tồn tại. Thực thi còn phải giữ scale hợp lệ và quaternion chuẩn hóa. Không cộng tùy tiện một vector chuyển động vào mọi thành phần Gaussian.
+
+Trực giác: universal field học “cách miệng thường chuyển động khi nói”; personalized field học phần khác biệt của một người. **Identity-free là mục tiêu thiết kế và regularization**, không chứng minh learned field đã xóa mọi thông tin nhận dạng hay bảo đảm privacy.
+
+## Negative contrast loss: Vì sao residual không nên giống nhau?
+
+Nếu personalized residuals của tất cả identities cùng học một chuyển động chung, universal field có thể không thu nhận phần kiến thức đáng lẽ phải chia sẻ. Paper hạn chế residuals giống hướng:
+
+$$
+\mathcal{L}_C(\Delta\boldsymbol{\mu}_P^i,
+\Delta\boldsymbol{\mu}_P^j)=
+\mathbb{I}_{trunc}
+\left(\Delta\boldsymbol{\mu}_P^i\cdot
+\Delta\boldsymbol{\mu}_P^j\right),
+$$
+
+$$
+\mathbb{I}_{trunc}(x)=\max(x,0),\qquad i\neq j.
+$$
+
+Hai personalized fields được query bằng cùng vị trí và condition để so sánh có ý nghĩa. Đây là **truncated dot product**, không phải cosine similarity, InfoNCE hay một loss contrastive có positive pair thông thường.
+
+Ví dụ $\Delta\mu^i=(1,0,0)$, $\Delta\mu^j=(0.5,0,0)$ tạo loss 0.5. Nếu residual thứ hai đổi thành $(-0.5,0,0)$, loss bằng 0. Nếu một residual gần 0, loss cũng nhỏ. Vì vậy loss không bắt residuals phải đối nhau vô hạn và không tự bảo đảm decomposition duy nhất; nó phối hợp với reconstruction objective.
+
+## Motion-Aligned Adaptation: Kiến thức chung phải vừa khuôn mặt mới
+
+Universal field chứa quan hệ chuyển động trong hệ tọa độ học từ pretraining. Người mới có kích thước và cấu trúc khác: query đúng một tọa độ chưa chắc tương ứng đúng vùng môi.
+
+**Motion Aligner** học coordinate offset:
+
+$$
+\Delta\boldsymbol{\mu}_A=
+\operatorname{MLP}\left(\mathcal{H}_A(\boldsymbol{\mu})\right)
+\in\mathbb{R}^3.
+$$
+
+Field chung được query tại tọa độ đã căn chỉnh:
+
+$$
+\Delta\boldsymbol{\mu}\in
+\mathcal{U}(\boldsymbol{\mu}+\Delta\boldsymbol{\mu}_A,\mathbf{C}),
+\qquad
+\Delta\boldsymbol{\mu}'=
+\Delta\boldsymbol{\mu}\odot\boldsymbol{\tau}_A,
+$$
+
+$$
+\delta_U'=\{\Delta\boldsymbol{\mu}',\Delta\mathbf{s},\Delta\mathbf{q}\},
+\qquad \boldsymbol{\tau}_A\in\mathbb{R}^3.
+$$
+
+Paper viết multiplication; vì scaler là vector ba chiều, hiểu theo từng trục. Offset chỉnh **nơi hỏi field**, scaler chỉnh **độ lớn displacement đã nhận**. Chúng không cùng tác dụng. Query sai vùng không phải lúc nào cũng sửa được bằng việc tăng scaler.
+
+### Ví dụ từng bước
+
+Giả sử field tại tọa độ đã căn chỉnh trả displacement $(0,0.02,0)$ và scaler $(1,1.5,1)$. Displacement cuối là $(0,0.03,0)$: chuyển động trục đứng lớn hơn 50%. Không có nghĩa scale của Gaussian tăng 50%; $\Delta\mathbf{s}$ là hạng khác.
+
+Trong demo, các vạch vàng ở bước Motion field là $\Delta\boldsymbol{\mu}$ thật do motion network đã train dự đoán. Hãy kéo slider Frame tới lúc AU25 lên cao: vạch quanh môi và cằm dài ra, còn vạch ở trán gần như không đổi. Thanh *Phóng đại vector* chỉ kéo dài vạch để dễ nhìn, không thay đổi model. Histogram $|\Delta\boldsymbol{\mu}|$ bên dưới tách riêng nhánh mặt và nhánh miệng.
+
+## Face-Mouth Hook: Môi và bên trong miệng phải đi cùng nhau
+
+Một ảnh miệng gồm môi ngoài, răng và khoang trong. InsTaG dùng hai branches: **face gồm môi** và **inside-mouth**. Nếu học độc lập với ít frame, môi có thể đóng nhưng khoang miệng vẫn mở hoặc răng đi sai nhịp.
+
+Từ face deformation $\delta^F$, paper lấy cues:
+
+$$
+\boldsymbol{\mu}_{dist}=
+\Delta\boldsymbol{\mu}_{max}-\Delta\boldsymbol{\mu}_{min},
+\qquad
+\varphi=
+\{\Delta\boldsymbol{\mu}_{max},
+\Delta\boldsymbol{\mu}_{min},
+\boldsymbol{\mu}_{dist}\}.
+$$
+
+Chúng phản ánh phạm vi biến dạng face để hướng dẫn inside-mouth. Mouth branch nhận audio và cues:
+
+$$
+\Delta\boldsymbol{\mu}^{M}=
+\mathcal{U}^{M}(\boldsymbol{\mu},\{\mathbf{a},\varphi\}).
+$$
+
+Branch này không lấy upper-face expression $\mathbf{e}$ và không dự đoán rotation/scale deformation như face branch. Hook điều chỉnh motion scale:
+
+$$
+\boldsymbol{\mu}_{hook}^{M}=
+\Delta\boldsymbol{\mu}^{M}\odot\boldsymbol{\tau}_M,
+\qquad
+\boldsymbol{\tau}_M=
+\operatorname{MLP}\left(
+\mathcal{H}_U^M(\boldsymbol{\mu})\oplus
+\boldsymbol{\mu}_{dist}\right).
+$$
+
+Ký hiệu $\mu_{hook}^{M}$ trong paper ở đây mô tả displacement đã scale, không phải tự nhiên trở thành tọa độ world tuyệt đối. Hook tạo liên hệ giữa hai branches thay vì chỉ thêm một loss “môi giống nhau”. Demo hiện không chạy learned inside-mouth branch hay hook của paper; không coi răng trong clip render là bằng chứng đã triển khai hook trong browser.
+
+## Geometry regularization: Video ngắn không đủ ràng buộc depth
+
+Một view có thể được giải thích bằng geometry sai nhưng texture đúng. InsTaG dùng estimated monocular depth $\check D$ và normals $\check N$ làm priors:
+
+$$
+\mathcal{L}_{Geo}=
+\lambda_D\mathcal{L}_D(D,\check D)+
+\lambda_N\sum_{i,j}
+\left(1-N_{i,j}\cdot\check N_{i,j}\right).
+$$
+
+$D,N$ là maps từ rendering, $\mathcal{L}_D$ là **scale-invariant depth loss**, còn dot product normals đo độ cùng hướng khi normals đã chuẩn hóa. Hai normals giống nhau tạo hạng 0; ngược nhau tạo hạng 2. Ước lượng monocular depth không phải đo depth ground truth: nó có thể sai và có ambiguity về scale, nên prior giúp ràng buộc chứ không chứng nhận geometry đúng.
+
+Không thay $\mathcal{L}_D$ bằng raw depth MSE rồi gọi đó là cùng phương pháp. Công thức paper để hạng depth dưới dạng loss được định nghĩa theo phương pháp tham chiếu; khi tái lập phải theo implementation và conventions đó.
+
+## Training objectives và dữ liệu thực tế
+
+Photometric objective gồm L1 và D-SSIM:
+
+$$
+\mathcal{L}_I=
+(1-\lambda)\|I-I_{GT}\|_1+
+\lambda\mathcal{L}_{D\text{-}SSIM}(I,I_{GT}).
+$$
+
+Pretraining kết hợp image supervision với negative contrast loss; adaptation kết hợp image supervision và geometry regularizers. Không tự dùng cùng một trọng số cho mọi stage: loss weights, trainable parameters và lịch tối ưu cần theo code.
+
+Dataset bạn cung cấp có các thành phần đúng kiểu pipeline: video/frames, audio features, camera transforms, OpenFace AU, point cloud và tracking parameters. Những file này **không hoán đổi được**:
+
+- Camera transforms phục vụ projection; phải biết camera-to-world hay world-to-camera.
+- Audio features là embedding theo thời gian, không phải file AU hay pixel ảnh.
+- AU là quan sát chuyển động mặt từ bộ detector; không tự bằng blendshape coefficients.
+- Point cloud khởi tạo geometry; không tự là tập Gaussian đã train với covariance, opacity và appearance.
+- Frame parsing/teeth masks giúp tách regions; lỗi mask có thể gây răng hoặc viền môi sai.
+
+README hướng dẫn video 25 FPS, một người nhất quán trong frames và preprocessing thích hợp. Audio/video lệch index ngay đầu pipeline sẽ làm training học quan hệ sai; có prior tốt vẫn không sửa được mọi dữ liệu sai.
+
+## Đọc demo và đánh giá model một cách trung thực
+
+Bấm *Phát* để xem render của InsTaG chạy cạnh video gốc, cùng giọng nói thật. Đây đều là frame test, không dùng khi adapt. Chuyển *Lớp hiển thị* sang Alpha face và Alpha mouth để thấy hai nhánh render riêng trước khi ghép. Nhánh miệng chỉ là một mảng nhỏ phía sau môi. Mọi frame và vector trên trang đều là output của model, được tính sẵn trên GPU; browser không train hay suy luận.
+
+Các con số ở cuối demo (PSNR 33,63 dB, LPIPS 0,027, LMD 2,93) đo trên 727 frame test của chính model này. LMD là khoảng cách landmark môi, càng thấp càng khớp nhịp. Muốn kết luận chắc hơn còn cần audio của người khác, góc camera mới và đo thời gian adaptation trên phần cứng cụ thể. PSNR cao vẫn có thể đi cùng môi sai nhịp, nên đừng đọc riêng một con số.
+
+So với [SyncTalk](/du-an/synctalk/), InsTaG khác cả representation lẫn chiến lược học: Gaussian deformation cùng shared motion prior và alignment cho adaptation ít dữ liệu. Không đơn giản là “SyncTalk nhanh hơn” và không thể so các con số từ hai paper nếu settings không cùng nhau.
+
+Đọc phương pháp: [InsTaG, CVPR 2025](https://openaccess.thecvf.com/content/CVPR2025/html/Li_InsTaG_Learning_Personalized_3D_Talking_Head_from_Few-Second_Video_CVPR_2025_paper.html). Excerpt ảnh, giọng nói và Gaussian PLY được công khai theo sự cho phép của chủ dataset; không đưa checkpoint đầy đủ lên browser.

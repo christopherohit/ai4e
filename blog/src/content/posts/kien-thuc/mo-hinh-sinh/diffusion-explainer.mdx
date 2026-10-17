@@ -1,0 +1,178 @@
+---
+title: 'Diffusion Explainer: Từ nhiễu ngẫu nhiên đến hình ảnh theo lời bạn'
+description: 'Khám phá Stable Diffusion qua từng bước khử nhiễu, hiểu vai trò của prompt, seed và guidance scale bằng Diffusion Explainer tương tác.'
+category: kien-thuc
+topic: mo-hinh-sinh
+order: 3
+tags: ['Mô hình sinh', 'Học sâu', 'Thị giác máy tính', 'Trực quan hóa']
+viz: diffusion-explainer
+vizHeight: 900
+cover: ../../../../assets/covers/diffusion-explainer.webp
+date: 2026-10-03
+---
+
+import Callout from '../../../../components/Callout.astro';
+import KeyTerm from '../../../../components/KeyTerm.astro';
+
+## Vì sao một màn nhiễu có thể trở thành chú thỏ?
+
+Bạn đưa một <KeyTerm vi="lời nhắc" en="Prompt" /> mô tả chú thỏ ôm hoa, rồi nhận được hình ảnh với màu sắc và bố cục tương ứng. Giữa câu chữ và bức tranh không có một bàn tay vẽ từng nét: Stable Diffusion bắt đầu từ nhiễu ngẫu nhiên và thực hiện <KeyTerm vi="khử nhiễu" en="Denoising" /> để tinh chỉnh một biểu diễn ảnh qua nhiều bước. Diffusion Explainer giúp bạn theo dõi quá trình ấy thay vì chỉ nhìn kết quả cuối cùng.
+
+Câu hỏi thú vị không chỉ là “ảnh có đẹp không?”, mà còn là “câu chữ tác động ở đâu?” và “vì sao giữ nguyên mô tả vẫn có thể nhận được ảnh khác?”. Công cụ của Polo Club đặt văn bản, biểu diễn trung gian và ảnh đầu ra trên cùng một sơ đồ. Bạn có thể dừng ở một bước, đổi một tham số rồi quan sát điều gì thay đổi.
+
+Đây là cách tiếp cận một <KeyTerm vi="mô hình sinh" en="Generative model" />: nó tạo mẫu dữ liệu mới từ những quy luật đã học, thay vì chỉ gán nhãn cho ảnh có sẵn. Nhưng để hiểu cơ chế, ta cần phân biệt quá trình mà mô hình thực hiện với cách công cụ trình bày quá trình đó.
+
+<Callout type="note">
+
+Bản tương tác này dùng lời nhắc và hình ảnh trung gian đã được chuẩn bị sẵn. Nó không chạy mô hình sinh ảnh mới trong trình duyệt và không có ô nhập lời nhắc tùy ý. Bạn vẫn có thể thay đổi các lựa chọn có sẵn để so sánh quá trình sinh ảnh.
+
+</Callout>
+
+## Khái niệm cốt lõi: Văn bản dẫn đường cho quá trình khử nhiễu
+
+<KeyTerm vi="Mô hình khuếch tán" en="Diffusion model" /> học cách đảo ngược quá trình làm nhiễu dữ liệu. Khi sinh ảnh, mô hình dùng điều đã học để đi từ nhiễu đến một mẫu ảnh, dưới sự hướng dẫn của văn bản.
+
+### Từ câu chữ đến biểu diễn số
+
+Đầu vào là lời nhắc: mô tả bằng văn bản về ảnh mong muốn. Trong sơ đồ, khối **Text Representation Generator** biến lời nhắc thành các con số mà mạng nơ-ron xử lý được. Nó không chuyển thẳng từ “chú thỏ” sang một ảnh thỏ hoàn chỉnh.
+
+Một <KeyTerm vi="token" en="Token" /> là đơn vị văn bản mà mô hình xử lý; nó không nhất thiết trùng với một từ. Bên trong khối này có <KeyTerm vi="bộ tách token" en="Tokenizer" /> và <KeyTerm vi="bộ mã hóa văn bản" en="Text encoder" />. Bộ mã hóa văn bản của CLIP tạo <KeyTerm vi="biểu diễn nhúng" en="Embedding" /> cho chuỗi token, đưa thông tin của lời nhắc vào dạng số.
+
+Phần giải thích của công cụ dùng nhãn **77 tokens** và minh họa việc thêm token kết thúc để đệm chuỗi ngắn. Đây là cấu hình được công cụ trình bày, không phải giới hạn chung của mọi mô hình tạo ảnh. Tuy nhiên, mã vẽ các ô token chỉ tách lời nhắc theo dấu cách và thêm ký hiệu bắt đầu, kết thúc: đó không phải bộ tách token thật của CLIP. Các ô số hiển thị một phần biểu diễn đã lưu trong `text_vector.json`, giúp hình dung “văn bản trở thành vector”, chứ không cho phép đọc từng tọa độ như một thuộc tính độc lập của ảnh.
+
+### Khử nhiễu trong không gian tiềm ẩn
+
+Stable Diffusion thực hiện phần lớn việc tinh chỉnh trong <KeyTerm vi="không gian tiềm ẩn" en="Latent space" />: một dạng biểu diễn ảnh gọn hơn ảnh đầu ra. Trong viz, ô nhỏ **Refined Representation** thể hiện trạng thái này, còn ảnh lớn bên phải cho thấy ảnh được giải mã từ trạng thái tương ứng.
+
+Khối **Image Representation Refiner** thực hiện khử nhiễu qua nhiều bước. Bên trong, **UNet** dự đoán nhiễu dựa trên biểu diễn hiện tại, thông tin bước và điều kiện văn bản. Dự đoán ấy được dùng để cập nhật trạng thái, rồi trạng thái mới lại đi vào vòng tiếp theo. Không có một bước riêng chỉ “vẽ mắt”, tiếp đó một bước chỉ “vẽ hoa”.
+
+Để hiểu điều mô hình học, có thể viết quá trình thêm nhiễu vào biểu diễn sạch $z_0$ như sau:
+
+$$
+z_t = \sqrt{\bar{\alpha}_t}\,z_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon,
+\qquad \epsilon \sim \mathcal{N}(0,I)
+$$
+
+Ở đây, $\epsilon$ là nhiễu Gaussian chuẩn; $I$ là ma trận đơn vị. Với $\beta_j$ là phương sai nhiễu ở bước $j$, ta có $\bar{\alpha}_t=\prod_{j=1}^{t}(1-\beta_j)$. Hệ số này quyết định tỷ lệ tín hiệu được giữ lại tại mức nhiễu $t$. Khi huấn luyện, mạng học dự đoán nhiễu trong những trạng thái như vậy. Khi sinh ảnh, nó dùng khả năng ấy để đi theo chiều ngược lại, bắt đầu từ nhiễu. Công thức này giải thích nền tảng, không phải phép tính đang được chạy trực tiếp trong iframe.
+
+<Callout type="note">
+
+Thanh **Timestep** của Diffusion Explainer chạy từ **1** đến **50** theo tiến độ sinh ảnh: số lớn hơn nghĩa là đã đi xa hơn trong chuỗi tinh chỉnh. Ký hiệu $t$ trong công thức thêm nhiễu thường biểu thị mức nhiễu theo chiều ngược lại. Đừng đồng nhất hai cách đánh số này.
+
+</Callout>
+
+Công cụ cố định chuỗi ở 50 bước. Thanh thời gian chọn trạng thái để xem, không thay đổi tổng số bước lấy mẫu. Trong mô hình thực tế, <KeyTerm vi="bộ điều phối bước lấy mẫu" en="Scheduler" /> cũng quyết định cách cập nhật trạng thái; sơ đồ đơn giản hóa điều đó thành dự đoán nhiễu, điều chỉnh lượng nhiễu cần loại bỏ và cập nhật biểu diễn.
+
+### Văn bản dẫn đường mạnh đến mức nào?
+
+<KeyTerm vi="Hệ số hướng dẫn" en="Guidance scale" /> điều khiển mức nhấn mạnh ảnh hưởng của lời nhắc. Cơ chế <KeyTerm vi="hướng dẫn không dùng bộ phân loại" en="Classifier-free guidance" /> kết hợp hai dự đoán: một với lời nhắc đã chọn, một với lời nhắc rỗng. Cách viết tương ứng với phần giải thích trong viz là:
+
+$$
+\hat{\epsilon} = \epsilon_{\mathrm{empty}} + s\left(\epsilon_{\mathrm{prompt}}-\epsilon_{\mathrm{empty}}\right)
+$$
+
+Hai dự đoán $\epsilon_{\mathrm{empty}}$ và $\epsilon_{\mathrm{prompt}}$ đều dùng cùng biểu diễn $z_t$ và mức nhiễu $t$, chỉ khác điều kiện văn bản; $\hat{\epsilon}$ là dự đoán kết hợp, không phải biểu diễn ảnh sau cập nhật. $s$ là hệ số hướng dẫn. Khi $s=0$, chỉ dự đoán với lời nhắc rỗng được dùng; khi $s=1$, kết quả chính là dự đoán có lời nhắc. Với giá trị lớn hơn 1, phần chênh lệch do văn bản được khuếch đại. Tuy vậy, bám lời nhắc mạnh hơn không đồng nghĩa ảnh luôn đẹp hơn: giá trị quá cao có thể làm chi tiết hoặc màu sắc bị phóng đại.
+
+Cuối cùng, <KeyTerm vi="bộ giải mã" en="Decoder" /> chuyển biểu diễn tiềm ẩn sang ảnh. Mũi tên **Upscale** trong giao diện mô tả bước này ở mức trực quan. Nó không chỉ là phóng to ô ảnh nhỏ bằng nội suy; mô hình dùng một mạng đã học để tái dựng ảnh từ biểu diễn.
+
+## Hướng dẫn khám phá Diffusion Explainer
+
+Giao diện gốc được thiết kế rộng, với chiều rộng tối thiểu 1200 px. Nếu khung nhúng không hiển thị hết sơ đồ, dùng **Mở tab mới** trên thanh công cụ của blog hoặc [mở viz trực tiếp](/viz/diffusion-explainer/). Trong viz, bộ điều khiển phát nằm phía trên khối màu hồng. Nút giữa dùng biểu tượng tam giác để phát và hai vạch để tạm dừng, không có chữ “Play” in trên nút.
+
+### 1. Theo dõi một chuỗi sinh ảnh
+
+<Callout type="try">
+
+Nhấp **Select another prompt** và chọn **a cute panda playing the guitar in a bamboo forest**. Kéo thanh **Timestep** về **1**, rồi lần lượt tới **10**, **25** và **50**. Việc kéo thanh tự tạm dừng phát. So sánh ô **Refined Representation** với ảnh lớn: tìm thời điểm bố cục và hình dáng gấu trúc bắt đầu dễ nhận ra.
+
+</Callout>
+
+Sau đó nhấp nút tam giác ở giữa để xem chuỗi tự chạy. Hai nút hai bên cho phép lùi hoặc tiến một bước và tự tạm dừng phát. Khi phát hết bước 50, công cụ quay về bước 1; đây là phát lại, không phải tiếp tục tinh chỉnh ảnh cuối. Chú ý rằng chi tiết không nhất thiết tốt lên đều đặn qua từng ảnh; một cấu trúc có thể được chỉnh lại trước khi ổn định. Thanh thời gian giúp bạn kiểm tra quan sát ấy, thay vì chỉ nhớ ảnh cuối.
+
+### 2. Giữ lời nhắc, đổi điểm khởi đầu
+
+<KeyTerm vi="Hạt giống ngẫu nhiên" en="Random seed" /> xác định phần khởi tạo nhiễu trong ví dụ này. Nó không phải thang điểm chất lượng: seed 3 không “tốt hơn” seed 1. Muốn tìm hiểu tác động của seed, hãy giữ nguyên các lựa chọn còn lại.
+
+<Callout type="try">
+
+Giữ cùng lời nhắc và chọn **7** trong **Guidance scale**. Kéo **Timestep** tới **50**, rồi mở **Seed** và lần lượt chọn **1**, **2**, **3**. Quan sát tư thế, vị trí chủ thể và bố cục ảnh. Sau đó quay về cùng một bước sớm để so sánh những đường đi khác nhau từ các điểm khởi đầu khác nhau.
+
+</Callout>
+
+Cùng một mô tả chỉ ràng buộc một phần nội dung ảnh, không chỉ định duy nhất từng điểm ảnh. Seed cho thấy khoảng tự do còn lại đó. Trong một hệ thống sinh ảnh thực tế, tái lập kết quả còn cần giữ mô hình, thuật toán lấy mẫu và cấu hình liên quan; riêng con số seed chưa đủ.
+
+### 3. Kiểm tra ảnh hưởng của guidance scale
+
+<Callout type="try">
+
+Chọn **1** trong **Seed**, giữ cùng lời nhắc và kéo **Timestep** tới **50**. Mở **Guidance scale**, lần lượt chọn **0**, **1**, **7**, **20**. Kiểm tra ảnh có thể hiện chủ thể và bối cảnh được mô tả không, rồi so sánh màu sắc và độ tự nhiên. Đừng mặc định **20** là lựa chọn tốt nhất chỉ vì số lớn hơn.
+
+</Callout>
+
+Bốn lựa chọn này tương ứng với các lượt sinh đã được chuẩn bị, không phải một thanh nhập giá trị liên tục. Ở mức 0, điều kiện lời nhắc đã chọn không đóng góp vào công thức hướng dẫn; nếu ảnh vô tình có chi tiết giống mô tả, đó chưa phải bằng chứng mô hình đã dùng mô tả ấy.
+
+### 4. So sánh khi bỏ một cụm từ
+
+<Callout type="try">
+
+Qua **Select another prompt**, chọn mô tả chú thỏ có cụm **in the style of cute pixar character**. Nhấp chính cụm được gạch chân ấy để mở chế độ so sánh. Hai lời nhắc được chuẩn bị sẵn hiện cùng hai chuỗi ảnh. Kéo **Timestep** tới **50** để dừng phát. Giữ chung **Seed**, **Guidance scale** và **Timestep**, rồi quan sát thay đổi về phong cách. Nhấp **Back to Overview** để quay lại.
+
+</Callout>
+
+Đây không phải trình sửa prompt tự do: nhấp cụm từ mở cặp so sánh đã có trong dữ liệu. Điểm đáng học là cách đặt một câu hỏi có kiểm soát: khi bớt cụm mô tả phong cách, điều gì thay đổi? Một cặp ảnh minh họa không đủ chứng minh cụm đó luôn có tác động giống nhau với mọi chủ thể và seed.
+
+### 5. Mở các khối để nối giao diện với cơ chế
+
+Ở màn hình tổng quan, nhấp **Text Representation Generator** để xem **Tokenizer**, **77 tokens** và **Text Encoder**. Nhấp **Image Representation Refiner** để xem **UNet**, **Noise** và sơ đồ cập nhật biểu diễn. Các khối này không mở rộng khi đang ở chế độ so sánh; hãy dùng **Back to Overview** trước.
+
+Thử giải thích lại vòng lặp bằng lời của mình: “UNet dự đoán phần nhiễu cần xử lý, rồi trạng thái được cập nhật”. Nếu bạn vẫn nghĩ bộ mã hóa văn bản vẽ ra ảnh, hãy trở lại sơ đồ tổng quan: mũi tên từ văn bản đi vào khối tinh chỉnh, còn ảnh được tái dựng ở phía sau.
+
+## Góc nhìn sâu hơn: Trực quan hóa không phải toàn bộ mô hình
+
+Các ảnh tính sẵn giúp việc khám phá không đòi hỏi GPU, nhưng không cho phép suy ra rằng mọi prompt và mọi cấu hình đều tạo kết quả giống ví dụ.
+
+### Xem quá trình không đồng nghĩa chạy mô hình
+
+Khi bạn đổi một lựa chọn, mã giao diện tìm ảnh tương ứng với prompt, seed, guidance scale và bước đang xem trong bộ tài nguyên. Không có lượt huấn luyện hay suy luận mới diễn ra ở đó. Vì vậy, nút phát là cách duyệt các trạng thái đã lưu, không phải đồng hồ đo tốc độ sinh ảnh của Stable Diffusion trên máy bạn.
+
+Điều này cũng giải thích vì sao không cần GPU và vì sao bạn không thể nhập một mô tả tiếng Việt mới để thử ngay. Các ví dụ tiếng Anh là tập lựa chọn cố định. Chúng phù hợp để học cơ chế, không phải phép đánh giá khả năng hiểu tiếng Việt của mô hình.
+
+<Callout type="note">
+
+Bản nhúng vẫn tải thư viện D3 từ bên ngoài và dùng tài nguyên ảnh khá lớn. Nếu mạng chậm, một bước có thể cập nhật số trước khi ảnh hiện đầy đủ. Hãy tạm dừng và chờ tải; ảnh chưa hiện không có nghĩa quá trình khử nhiễu đã thất bại.
+
+</Callout>
+
+### Ba điều dễ bị sơ đồ làm chúng ta hiểu nhầm
+
+Thứ nhất, ô **Refined Representation** là ảnh minh họa của biểu diễn tiềm ẩn, không phải toàn bộ tensor mà mô hình dùng. Những điểm màu nhìn được không có một ánh xạ đơn giản kiểu “điểm này là tai thỏ”.
+
+Thứ hai, công cụ tập trung vào lúc sinh ảnh. Nó không cho thấy toàn bộ quá trình huấn luyện, dữ liệu nguồn hay cách học trọng số. Mô hình không bắt đầu học về gấu trúc khi bạn chọn prompt; kiến thức của nó đã được hình thành trước đó.
+
+Thứ ba, sơ đồ dự đoán rồi trừ nhiễu là một cách giải thích nhập môn. Các thuật toán lấy mẫu thực tế có quy tắc cập nhật cụ thể hơn. Đừng lấy mũi tên “trừ” trên giao diện làm công thức đầy đủ để tự triển khai Stable Diffusion.
+
+### Từ quan sát đến câu hỏi có kiểm soát
+
+Một thói quen hữu ích là chỉ thay một yếu tố mỗi lần. So sánh prompt mà đồng thời đổi seed sẽ làm bạn khó biết khác biệt đến từ câu chữ hay nhiễu ban đầu. Giữ seed cũng không biến một ví dụ thành quy luật chung: hãy thử lại với cả ba seed để xem nhận xét có còn đứng vững không.
+
+Tương tự, độ đẹp không bao quát hết chất lượng. Một ảnh bắt mắt vẫn có thể thiếu cây đàn hoặc không thể hiện bối cảnh tre. Hãy tách hai câu hỏi: ảnh có hợp lý về thị giác không, và ảnh có đáp ứng mô tả không? Công cụ giúp đặt câu hỏi ấy rõ hơn, nhưng không cung cấp phép đo chất lượng tự động.
+
+## Tóm tắt
+
+<Callout type="key">
+
+- Văn bản được mã hóa thành biểu diễn số để hướng dẫn quá trình sinh ảnh.
+- UNet hỗ trợ tinh chỉnh biểu diễn tiềm ẩn; bộ giải mã chuyển biểu diễn ấy thành ảnh.
+- **Seed** thay đổi nhiễu khởi tạo; **Guidance scale** thay đổi mức nhấn mạnh điều kiện văn bản.
+- **Timestep** chọn trạng thái trong chuỗi 50 bước cố định, không đổi tổng số bước lấy mẫu.
+- Viz dùng các prompt và ảnh tính sẵn; so sánh có kiểm soát giúp học cơ chế, không chứng minh quy luật cho mọi ảnh.
+
+</Callout>
+
+## Nguồn tham khảo
+
+- [Bài báo Diffusion Explainer, báo cáo ngắn tại IEEE VIS 2024](https://arxiv.org/abs/2305.03509).
+- [Mã nguồn Diffusion Explainer, giấy phép MIT](https://github.com/poloclub/diffusion-explainer).
+- [Demo chính thức của Polo Club](https://poloclub.github.io/diffusion-explainer/).
+- [High-Resolution Image Synthesis with Latent Diffusion Models — Rombach và cộng sự, CVPR 2022](https://arxiv.org/abs/2112.10752): nền tảng khuếch tán trong không gian tiềm ẩn.
+- [Classifier-Free Diffusion Guidance — Ho và Salimans, 2022](https://arxiv.org/abs/2207.12598): cơ chế kết hợp dự đoán có điều kiện và không điều kiện.

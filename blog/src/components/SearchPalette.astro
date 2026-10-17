@@ -1,0 +1,288 @@
+---
+/**
+ * Search command palette: opens on the header trigger, Ctrl/⌘+K or "/".
+ * Lazily loads the MiniSearch index, shows the top 6 results (↑↓ Enter Esc);
+ * Enter without a selected result submits to /tim-kiem/?q=.
+ */
+---
+
+<dialog class="search-palette" id="search-palette" aria-labelledby="search-palette-title">
+  <form class="search-palette__form" action="/tim-kiem/" method="get" role="search">
+    <h2 id="search-palette-title" class="sr-only">Tìm kiếm bài viết</h2>
+    <svg class="search-palette__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+      <circle cx="11" cy="11" r="7"></circle>
+      <path d="m20 20-3.5-3.5"></path>
+    </svg>
+    <label for="search-palette-input" class="sr-only">Từ khóa tìm kiếm</label>
+    <input
+      id="search-palette-input"
+      class="search-palette__input"
+      type="search"
+      name="q"
+      placeholder="Tìm chủ đề, ví dụ: tích chập, attention…"
+      autocomplete="off"
+      spellcheck="false"
+      role="combobox"
+      aria-autocomplete="list"
+      aria-expanded="false"
+      aria-controls="search-palette-listbox"
+      data-search-input
+    />
+    <button type="button" class="search-palette__esc" data-search-close aria-label="Đóng hộp tìm kiếm">Esc</button>
+  </form>
+  <div class="search-palette__results">
+    <ul class="search-palette__list" id="search-palette-listbox" role="listbox" aria-label="Kết quả tìm kiếm" data-search-results></ul>
+    <p class="search-palette__hint" aria-live="polite" data-search-hint>Gõ để tìm. <kbd>↑</kbd><kbd>↓</kbd> chọn · <kbd>Enter</kbd> mở · <kbd>Esc</kbd> đóng</p>
+  </div>
+</dialog>
+
+<style>
+  .search-palette {
+    width: min(640px, calc(100vw - 32px));
+    max-height: min(560px, calc(100vh - 96px));
+    margin: 10vh auto auto;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-2xl);
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: var(--shadow-xl);
+    overflow: hidden;
+  }
+
+  .search-palette::backdrop {
+    background: rgb(15 23 42 / 0.5);
+    backdrop-filter: blur(2px);
+  }
+
+  .search-palette__form {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .search-palette__icon {
+    width: 20px;
+    height: 20px;
+    color: var(--color-muted);
+    flex: none;
+  }
+
+  .search-palette__input {
+    flex: 1;
+    min-width: 0;
+    height: 44px;
+    border: 0;
+    background: transparent;
+    font-size: var(--text-lg);
+  }
+
+  .search-palette__input:focus-visible {
+    outline: none;
+  }
+
+  .search-palette__input::placeholder {
+    color: var(--color-muted);
+  }
+
+  .search-palette__esc {
+    flex: none;
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-2);
+    color: var(--color-muted);
+    font-size: var(--text-xs);
+  }
+
+  .search-palette__results {
+    padding: var(--space-4);
+    overflow-y: auto;
+  }
+
+  .search-palette__hint {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+
+  .search-palette__list {
+    display: grid;
+    gap: var(--space-1);
+    margin: 0 0 var(--space-3);
+    padding: 0;
+    list-style: none;
+  }
+
+  .search-palette__list:empty {
+    display: none;
+  }
+
+  .search-palette__list :global(.search-palette__item) {
+    display: grid;
+    gap: 0.125rem;
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .search-palette__list :global(.search-palette__item[aria-selected='true']) {
+    background: var(--color-primary-soft);
+    color: var(--color-primary-soft-text);
+  }
+
+  .search-palette__list :global(.search-palette__meta) {
+    color: var(--color-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .search-palette__list :global(.search-palette__title) {
+    font-weight: 600;
+  }
+
+  .search-palette__list :global(.search-palette__desc) {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--color-text-2);
+    font-size: var(--text-sm);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .search-palette__list :global(mark) {
+    padding: 0 0.1em;
+    border-radius: 0.2em;
+    background: var(--color-mark);
+    color: var(--color-mark-text);
+  }
+
+  .search-palette__hint kbd {
+    margin-inline: 0.1rem;
+    font-family: var(--font-sans);
+    padding: 0 0.375rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+</style>
+
+<script>
+  import { highlight, loadSearch, search, snippet, type SearchHit } from '../scripts/search';
+  import { CATEGORIES, isCategorySlug } from '../lib/site';
+
+  const dialog = document.getElementById('search-palette') as HTMLDialogElement | null;
+  const input = dialog?.querySelector<HTMLInputElement>('[data-search-input]');
+  const form = dialog?.querySelector<HTMLFormElement>('form');
+  const list = dialog?.querySelector<HTMLUListElement>('[data-search-results]');
+  const hint = dialog?.querySelector<HTMLElement>('[data-search-hint]');
+  const defaultHint = hint?.innerHTML ?? '';
+  let lastFocus: HTMLElement | null = null;
+  let hits: SearchHit[] = [];
+  let active = -1;
+  let runId = 0;
+
+  function setActive(index: number) {
+    active = index;
+    list?.querySelectorAll<HTMLElement>('[role="option"]').forEach((option, i) => {
+      option.setAttribute('aria-selected', String(i === active));
+      if (i === active) option.scrollIntoView({ block: 'nearest' });
+    });
+    if (active >= 0) input?.setAttribute('aria-activedescendant', `search-option-${active}`);
+    else input?.removeAttribute('aria-activedescendant');
+  }
+
+  function render(query: string) {
+    if (!list || !hint || !input) return;
+    list.innerHTML = hits
+      .map(({ doc, terms }, i) => {
+        const label = isCategorySlug(doc.category) ? CATEGORIES[doc.category].label : doc.category;
+        return `<li><a class="search-palette__item" id="search-option-${i}" role="option" aria-selected="false" href="${doc.url}" tabindex="-1">
+          <span class="search-palette__meta">${label}</span>
+          <span class="search-palette__title">${highlight(doc.title, terms)}</span>
+          <span class="search-palette__desc">${highlight(snippet(doc.description, terms, 140), terms)}</span>
+        </a></li>`;
+      })
+      .join('');
+    input.setAttribute('aria-expanded', String(hits.length > 0));
+    if (!query) hint.innerHTML = defaultHint;
+    else if (hits.length === 0) hint.textContent = `Không có kết quả cho “${query}”. Nhấn Enter để tìm trên trang tìm kiếm.`;
+    else hint.innerHTML = `${hits.length} kết quả hàng đầu · <kbd>Enter</kbd> mở · <a href="/tim-kiem/?q=${encodeURIComponent(query)}">Xem tất cả</a>`;
+    setActive(-1);
+  }
+
+  async function update() {
+    const id = ++runId;
+    const query = input?.value.trim() ?? '';
+    if (!query) {
+      hits = [];
+      render(query);
+      return;
+    }
+    try {
+      const results = await search(query, { limit: 6 });
+      if (id !== runId) return;
+      hits = results;
+      render(query);
+    } catch {
+      if (id === runId && hint) hint.textContent = 'Không tải được chỉ mục tìm kiếm. Nhấn Enter để mở trang tìm kiếm.';
+    }
+  }
+
+  input?.addEventListener('focus', () => void loadSearch().catch(() => undefined), { once: true });
+  input?.addEventListener('input', () => void update());
+  input?.addEventListener('keydown', (e) => {
+    const count = hits.length;
+    if (e.key === 'ArrowDown' && count) {
+      e.preventDefault();
+      setActive((active + 1) % count);
+    } else if (e.key === 'ArrowUp' && count) {
+      e.preventDefault();
+      setActive(active <= 0 ? count - 1 : active - 1);
+    } else if (e.key === 'Enter' && active >= 0 && hits[active]) {
+      e.preventDefault();
+      location.href = hits[active].doc.url;
+    }
+  });
+  form?.addEventListener('submit', (e) => {
+    if (!input?.value.trim()) e.preventDefault();
+  });
+
+  function open() {
+    if (!dialog || dialog.open) return;
+    lastFocus = document.activeElement as HTMLElement | null;
+    dialog.showModal();
+    input?.focus();
+    input?.select();
+    document.dispatchEvent(new CustomEvent('searchpalette:open'));
+  }
+
+  function close() {
+    if (dialog?.open) dialog.close();
+  }
+
+  dialog?.addEventListener('close', () => lastFocus?.focus());
+  dialog?.addEventListener('click', (e) => {
+    if (e.target === dialog) close(); // click on backdrop
+  });
+  dialog?.querySelector('[data-search-close]')?.addEventListener('click', close);
+
+  document.querySelectorAll('[data-search-open]').forEach((btn) => btn.addEventListener('click', open));
+
+  document.addEventListener('keydown', (e) => {
+    const target = e.target as HTMLElement | null;
+    const typing =
+      !!target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      if (dialog?.open) close();
+      else open();
+    } else if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      open();
+    }
+  });
+</script>

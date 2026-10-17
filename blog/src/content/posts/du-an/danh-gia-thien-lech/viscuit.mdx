@@ -1,0 +1,142 @@
+---
+title: 'VisCUIT: Soi điểm mù và thiên lệch của mô hình nhận diện ảnh'
+description: 'Khám phá VisCUIT để đối chiếu nhóm ảnh dự đoán kém, ma trận nhầm lẫn, Grad-CAM và nơ-ron, từ đó đặt câu hỏi đúng về thiên lệch của CNN.'
+category: du-an
+topic: danh-gia-thien-lech
+order: 3
+tags: ['Thị giác máy tính', 'Học sâu', 'AI có trách nhiệm', 'Diễn giải mô hình', 'Trực quan hóa']
+viz: viscuit
+vizHeight: 900
+cover: ../../../../assets/covers/viscuit.webp
+date: 2026-10-03
+---
+
+import Callout from '../../../../components/Callout.astro';
+import KeyTerm from '../../../../components/KeyTerm.astro';
+
+## Mở đầu: Điểm số tốt có thể che khuất điểm mù
+
+Một hệ thống nhận diện ảnh có thể dự đoán đúng phần lớn trường hợp nhưng liên tục sai trên một nhóm ảnh cụ thể. Khi chỉ nhìn điểm số tổng thể, ta khó biết ai đang chịu nhiều sai sót hơn và mô hình đang dựa vào dấu hiệu nào.
+
+VisCUIT kết nối ba góc nhìn: nhóm ảnh dự đoán kém, nhóm tương tự được dự đoán tốt, và những nơ-ron hoạt động khác nhau giữa hai nhóm. Thay vì kết luận ngay rằng mô hình có vấn đề vì một thuộc tính nhìn thấy được, ta thu thập bằng chứng từng bước.
+
+Trong giao diện, <KeyTerm vi="Độ chính xác" en="Accuracy" /> ở mục **Accuracy** được ghi là **92.1%**. Đây là con số được ghi cố định trong mã giao diện, không phải kết quả tính lại khi bạn chọn nhóm. Bản demo cũng không có chức năng tải ảnh cá nhân lên để phân loại. Điều đáng chú ý nằm ở danh sách bên trái: hiệu năng của từng nhóm có thể khác xa bức tranh tổng thể. Câu hỏi vì thế chuyển từ “mô hình tốt đến đâu?” sang “mô hình sai ở đâu, và có dấu hiệu nào liên quan đến những sai sót đó?”.
+
+<KeyTerm vi="Thiên lệch" en="Bias" /> ở đây được xem xét thông qua chênh lệch hiệu năng và cách mô hình sử dụng đặc trưng ảnh. Không nên đồng nhất mọi nhóm dự đoán kém với một kết luận về phân biệt đối xử. VisCUIT là công cụ hỗ trợ điều tra: nó làm vấn đề trở nên cụ thể hơn, nhưng vẫn cần con người kiểm tra dữ liệu, bối cảnh sử dụng và giả thuyết giải thích.
+
+## Khái niệm cốt lõi: Từ nhóm ảnh đến nơ-ron
+
+<KeyTerm vi="Mạng nơ-ron tích chập" en="Convolutional Neural Network" /> hay CNN là họ mô hình xử lý ảnh thông qua các đặc trưng học được. Trong bản minh họa này, **Model** ghi **ResNet50**, **Dataset** ghi **Biased CelebA**. Nhiệm vụ phân loại thể hiện qua hai nhãn **Smiling** và **Not Smiling**.
+
+### Hiệu năng theo nhóm và ma trận nhầm lẫn
+
+Một <KeyTerm vi="Nhóm con" en="Subgroup" /> là tập ảnh được xét cùng nhau. Ta không chỉ hỏi từng ảnh đúng hay sai mà còn tìm mẫu lỗi lặp lại trong nhóm. Với $G$ là tập chỉ số ảnh không rỗng, $y_i$ là nhãn tham chiếu và $\hat{y}_i$ là dự đoán, độ chính xác của nhóm được viết:
+
+$$
+\operatorname{Acc}(G)=\frac{1}{|G|}\sum_{i\in G}\mathbf{1}(\hat{y}_i=y_i)
+$$
+
+Hàm chỉ báo bằng một khi dự đoán đúng và bằng không khi sai. Công thức cũng nhắc ta chú ý mẫu số: một nhóm ít ảnh có thể thay đổi tỷ lệ rất mạnh chỉ vì một trường hợp. Chênh lệch phần trăm là điểm khởi đầu, không thay thế việc kiểm tra số lượng và thành phần ảnh.
+
+<KeyTerm vi="Ma trận nhầm lẫn" en="Confusion Matrix" /> cho biết mô hình nhầm theo hướng nào. Trong VisCUIT, **Ground Truth** nằm theo cột, còn **Prediction** nằm theo hàng. Ô giao giữa hai nhãn giống nhau là dự đoán đúng; hai ô còn lại biểu diễn hai loại nhầm. Đừng đọc bảng theo thói quen từ một thư viện khác: đổi hướng hàng và cột sẽ đổi ý nghĩa của lỗi.
+
+Chẳng hạn, dự đoán **Smiling** cho ảnh có nhãn **Not Smiling** khác với bỏ sót một nụ cười. Hai nhóm có độ chính xác gần nhau vẫn có thể sai theo hướng khác nhau. Khi điều tra, hãy ghi cả tỷ lệ đúng lẫn kiểu nhầm, thay vì chỉ xếp hạng nhóm theo một con số.
+
+### Điểm kích hoạt không phải độ tin cậy dự đoán
+
+Phần bên phải đối chiếu nơ-ron theo từng lớp. <KeyTerm vi="Điểm kích hoạt" en="Activation Score" /> trong bản demo được tính từ dữ liệu có sẵn: giá trị đếm của nơ-ron trong trường `importance` chia cho số ảnh trong trường `images` của nhóm. Gọi giá trị đếm ấy là $c_{u,G}$, điểm cho nơ-ron $u$ là:
+
+$$
+s_{u,G}=\frac{c_{u,G}}{|G|}
+$$
+
+Đây là phép chuẩn hóa số đếm đã lưu, không phải lấy trung bình cường độ kích hoạt thô hay tính xác suất dự đoán đúng. Kho mã giao diện không kèm quy trình sinh số đếm này, nên không thể từ đó khẳng định mọi đáp ứng khác không đều được tính là một lần kích hoạt.
+
+Giao diện chỉ hiển thị nơ-ron có điểm đạt ngưỡng $\tau$, tức $s_{u,G}\geq\tau$ ở ít nhất một trong hai nhóm. Cột **Underperforming** chứa nơ-ron đạt ngưỡng ở nhóm dự đoán kém nhưng không ở nhóm so sánh; **Both** chứa nơ-ron đạt ngưỡng ở cả hai; **Well-performing** thể hiện chiều ngược lại. Màu đỏ, xám và xanh tương ứng với ba cột, không phải mức độ đạo đức của từng nơ-ron.
+
+Thanh **Activation Score Threshold** lọc những gì được nhìn thấy. Nó không thay đổi trọng số, không sửa dự đoán và không phải ngưỡng phân loại nụ cười. Một nơ-ron biến mất khi tăng ngưỡng chỉ có nghĩa là điểm của nó không còn đáp ứng điều kiện hiển thị.
+
+<Callout type="note">
+
+Cửa sổ nơ-ron làm tròn điểm đến hai chữ số thập phân. Ngoài ra, mã hiển thị có thể truyền giá trị giữ chỗ bằng không cho phía không đạt ngưỡng, đặc biệt ở cột **Underperforming**. Vì vậy, một số **0** trong cửa sổ không luôn chứng minh nơ-ron hoàn toàn không kích hoạt ở nhóm kia. Nếu cần so sánh chính xác, phải đối chiếu số đếm gốc và số ảnh của từng nhóm.
+
+</Callout>
+
+### Hai cấp độ quan sát: ảnh và mảnh ảnh
+
+<KeyTerm vi="Bản đồ kích hoạt lớp dựa trên gradient" en="Gradient-weighted Class Activation Mapping" /> hay Grad-CAM giúp quan sát vùng ảnh liên quan đến đầu ra của mô hình. Trong VisCUIT, cửa sổ ảnh đưa bản đồ này về cùng ngữ cảnh với nhãn thật và dự đoán. Nên xem đây là một tín hiệu để kiểm tra, không phải lời giải thích đầy đủ cho mọi bước tính toán.
+
+Trong cửa sổ nơ-ron, các <KeyTerm vi="Mảnh ảnh biểu thị khái niệm" en="Concept Patches" /> ở mục **Concept Patches** giúp ta nhìn các mẫu thị giác gắn với nơ-ron. Phần mô tả trong ứng dụng giới thiệu chúng là những mảnh ảnh kích hoạt nơ-ron mạnh nhất; mã giao diện cắt các vùng $30\times30$ điểm ảnh theo tọa độ đã lưu. So sánh nhiều mảnh ảnh sẽ có ích hơn việc gán tên khái niệm từ một ví dụ. Nếu thấy vùng tóc hoặc miệng lặp lại, hãy ghi nhận mẫu quan sát trước khi suy đoán rằng nơ-ron chỉ nhận diện đúng một thuộc tính.
+
+Grad-CAM và mảnh ảnh trả lời hai câu hỏi khác nhau. Cửa sổ Grad-CAM đặt một ảnh cụ thể cạnh bản đồ nhiệt và nhãn của nó. Cửa sổ nơ-ron trình bày các mảnh ảnh gắn với nơ-ron được chọn, không chỉ các mảnh từ ảnh bạn vừa nhấp. Không nên coi toàn bộ các mảnh ấy là phần giải thích riêng cho một dự đoán.
+
+## Hướng dẫn khám phá VisCUIT từng bước
+
+### Chọn một nhóm dự đoán kém
+
+Danh sách bên trái được sắp theo độ chính xác tăng dần: nhóm có tỷ lệ đúng thấp hơn nằm trước. Hãy chọn một nhóm rồi ghi lại mã nhóm, tỷ lệ đúng và số ảnh trong ma trận. Nhóm ở **Well-performing Similar Subgroup** được liên kết sẵn qua trường `closest` trong dữ liệu; trình duyệt không tìm lại nhóm gần nhất mỗi lần bạn nhấp. “Tương tự” vì thế là cách ghép nhóm của ví dụ, không phải lời bảo đảm rằng mọi thuộc tính đều giống nhau.
+
+<Callout type="try">
+
+Nhấp phần mã hoặc tỷ lệ phần trăm của một hàng chưa chọn trong **Underperforming Subgroups**, dưới nhãn **by accuracy**. Quan sát nhóm ảnh ở **Well-performing Similar Subgroup**, hai bảng trong **Confusion Matrix** và các nơ-ron bên phải cập nhật theo lựa chọn.
+
+</Callout>
+
+### Đối chiếu dự đoán của một ảnh
+
+Ma trận hiển thị số lượng ảnh, không phải tỷ lệ phần trăm. Cộng bốn ô để biết kích thước nhóm; cộng hai ô trên đường chéo rồi chia cho tổng để kiểm tra tỷ lệ đúng. Tiếp đó, chọn một ảnh sai để xem nhãn và bản đồ nhiệt. Trong danh sách, ảnh thuộc tập dự đoán sai có dấu chéo đỏ ở góc; đừng nhầm dấu này với nút đóng cửa sổ.
+
+<Callout type="try">
+
+Nhấp một ảnh trong hàng đang chọn của **Underperforming Subgroups** để mở cửa sổ Grad-CAM. Đọc **Ground Truth:** và **Prediction:**, rồi so sánh ảnh gốc với bản đồ nhiệt bên cạnh. Đóng bằng dấu **X** trong cửa sổ hoặc phím **Esc**. Làm tương tự với một ảnh trong **Well-performing Similar Subgroup**.
+
+</Callout>
+
+### Khám phá các nơ-ron được hiển thị
+
+Thanh trượt bắt đầu ở **0.5** và cho phép tăng đến **1.0**, theo bước **0.1**. Giữ nguyên cặp nhóm khi thay đổi ngưỡng để không lẫn hai thao tác. Một nơ-ron đang ở **Both** có thể chuyển sang một cột riêng nếu chỉ một phía còn đạt ngưỡng mới; nếu cả hai phía đều không đạt, nó biến mất. Không phải mọi thay đổi vị trí đều có nghĩa mô hình vừa học điều gì mới.
+
+<Callout type="try">
+
+Kéo **Activation Score Threshold** từ phía **0.5** về phía **1.0**. Quan sát các cột **Underperforming**, **Both**, **Well-performing** thay đổi; nhấp một nơ-ron còn hiện để đọc **Activation Score** và **Concept Patches**.
+
+</Callout>
+
+### So sánh các mẫu thị giác gắn với nơ-ron
+
+Các hàng bên phải mang tên lớp như **Res5c** và **Res2a**. Nhấp một vòng tròn để xem tên lớp, mã nơ-ron, điểm theo nhóm và các mảnh ảnh. Khi ghi chép, dùng cả tên lớp lẫn mã nơ-ron: cùng một số ở hai lớp không chỉ cùng một đối tượng. Di chuột là thao tác bổ sung để tìm những nơ-ron có khái niệm tương tự theo các cụm đã lưu.
+
+<Callout type="try">
+
+Ở hàng **Res5c**, di chuột lên một vòng tròn trong **Underperforming**, **Both** hoặc **Well-performing**. Quan sát các vòng tròn thuộc cùng cụm được giữ nổi bật, còn các vòng tròn khác mờ đi. Nhấp vòng tròn đó để mở cửa sổ, đọc **Activation Score** rồi so sánh nhiều ảnh ở **Concept Patches**. Đưa chuột ra ngoài để bỏ trạng thái làm nổi bật.
+
+</Callout>
+
+## Góc nhìn sâu hơn: Bằng chứng chưa phải kết luận
+
+Một bản đồ nhiệt gợi ý nơi cần kiểm tra, không chứng minh rằng vùng ảnh ấy gây ra thiên lệch. Chẳng hạn, nếu nhiều mảnh ảnh chứa tóc, nhận xét thận trọng là “các mẫu này thường xuất hiện trong mảnh ảnh của nơ-ron đang xét”. Nhận xét ấy khác hẳn khẳng định “mô hình phân loại nụ cười bằng tóc”. Muốn kiểm tra giả thuyết thứ hai, cần thí nghiệm ngoài demo, kiểm soát những thay đổi khác của ảnh và đo lại dự đoán.
+
+Cặp nhóm tương tự giúp đặt câu hỏi cụ thể hơn, nhưng không phải đối chứng nhân quả. Hai nhóm vẫn có thể khác về số ảnh, nhãn, góc chụp hoặc nhiều dấu hiệu đồng thời. Nhóm ít ảnh có tỷ lệ sai cao cũng chưa đủ để kết luận một cộng đồng đang chịu bất công. Nên ghi rõ phạm vi dữ liệu và mức độ chắc chắn của từng nhận xét, thay vì biến một quan sát trực quan thành nhãn đánh giá con người.
+
+Bản demo trong trình duyệt hiển thị dữ liệu đã tính sẵn, không phải môi trường huấn luyện hoặc sửa mô hình trực tiếp. Theo phần mô tả của ứng dụng, giao diện dùng HTML, CSS, JavaScript và D3.js; huấn luyện và suy luận của mô hình được thực hiện bằng PyTorch. Trong kho này, mã giao diện tải các tệp JSON, ảnh gốc và ảnh Grad-CAM có sẵn. Thay nhóm hoặc kéo ngưỡng chỉ thay đổi cách trình bày những dữ liệu ấy.
+
+Một cách ghi chép hữu ích là tách ba phần: quan sát, giả thuyết và phép kiểm tra tiếp theo. Quan sát có thể gồm mã nhóm, kiểu nhầm và mảnh ảnh lặp lại. Giả thuyết nêu dấu hiệu bạn nghi mô hình dựa vào. Phép kiểm tra mô tả dữ liệu hoặc thí nghiệm còn thiếu. Cách làm này giữ được giá trị khám phá của VisCUIT mà không gán cho bản demo khả năng tự xác nhận hay tự sửa thiên lệch.
+
+## Tóm tắt: Một quy trình điều tra có thể lặp lại
+
+<Callout type="key">
+
+- Đối chiếu hiệu năng theo nhóm thay vì chỉ nhìn điểm số tổng thể.
+- Dùng nhóm tương tự để đặt câu hỏi về khác biệt, không coi đó là đối chứng nhân quả.
+- Đọc hướng nhãn của ma trận nhầm lẫn trước khi diễn giải lỗi.
+- Kết hợp Grad-CAM, điểm kích hoạt và mảnh ảnh để hình thành giả thuyết.
+- Kiểm nghiệm giả thuyết bằng dữ liệu và thí nghiệm ngoài bản demo.
+
+</Callout>
+
+## Nguồn tham khảo
+
+- [Bài báo VisCUIT, CVPR 2022](https://openaccess.thecvf.com/content/CVPR2022/html/Lee_VisCUIT_Visual_Auditor_for_Bias_in_CNN_Image_Classifier_CVPR_2022_paper.html).
+- [Mã nguồn VisCUIT — giấy phép MIT](https://github.com/poloclub/VisCUIT).
+- [Demo chính thức của Polo Club](https://poloclub.github.io/VisCUIT/).
+- [Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization](https://arxiv.org/abs/1610.02391).

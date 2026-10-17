@@ -1,0 +1,192 @@
+---
+title: 'EnergyVis: Một lần huấn luyện AI để lại bao nhiêu khí thải?'
+description: 'Khám phá điện năng, phát thải và các kịch bản thay đổi vùng điện, phần cứng qua EnergyVis; phân biệt hồ sơ minh họa với phép đo thực tế.'
+category: du-an
+topic: nang-luong-ai
+order: 4
+tags: ['AI có trách nhiệm', 'Trực quan hóa', 'Học sâu']
+viz: energyvis
+vizHeight: 1000
+cover: ../../../../assets/covers/energyvis.webp
+date: 2026-10-03
+---
+
+import Callout from '../../../../components/Callout.astro';
+import KeyTerm from '../../../../components/KeyTerm.astro';
+
+## Mở đầu: Chi phí nằm ngoài độ chính xác
+
+Một mô hình tốt không chỉ được đánh giá bằng độ chính xác. Khi huấn luyện, CPU, GPU và hệ thống làm mát đều cần điện. <KeyTerm vi="Điện năng tiêu thụ" en="Energy Consumption" /> có thể gắn với những mức phát thải khác nhau, tùy nguồn cung. EnergyVis đặt biểu đồ diễn biến tiêu thụ, bản đồ hệ số phát thải và cấu hình phần cứng cạnh nhau để làm rõ mối liên hệ này.
+
+Giả sử bạn đang chuẩn bị chạy thêm một thử nghiệm. Chọn GPU khác có thực sự giảm điện năng? Chuyển nơi chạy có giảm phát thải dù mô hình không đổi? Nếu tiếp tục huấn luyện, chi phí tích lũy sẽ tăng ra sao? EnergyVis hỗ trợ <KeyTerm vi="Phân tích kịch bản giả định" en="What-If Analysis" /> để khám phá những câu hỏi này bằng thao tác trực tiếp, thay vì chỉ đọc một con số tổng kết.
+
+Công trình của Omar Shaikh và các đồng tác giả xuất hiện tại CHI EA 2021, hướng tới việc theo dõi và tìm hiểu chi phí năng lượng của mô hình học máy. Trong bài này, mục tiêu không phải tìm một cấu hình «xanh nhất» cho mọi tình huống. Ta sẽ học cách đọc từng đại lượng, thay đổi từng giả định và nhận ra khi nào kết luận vượt quá dữ liệu mà công cụ có.
+
+<Callout type="note">
+
+Bản nhúng trên blog dùng các hồ sơ có sẵn, không kết nối dịch vụ Python để theo dõi huấn luyện trực tiếp. Hãy khám phá hồ sơ Transformer và **BERT**, cùng các kịch bản giả định; đừng coi đường biểu đồ là dữ liệu vừa đo từ máy của bạn. Nút của hồ sơ Transformer trong mã nguồn viết thiếu chữ thành **Transfomer**; bản tự lưu trữ giữ nguyên nhãn này.
+
+</Callout>
+
+## Khái niệm cốt lõi: Từ điện năng đến phát thải
+
+Điện năng đo lượng điện đã dùng, thường tính bằng kWh. Công suất tính bằng W hoặc kW mô tả tốc độ sử dụng điện. Nếu công suất trung bình là $\overline{P}$ W và thời gian chạy là $t$ giờ, điện năng tương ứng là:
+
+$$
+E = \frac{\overline{P}\,t}{1000}
+$$
+
+<KeyTerm vi="Cường độ phát thải của điện" en="Carbon Intensity" /> cho biết phát thải gắn với mỗi kWh. Với hệ số $I$ tính bằng lb CO₂/kWh và $E$ là điện năng đã tính cả hạ tầng phụ trợ, ta có $C = E I$. EnergyVis hiển thị phát thải bằng pound, không phải kilogram. Backend tính thời gian bằng giây nên chia tích công suất và thời gian cho $3\,600\,000$, tương đương công thức dùng giờ ở trên.
+
+### Ba đại lượng cần tách riêng
+
+Một thiết bị có công suất cao chưa chắc tiêu thụ nhiều điện hơn cho cùng nhiệm vụ: thời gian hoàn thành cũng tham gia phép tính. Ngược lại, một hệ thống chạy lâu hơn có thể dùng nhiều điện dù công suất tức thời thấp. Vì vậy, khi so sánh cấu hình, cần hỏi «bao nhiêu điện cho công việc này?» chứ không chỉ «GPU này dùng bao nhiêu watt?».
+
+Sau điện năng là nguồn điện. Nếu giữ nguyên lượng điện tiêu thụ và giảm hệ số phát thải của vùng chạy, lượng CO₂ ước tính giảm theo. Điều đó không có nghĩa chương trình chạy nhanh hơn hoặc dùng ít điện hơn. Bản đồ bên phải là cách EnergyVis làm rõ sự khác biệt này: màu sắc mô tả hệ số của từng bang, không mô tả sức mạnh tính toán của máy chủ.
+
+<KeyTerm vi="Hệ số hiệu quả sử dụng năng lượng" en="Power Usage Effectiveness, PUE" /> là tỉ số giữa điện năng toàn cơ sở và điện năng thiết bị CNTT, giúp tính cả phần điện dành cho hạ tầng như làm mát và chiếu sáng. Với điện năng thiết bị $E_{\mathrm{IT}}$, điện năng toàn cơ sở $E_{\mathrm{facility}}$ và phát thải $C$:
+
+$$
+\mathrm{PUE} = \frac{E_{\mathrm{facility}}}{E_{\mathrm{IT}}},\qquad
+C = E_{\mathrm{IT}}\times\mathrm{PUE}\times I
+$$
+
+Hai hồ sơ tích hợp dùng PUE 1,59. Đây là tham số của ví dụ, không phải phép đo cơ sở nơi bạn đang chạy mô hình. Thay PUE là thay giả định về điện phụ trợ, không thay chuỗi điện năng CPU và GPU. Phần giải thích trong ứng dụng gộp CPU và DRAM vào công suất chipset, cộng công suất các GPU rồi nhân PUE; biểu đồ mẫu nhận sẵn điện năng từng vòng và nhân PUE ở bước đổi sang phát thải.
+
+### Đọc biểu đồ theo vòng huấn luyện
+
+<KeyTerm vi="Vòng huấn luyện" en="Epoch" /> thường chỉ một lượt mô hình đi qua tập dữ liệu huấn luyện. EnergyVis dùng trục **Epochs** để trình bày chuỗi năng lượng theo các vòng. Cần phân biệt một điểm biểu diễn chi phí của riêng một vòng với một điểm biểu diễn tổng chi phí từ đầu đến vòng đó.
+
+Với điện năng từng vòng là $E_j$, tổng đến vòng thứ $n$ được viết:
+
+$$
+E_{\mathrm{total}}(n) = \sum_{j=1}^{n} E_j
+$$
+
+Nếu mọi vòng dùng lượng điện giống nhau, đường từng vòng nằm ngang nhưng đường tổng vẫn tăng. Đó không phải dấu hiệu mô hình ngày càng kém hiệu quả; chỉ là hai cách trả lời hai câu hỏi khác nhau. Trong giao diện, công tắc **Cumulative Consumption** quyết định cách đọc này.
+
+Phần **How Your CO₂ Emissions are Calculated** đặt phép tính ngay dưới biểu đồ. Ba dòng **CO₂ Emissions**, **Epoch Power Consumption** và **Total Instantaneous Power** có thể mở rộng để xem giải thích. Giao diện dùng chữ «power» ở cả nơi nói về kWh; hãy dựa vào đơn vị: W là công suất, kWh là điện năng. Nhờ vậy bạn không nhầm tốc độ dùng điện với lượng điện đã tiêu thụ.
+
+## Khám phá EnergyVis từng bước
+
+Giao diện có hai cột: biểu đồ và công thức bên trái, bản đồ cùng phần cứng bên phải. Khi khung nhúng quá hẹp, hãy dùng **Toàn màn hình** hoặc **Mở tab mới** trên thanh công cụ của blog. Cuộn bên trong khung để thấy phần cấu hình phía dưới; đây không phải giao diện chỉ có bản đồ.
+
+### Bước 1: Chọn một hồ sơ làm mốc
+
+<Callout type="try">
+
+Trong **Energy Profiles**, chọn **BERT**, rồi chọn lại **Transfomer** — nút hồ sơ Transformer trong bản tự lưu trữ. Quan sát vùng điện trên bản đồ, danh sách **Your Hardware** và đường phát thải. Đây là hai hồ sơ minh họa, không phải phép so sánh đã kiểm soát mọi điều kiện huấn luyện.
+
+</Callout>
+
+Hồ sơ Transformer gắn với Georgia, một CPU Intel i7 2600K và bốn GPU geforce-gtx-1080-ti; hồ sơ BERT gắn với Wyoming, hai CPU cùng loại và tám GPU geforce-rtx-2080-ti. Chọn hồ sơ mới làm thay đổi nhiều yếu tố cùng lúc. Không thể từ độ cao của hai đường mà kết luận riêng kiến trúc BERT gây phát thải nhiều hơn.
+
+Dữ liệu tích hợp có sáu giá trị giống nhau cho mỗi thành phần: 0,05 kWh cho CPU và 0,05 kWh cho GPU ở Transformer; 0,1 kWh cho mỗi phần ở BERT. Đây là chuỗi tổng của từng nhóm thiết bị, không phải điện năng của từng GPU. Nhãn trục bắt đầu từ 0, nhưng điểm đầu đã cộng giá trị đầu tiên, không phải tổng bằng 0 trước huấn luyện. Các con số minh họa này không tái hiện đầy đủ việc huấn luyện hai mô hình gốc.
+
+### Bước 2: Đổi đơn vị và cách cộng dồn
+
+<Callout type="try">
+
+Nhấp biểu tượng bánh răng của biểu đồ để mở **Settings**. Trong **Measuring Unit (Y-Axis)**, chuyển giữa **Carbon (CO₂)** và **Electricity (kWH)**. Quan sát nhãn trục tung để tránh nhầm lượng điện với lượng khí thải.
+
+</Callout>
+
+Ngay trong **Settings**, chuyển **Cumulative Consumption** từ **On** sang **Off**. Với hồ sơ mẫu có mức tiêu thụ từng vòng không đổi, đường tăng sẽ trở thành đường ngang. Chuyển lại **On** trước khi tiếp tục nếu bạn muốn đọc tổng chi phí đến từng mốc.
+
+Trong bản triển khai này, **Electricity (kWH)** vẽ tổng điện năng CPU và GPU từ hồ sơ; nhánh **Carbon (CO₂)** còn nhân PUE và hệ số phát thải của vùng. Vì vậy, đường điện năng không phải lúc nào cũng đại diện cho toàn bộ điện của cơ sở. Đổi PUE có thể làm đường carbon thay đổi mà đường điện năng thiết bị vẫn giữ nguyên.
+
+### Bước 3: Chỉ thay nguồn điện
+
+<Callout type="try">
+
+Trên bản đồ **Your Region's Energy Intensity**, rê chuột qua một bang khác bang đang chọn. Quan sát hệ số CO₂ lb/kWh và đường so sánh xuất hiện trên biểu đồ. Rời chuột khỏi bản đồ để xem tác động của việc chỉ xem trước một vùng điện khác.
+
+</Callout>
+
+Giữ hồ sơ và cấu hình phần cứng, chuyển về **Carbon (CO₂)** rồi so sánh vài bang có màu đậm, nhạt khác nhau. Đường **Alternative Consumption** màu cam là kịch bản so sánh, không phải một lần huấn luyện mới. Vùng gốc vẫn được đánh dấu riêng; tên và hệ số của vùng đang xem xuất hiện cạnh bản đồ.
+
+Rê chuột chỉ xem trước. Nếu muốn giữ một bang để tiếp tục khám phá, nhấp vào bang khác vùng gốc. Khi hộp thoại **Entering 'What-If' Mode** xuất hiện, chọn **Yes, explore alternatives**. Bạn đang phân tích kịch bản giả định: giữ một số điều kiện cố định và xem kết quả ước lượng dưới điều kiện khác. Hệ thống không thực sự chuyển tác vụ huấn luyện sang bang đó.
+
+### Bước 4: Khám phá công thức và hạ tầng
+
+<Callout type="try">
+
+Trong **How Your CO₂ Emissions are Calculated**, nhấp **Total Instantaneous Power** để mở giải thích. Dùng mũi tên cạnh giá trị PUE trong phần vừa mở, rồi chọn **Yes, explore alternatives** nếu được hỏi. Giữ **Carbon (CO₂)** và quan sát đường **Alternative Consumption** khi giả định về điện phụ trợ thay đổi.
+
+</Callout>
+
+Mở tiếp **Epoch Power Consumption** để nối công suất trung bình với thời gian của một vòng, rồi mở **CO₂ Emissions** để nối điện năng với hệ số vùng. Thứ tự này giúp bạn đọc biểu đồ như một chuỗi phép tính có thể giải thích, thay vì một kết quả do công cụ đưa ra mà không rõ căn cứ.
+
+Ở **Your Hardware**, các nút dấu cộng và trừ sửa số lượng thiết bị trong kịch bản. Phần **Add Alternative Hardware** có ô **Hardware** và nút **Add**: chọn một GPU từ danh sách trước khi nhấn nút. Tuy nhiên, đừng kỳ vọng đổi số lượng GPU sẽ tạo ra một mô phỏng huấn luyện phân tán chính xác. Giới hạn của phép ước lượng được giải thích ở phần sau.
+
+Sau một chuỗi thay đổi, dùng **Reset** trên thông báo chế độ giả định, rồi chọn lại hồ sơ trong **Energy Profiles**. **Reset** cũng bỏ lựa chọn hồ sơ nên biểu đồ tạm trống. Nếu đã sửa phần cứng, dùng **Tải lại** trên thanh công cụ blog để bắt đầu sạch: mã hiện tại có thể sửa trực tiếp cấu hình hồ sơ trong bộ nhớ, nên chọn lại hồ sơ chưa chắc khôi phục mọi số lượng ban đầu.
+
+### Bước 5: Phân biệt dữ liệu có sẵn và dự báo
+
+<KeyTerm vi="Ngoại suy" en="Extrapolation" /> kéo dài xu hướng ra ngoài đoạn dữ liệu đang có. Hãy thử tăng số vòng để thấy giới hạn giữa dữ liệu có sẵn và phần ước lượng.
+
+<Callout type="try">
+
+Tại dòng **Epochs (… extrapolated)** dưới biểu đồ, nhấp mũi tên tăng một lần. Số vòng ngoại suy tăng thêm 10 và đường nét đứt kéo dài biểu đồ xuất hiện. Nhấp mũi tên giảm để trở lại; quan sát sự khác nhau giữa phần dữ liệu có sẵn và phần ước lượng.
+
+</Callout>
+
+EnergyVis dùng <KeyTerm vi="Hồi quy tuyến tính" en="Linear Regression" /> trên chuỗi đang hiển thị, với chỉ số điểm làm biến độc lập. Nếu bật cộng dồn, nó khớp xu hướng tổng tích lũy; nếu tắt, nó khớp chuỗi từng vòng. Nhãn **Extrapolated Consumption** bị ẩn khỏi chú giải, nên hãy nhận diện phần dự báo bằng nét đứt. Đường này không phải kết quả huấn luyện đã xảy ra, cũng không dự đoán độ chính xác của mô hình.
+
+## Góc nhìn sâu hơn: Một kịch bản không phải phép đo
+
+Trực quan hóa giúp nhìn thấy mối liên hệ giữa điện năng, nguồn điện và phát thải, nhưng không tự biến giả định thành bằng chứng. Hồ sơ mẫu, hệ số vùng và cách ước lượng phần cứng đều cần được xem xét trước khi áp dụng kết quả vào một dự án thật.
+
+### Phần cứng được đơn giản hóa như thế nào?
+
+Để tạo đường thay thế, mã biểu đồ điều chỉnh điện năng GPU bằng tỉ lệ từ bảng hiệu suất thiết bị. Với các giá trị hiệu suất $\eta_1,\ldots,\eta_m$, mỗi GPU đóng góp một giá trị, phép tính là:
+
+$$
+H(\eta_1,\ldots,\eta_m)=\frac{m}{\sum_{q=1}^{m}1/\eta_q},\qquad
+r=\frac{H_{\mathrm{goc}}}{H_{\mathrm{thay\,the}}}
+$$
+
+Điện năng thay thế bằng điện năng CPU cộng $r$ lần điện năng GPU. Bảng hiệu suất không phải phép đo tác vụ đang xem; ứng dụng không chạy lại mô hình trên thiết bị được chọn.
+
+Một hệ quả đáng chú ý: thêm GPU cùng loại không nhất thiết làm đường thay đổi, vì trung bình điều hòa của các giá trị giống nhau vẫn giữ nguyên. Thay số lượng CPU cũng không tự sửa chuỗi điện năng CPU đã nạp. Do đó, không nên dùng nút cộng, trừ để suy ra «gấp đôi GPU thì giảm một nửa thời gian» hoặc «gấp đôi CPU thì gấp đôi điện năng».
+
+<Callout type="note">
+
+Các nút phần cứng sửa cấu hình của kịch bản, nhưng không mô phỏng đầy đủ thời gian chạy, giao tiếp giữa GPU hay mức sử dụng tài nguyên. Nếu đường không đổi khi sửa số lượng thiết bị cùng loại, đó là giới hạn của cách tính, không phải bằng chứng rằng thêm phần cứng không tốn điện.
+
+</Callout>
+
+### Bản đồ không phải dữ liệu lưới điện trực tiếp
+
+Hệ số phát thải được lấy từ tệp dữ liệu đi kèm ứng dụng, với các bang Hoa Kỳ và nguồn được phần giải thích ghi là NREL. Bản tự lưu trữ không cập nhật hệ số theo giờ và không có lựa chọn tỉnh, thành Việt Nam. Thấy một bang màu nhạt chỉ cho phép nói rằng hệ số trong bộ dữ liệu thấp hơn, không bảo đảm tác vụ chạy ở đó hôm nay có phát thải tương ứng.
+
+Việc đổi vùng còn giả định các yếu tố khác được giữ nguyên. Trong thực tế, vùng mới có thể đi kèm thiết bị, thời gian chạy hoặc hạ tầng khác. EnergyVis giúp tách riêng tác động của hệ số vùng; quyết định triển khai thật vẫn cần kiểm tra những điều kiện mà hình vẽ đang bỏ qua.
+
+### Mang bài học vào một dự án thật
+
+Một báo cáo có ích nên ghi rõ công việc được đo, phần cứng, thời gian chạy, điện năng, nguồn hệ số phát thải và giả định PUE. Khi so sánh mô hình, hãy xác định trước yêu cầu chất lượng chung; một thử nghiệm nhanh hơn nhưng không đạt yêu cầu không tự động là lựa chọn tốt hơn. Đồng thời cần phân biệt chi phí của một lần chạy với tổng chi phí của nhiều lần thử nghiệm.
+
+[Carbontracker](https://arxiv.org/abs/2007.03051), thư viện mà backend EnergyVis dựa vào, là hướng tiếp nối khi muốn thu thập số liệu trong vòng huấn luyện thật. README mô tả cách gắn bộ theo dõi vào chương trình Python, nhưng backend ấy không được triển khai trong bản nhúng này. Biểu tượng liên kết và ô **Enter Live Energy Profile URL** không biến blog tĩnh thành dịch vụ đo điện; bài thực hành ở đây không yêu cầu bật chế độ đó.
+
+Cuối cùng, phép tính đang xét phát thải gắn với điện sử dụng, không tự bao gồm sản xuất GPU, vận chuyển thiết bị hay mọi tác động môi trường trong vòng đời hệ thống. Điểm mạnh của EnergyVis là giúp ta đặt câu hỏi rõ hơn và thấy giả định tác động đến kết quả thế nào, không phải cấp một con số chứng nhận môi trường cho mô hình.
+
+## Tóm tắt
+
+Thử đi hết chuỗi «hồ sơ → đơn vị → vùng điện → PUE → ngoại suy», mỗi lần chỉ thay một yếu tố. Khi có thể giải thích vì sao một đường đổi hoặc không đổi, bạn đã học được điều quan trọng hơn việc chọn cấu hình tạo ra đường thấp nhất.
+
+<Callout type="key">
+
+- Điện năng và phát thải là hai đại lượng khác nhau.
+- Nguồn điện ảnh hưởng đến lượng CO₂ gắn với cùng một công việc tính toán.
+- Hồ sơ có sẵn phục vụ khám phá, không thay thế số liệu đo.
+- Kịch bản thay đổi phần cứng cần được kiểm chứng bằng thực nghiệm.
+- Bản tự lưu trữ không theo dõi huấn luyện trực tiếp nếu thiếu backend riêng.
+
+</Callout>
+
+## Nguồn tham khảo
+
+- [Bài báo EnergyVis, CHI EA 2021](https://arxiv.org/abs/2103.16435).
+- [Mã nguồn EnergyVis và giấy phép MIT](https://github.com/poloclub/EnergyVis).
+- [Demo chính thức](https://poloclub.github.io/EnergyVis/).
+- [Carbontracker: Tracking and Predicting the Carbon Footprint of Training Deep Learning Models](https://arxiv.org/abs/2007.03051).

@@ -1,0 +1,445 @@
+---
+/**
+ * Embeds a self-hosted viz from /viz/<slug>/ in a lazy iframe with a toolbar
+ * (Toàn màn hình · Mở tab mới · Tải lại). When public/viz/<slug>/index.html is
+ * missing at build time (or the manifest marks the build as failed) a
+ * Vietnamese fallback card links to the original live demo instead.
+ * Viz UIs are light-only, so the frame keeps a white background in dark mode.
+ */
+import Icon from './Icon.astro';
+import { isVizAvailable, vizHref } from '../lib/viz';
+
+interface Props {
+  /** Viz slug under /viz/. */
+  viz: string;
+  /** Accessible title of the iframe (Vietnamese). */
+  title: string;
+  /** Iframe height in px (desktop). */
+  height?: number;
+  /** Original live demo, linked from the fallback card. */
+  demo?: string;
+}
+
+const { viz, title, height = 820, demo } = Astro.props;
+const available = isVizAvailable(viz);
+const src = vizHref(viz);
+const uid = `viz-${viz}`;
+---
+
+{
+  available ? (
+    <figure class="viz" id={uid} data-viz style={`--viz-h: ${height}px`}>
+      <div class="viz__toolbar" role="toolbar" aria-label={`Điều khiển trực quan hóa: ${title}`}>
+        <span class="viz__label">
+          <span class="viz__dot" aria-hidden="true" />
+          Trực quan hóa tương tác
+        </span>
+        <div class="viz__actions">
+          <button type="button" class="viz__btn" data-viz-fullscreen aria-pressed="false" title="Toàn màn hình">
+            <Icon name="maximize" size={16} class="viz__icon-max" />
+            <Icon name="minimize" size={16} class="viz__icon-min" />
+            <span class="viz__btn-text" data-viz-fullscreen-label>Toàn màn hình</span>
+          </button>
+          <a class="viz__btn" href={src} target="_blank" rel="noopener" title="Mở tab mới">
+            <Icon name="external-link" size={16} />
+            <span class="viz__btn-text">Mở tab mới</span>
+            <span class="sr-only">(mở trong thẻ mới)</span>
+          </a>
+          <button type="button" class="viz__btn" data-viz-reload title="Tải lại">
+            <Icon name="refresh" size={16} />
+            <span class="viz__btn-text">Tải lại</span>
+          </button>
+        </div>
+      </div>
+      <p class="viz__hint" id={`${uid}-hint`}>Cuộn ngang để xem đầy đủ trực quan hóa, hoặc chọn Toàn màn hình / Mở tab mới.</p>
+      <div class="viz__stage" role="region" aria-label={`Khung trực quan hóa: ${title}`} aria-describedby={`${uid}-hint`} tabindex="0">
+        <div class="viz__skeleton" data-viz-skeleton aria-hidden="true">
+          <div class="viz__spinner" />
+          <p>Đang tải trực quan hóa…</p>
+        </div>
+        <iframe
+          class="viz__frame"
+          src={src}
+          title={title}
+          loading="lazy"
+          allow="fullscreen"
+          allowfullscreen
+          referrerpolicy="same-origin"
+          data-viz-frame
+        />
+      </div>
+      <figcaption class="sr-only">{title}</figcaption>
+    </figure>
+  ) : (
+    <aside class="viz-fallback" aria-labelledby={`${uid}-fallback-title`}>
+      <div class="viz-fallback__icon">
+        <Icon name="image-off" size={28} />
+      </div>
+      <div class="viz-fallback__body">
+        <p class="viz-fallback__title" id={`${uid}-fallback-title`}>
+          Trực quan hóa chưa sẵn sàng
+        </p>
+        <p class="viz-fallback__text">
+          Bản trực quan hóa <strong>{title}</strong> chưa được xây dựng trên trang này.
+          {demo ? ' Bạn vẫn có thể khám phá phiên bản gốc do nhóm tác giả công bố.' : ' Vui lòng quay lại sau.'}
+        </p>
+        {demo && (
+          <a class="btn btn--primary btn--sm viz-fallback__cta" href={demo} target="_blank" rel="noopener noreferrer">
+            <Icon name="external-link" size={16} />
+            Mở bản demo gốc
+            <span class="sr-only">(mở trong thẻ mới)</span>
+          </a>
+        )}
+      </div>
+    </aside>
+  )
+}
+
+<style>
+  .viz {
+    container-type: inline-size;
+    margin: var(--space-8) 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-lg);
+  }
+  .viz__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .viz__label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+  .viz__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 0 3px rgb(34 197 94 / 0.2);
+  }
+  .viz__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+  .viz__btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 36px;
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text-2);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    line-height: 1;
+    text-decoration: none;
+    transition:
+      background-color var(--dur) var(--ease),
+      color var(--dur) var(--ease),
+      border-color var(--dur) var(--ease);
+  }
+  /* Beat .prose a { color; underline } when embedded in an article body. */
+  .viz a.viz__btn {
+    color: var(--color-text-2);
+    text-decoration: none;
+  }
+  .viz__btn:hover,
+  .viz a.viz__btn:hover {
+    background: var(--color-primary-soft);
+    border-color: var(--brand-300);
+    color: var(--color-primary-soft-text);
+  }
+  .viz__btn :global(.viz__icon-min) {
+    display: none;
+  }
+  .viz:fullscreen .viz__btn :global(.viz__icon-min),
+  .viz.is-fullscreen .viz__btn :global(.viz__icon-min) {
+    display: inline;
+  }
+  .viz:fullscreen .viz__btn :global(.viz__icon-max),
+  .viz.is-fullscreen .viz__btn :global(.viz__icon-max) {
+    display: none;
+  }
+
+  /* Viz apps are light-only: keep a white stage in both themes. */
+  .viz__stage {
+    position: relative;
+    height: var(--viz-h, 820px);
+    max-height: calc(100vh - var(--header-h) - 64px);
+    min-height: 420px;
+    overflow: auto;
+    background: #ffffff;
+  }
+  .viz__hint {
+    display: none;
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    color: var(--color-text-2);
+    background: var(--color-surface);
+    font-size: var(--text-sm);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .viz__frame {
+    display: block;
+    width: 100%;
+    min-width: 1120px;
+    max-width: none;
+    height: 100%;
+    border: 0;
+    background: #ffffff;
+    color-scheme: light;
+  }
+  @container (max-width: 1119px) {
+    .viz__hint {
+      display: block;
+    }
+  }
+  .viz__skeleton {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: var(--space-3);
+    background:
+      linear-gradient(110deg, #f1f5f9 8%, #f8fafc 18%, #f1f5f9 33%) 0 0 / 200% 100%,
+      #f1f5f9;
+    color: #475569;
+    font-size: var(--text-sm);
+    animation: viz-shimmer 1.4s linear infinite;
+    transition: opacity 250ms var(--ease);
+  }
+  .viz__skeleton.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .viz__spinner {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 3px solid #bae6fd;
+    border-top-color: #0284c7;
+    animation: viz-spin 0.8s linear infinite;
+  }
+  @keyframes viz-shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+  @keyframes viz-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Fullscreen (native) and pseudo-fullscreen fallback (iOS Safari lacks element fullscreen). */
+  .viz:fullscreen,
+  .viz.is-fullscreen {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    border-radius: 0;
+    border: 0;
+  }
+  .viz.is-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+  }
+  .viz:fullscreen .viz__stage,
+  .viz.is-fullscreen .viz__stage {
+    flex: 1;
+    height: auto;
+    max-height: none;
+  }
+
+  @media (max-width: 640px) {
+    .viz {
+      margin-inline: calc(var(--container-pad) * -1);
+      border-radius: 0;
+      border-inline: 0;
+    }
+    .viz__label {
+      display: none;
+    }
+    .viz__actions {
+      width: 100%;
+      justify-content: space-between;
+    }
+    .viz__btn {
+      flex: 1;
+      justify-content: center;
+      min-height: 44px;
+      padding-inline: 0.4rem;
+    }
+    .viz__btn {
+      white-space: nowrap;
+      font-size: var(--text-xs);
+    }
+    .viz__stage {
+      min-height: 360px;
+      max-height: 75vh;
+    }
+  }
+
+  /* Very narrow screens: icon-only buttons, text kept for assistive tech. */
+  @media (max-width: 420px) {
+    .viz__btn-text {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+    }
+    .viz__btn {
+      min-height: 40px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .viz__skeleton,
+    .viz__spinner {
+      animation: none;
+    }
+  }
+
+  /* Fallback card */
+  .viz-fallback {
+    display: flex;
+    gap: var(--space-4);
+    align-items: flex-start;
+    margin: var(--space-8) 0;
+    padding: var(--space-6);
+    border: 1px dashed var(--brand-300);
+    border-radius: var(--radius-xl);
+    background: var(--color-primary-soft);
+  }
+  .viz-fallback__icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 52px;
+    height: 52px;
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    color: var(--color-primary);
+    box-shadow: var(--shadow-sm);
+  }
+  .viz-fallback__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+  .viz-fallback__title {
+    font-weight: 700;
+    font-size: var(--text-lg);
+    color: var(--color-text);
+  }
+  .viz-fallback__text {
+    color: var(--color-text-2);
+  }
+  /* Override .prose link styles when embedded in an article body. */
+  .viz-fallback .viz-fallback__cta,
+  .viz-fallback .viz-fallback__cta:hover {
+    color: var(--color-primary-contrast);
+    text-decoration: none;
+  }
+  .viz-fallback__cta {
+    align-self: flex-start;
+    margin-top: var(--space-2);
+    white-space: normal;
+  }
+  @media (max-width: 480px) {
+    .viz-fallback {
+      flex-direction: column;
+      padding: var(--space-5) var(--space-4);
+    }
+  }
+</style>
+
+<script>
+  function initViz(root: HTMLElement) {
+    if (root.dataset.vizReady) return;
+    root.dataset.vizReady = 'true';
+
+    const frame = root.querySelector<HTMLIFrameElement>('[data-viz-frame]');
+    const skeleton = root.querySelector<HTMLElement>('[data-viz-skeleton]');
+    const fsBtn = root.querySelector<HTMLButtonElement>('[data-viz-fullscreen]');
+    const fsLabel = root.querySelector<HTMLElement>('[data-viz-fullscreen-label]');
+    const reloadBtn = root.querySelector<HTMLButtonElement>('[data-viz-reload]');
+    if (!frame) return;
+
+    const hideSkeleton = () => skeleton?.classList.add('is-hidden');
+    const showSkeleton = () => skeleton?.classList.remove('is-hidden');
+    frame.addEventListener('load', hideSkeleton);
+    // The iframe may already have finished loading before this script ran.
+    try {
+      if (frame.contentDocument?.readyState === 'complete' && frame.contentDocument.URL !== 'about:blank') hideSkeleton();
+    } catch {
+      /* cross-origin: rely on the load event */
+    }
+
+    reloadBtn?.addEventListener('click', () => {
+      showSkeleton();
+      try {
+        frame.contentWindow?.location.reload();
+      } catch {
+        frame.src = frame.src;
+      }
+    });
+
+    const canNativeFs = typeof root.requestFullscreen === 'function' && document.fullscreenEnabled;
+
+    const sync = () => {
+      const on = document.fullscreenElement === root || root.classList.contains('is-fullscreen');
+      fsBtn?.setAttribute('aria-pressed', String(on));
+      if (fsLabel) fsLabel.textContent = on ? 'Thoát toàn màn hình' : 'Toàn màn hình';
+    };
+
+    const exitPseudo = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') togglePseudo(false);
+    };
+    const togglePseudo = (on: boolean) => {
+      root.classList.toggle('is-fullscreen', on);
+      document.documentElement.style.overflow = on ? 'hidden' : '';
+      if (on) document.addEventListener('keydown', exitPseudo);
+      else document.removeEventListener('keydown', exitPseudo);
+      sync();
+    };
+
+    fsBtn?.addEventListener('click', async () => {
+      if (canNativeFs) {
+        try {
+          if (document.fullscreenElement === root) await document.exitFullscreen();
+          else await root.requestFullscreen();
+          return;
+        } catch {
+          /* fall through to pseudo-fullscreen */
+        }
+      }
+      togglePseudo(!root.classList.contains('is-fullscreen'));
+    });
+    document.addEventListener('fullscreenchange', sync);
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-viz]').forEach(initViz);
+</script>

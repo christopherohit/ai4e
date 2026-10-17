@@ -1,0 +1,56 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Breadcrumb from '../components/Breadcrumb.astro';
+import { CATEGORY_LIST, SITE } from '../lib/site';
+
+---
+
+<BaseLayout title="Giới thiệu" description={`Mục đích của ${SITE.name}, cách học và các nhóm nội dung.`}>
+  <section class="container section about">
+    <Breadcrumb items={[{ label: 'Trang chủ', href: '/' }, { label: 'Giới thiệu' }]} />
+    <header class="about-header">
+      <h1>Giới thiệu {SITE.name}</h1>
+      <p class="section-desc">{SITE.tagline}.</p>
+    </header>
+
+    <div class="prose">
+      <h2 id="muc-dich">Vì sao có {SITE.name}?</h2>
+      <p>
+        Nhiều khái niệm trí tuệ nhân tạo — tích chập, cơ chế chú ý, khuếch tán, huấn luyện đối nghịch — rất khó hiểu
+        nếu chỉ đọc công thức. {SITE.name} là blog tiếng Việt giúp bạn <strong>nhìn thấy</strong> mô hình hoạt động:
+        mỗi bài viết giải thích một khái niệm hoặc một công cụ nghiên cứu, kèm theo trực quan hóa tương tác chạy
+        ngay trong trình duyệt để bạn tự tay thay đổi tham số và quan sát kết quả.
+      </p>
+
+      <h2 id="cach-doc">Cách đọc blog</h2>
+      <ul>
+        {CATEGORY_LIST.map((category) => (
+          <li><a href={category.href}><strong>{category.label}</strong></a> — {category.description}</li>
+        ))}
+        <li>Dùng <a href="/chu-de/">trang chủ đề</a> hoặc tìm kiếm (phím <kbd>/</kbd> hay <kbd>Ctrl</kbd>+<kbd>K</kbd>) — gõ có dấu hay không dấu, tiếng Việt hay tiếng Anh đều được.</li>
+        <li>Các khung “Thử ngay” trong bài chỉ cho bạn thao tác cụ thể trên trực quan hóa; các nút thao tác bằng tiếng Việt, thuật ngữ chuyên ngành giữ nguyên tiếng Anh.</li>
+      </ul>
+
+      <h2 id="cau-truc">Hai hướng khám phá</h2>
+      <p>Kiến thức giải thích nguyên lý theo từng chủ đề. Dự án tập trung vào giải thích mô hình, đánh giá thiên lệch và năng lượng AI.</p>
+      <p>Công cụ chạy trực tiếp trong bài, không sử dụng iframe.</p>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .about-header {
+    margin: var(--space-6) 0 var(--space-8);
+  }
+  .about-header h1 {
+    font-size: clamp(2rem, 5vw, 2.75rem);
+  }
+  .about kbd {
+    padding: 0 0.35em;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-2);
+    font-family: var(--font-sans);
+    font-size: 0.85em;
+  }
+</style>

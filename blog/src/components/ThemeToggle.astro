@@ -1,0 +1,77 @@
+---
+/** Light/dark theme toggle. Persists choice to localStorage("theme"). */
+---
+
+<button
+  type="button"
+  class="icon-btn theme-toggle"
+  data-theme-toggle
+  aria-label="Chuyển giao diện sáng/tối"
+  title="Chuyển giao diện sáng/tối"
+  aria-pressed="false"
+>
+  <svg class="theme-toggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <circle cx="12" cy="12" r="4"></circle>
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+  </svg>
+  <svg class="theme-toggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+  </svg>
+</button>
+
+<style>
+  /* Show the icon of the theme you will switch TO. */
+  .theme-toggle__sun {
+    display: none;
+  }
+  :global(:root[data-theme='dark']) .theme-toggle__sun {
+    display: block;
+  }
+  :global(:root[data-theme='dark']) .theme-toggle__moon {
+    display: none;
+  }
+</style>
+
+<script>
+  function currentTheme(): 'light' | 'dark' {
+    return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  }
+
+  function sync() {
+    const dark = currentTheme() === 'dark';
+    document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]').forEach((btn) => {
+      btn.setAttribute('aria-pressed', String(dark));
+    });
+  }
+
+  function setTheme(theme: 'light' | 'dark') {
+    document.documentElement.setAttribute('data-theme', theme);
+    try {
+      localStorage.setItem('theme', theme);
+    } catch {
+      /* storage unavailable — theme still applies for this page */
+    }
+    sync();
+    document.dispatchEvent(new CustomEvent('themechange', { detail: { theme } }));
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]').forEach((btn) => {
+    btn.addEventListener('click', () => setTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
+  });
+
+  // Follow OS changes only while the user has not chosen explicitly.
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem('theme');
+    } catch {
+      /* ignore */
+    }
+    if (stored !== 'light' && stored !== 'dark') {
+      document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+      sync();
+    }
+  });
+
+  sync();
+</script>

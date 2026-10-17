@@ -1,0 +1,95 @@
+---
+/** Post preview card: 16:9 cover, category badge, title, 3-line description, tags, reading time. */
+import { Image } from 'astro:assets';
+import type { CollectionEntry } from 'astro:content';
+import Icon from './Icon.astro';
+import TagChip from './TagChip.astro';
+import { CATEGORIES } from '../lib/site';
+import { postHref, postReadingTime } from '../lib/posts';
+import { readingTimeLabel } from '../lib/reading-time';
+
+interface Props {
+  post: CollectionEntry<'posts'>;
+  /** Heading level for the title (default h3). */
+  headingLevel?: 2 | 3 | 4;
+  /** Load the cover eagerly (above-the-fold cards). */
+  eager?: boolean;
+  /** Max tags shown on the card. */
+  maxTags?: number;
+}
+
+const { post, headingLevel = 3, eager = false, maxTags = 3 } = Astro.props;
+const { title, description, category, tags, cover } = post.data;
+const diagramCover = cover.src.includes('diagram') || cover.src.includes('architecture');
+const href = postHref(post);
+const cat = CATEGORIES[category];
+const minutes = postReadingTime(post);
+const Heading = `h${headingLevel}` as 'h2' | 'h3' | 'h4';
+const shownTags = tags.slice(0, maxTags);
+---
+
+<article class:list={['card', 'card--hover', 'post-card', { 'post-card--diagram': diagramCover }]} data-tags={tags.join('|')} data-category={category}>
+  <div class="card__media">
+    <Image
+      src={cover}
+      alt=""
+      widths={[400, 640, 960]}
+      sizes="(min-width: 1200px) 380px, (min-width: 640px) 50vw, 100vw"
+      loading={eager ? 'eager' : 'lazy'}
+      fetchpriority={eager ? 'high' : undefined}
+    />
+  </div>
+  <div class="card__body">
+    <span class="badge post-card__badge">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" set:html={cat.icon} />
+      {cat.label}
+    </span>
+    <Heading class="card__title"><a href={href}>{title}</a></Heading>
+    <p class="card__desc">{description}</p>
+    <div class="card__meta">
+      {shownTags.length > 0 && (
+        <ul class="post-card__tags" aria-label="Chủ đề">
+          {shownTags.map((tag) => <li><TagChip tag={tag} size="sm" /></li>)}
+        </ul>
+      )}
+      <span class="post-card__time">
+        <Icon name="clock" size={14} />
+        {readingTimeLabel(minutes)}
+      </span>
+    </div>
+  </div>
+</article>
+
+<style>
+  .post-card--diagram .card__media { background: white; }
+  .post-card--diagram .card__media :global(img) { object-fit: contain; padding: .5rem; }
+  .post-card__badge {
+    align-self: flex-start;
+  }
+  .post-card__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .post-card__time {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  .card__media :global(img) {
+    transition: transform 400ms var(--ease);
+  }
+  .post-card:hover .card__media :global(img) {
+    transform: scale(1.03);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .post-card:hover .card__media :global(img) {
+      transform: none;
+    }
+  }
+</style>

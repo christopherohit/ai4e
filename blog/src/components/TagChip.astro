@@ -1,0 +1,36 @@
+---
+/** Tag link chip → /chu-de/<slug>/. Optional post count. */
+import { tagHref } from '../lib/tags';
+
+interface Props {
+  tag: string;
+  count?: number;
+  size?: 'sm' | 'md';
+  /** Marks the chip as the current page's tag. */
+  current?: boolean;
+}
+
+const { tag, count, size = 'md', current = false } = Astro.props;
+const label = count === undefined ? `Chủ đề ${tag}` : `Chủ đề ${tag}, ${count} bài viết`;
+---
+
+<a
+  class:list={['chip', 'tag-chip', { 'chip--sm': size === 'sm', 'is-active': current }]}
+  href={tagHref(tag)}
+  aria-label={label}
+  aria-current={current ? 'page' : undefined}
+>
+  <span aria-hidden="true" class="tag-chip__hash">#</span>{tag}
+  {count !== undefined && <span class="chip__count" aria-hidden="true">{count}</span>}
+</a>
+
+<style>
+  .tag-chip {
+    position: relative;
+    z-index: 1; /* stay clickable above the card's stretched title link */
+  }
+  .tag-chip__hash {
+    opacity: 0.55;
+    margin-right: -0.1em;
+  }
+</style>

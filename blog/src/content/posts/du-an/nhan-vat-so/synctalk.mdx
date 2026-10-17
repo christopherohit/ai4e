@@ -1,0 +1,187 @@
+---
+title: 'SyncTalk: Khi môi, biểu cảm và đầu phải cùng đúng nhịp'
+description: 'Giải thích SyncTalk từ audio-visual synchronization tới tri-plane NeRF, tracking head pose và khôi phục chi tiết portrait.'
+category: du-an
+topic: nhan-vat-so
+tags: ['SyncTalk', 'Talking head', 'NeRF', 'Audio-visual synchronization']
+viz: synctalk
+cover: ../../../../assets/covers/synctalk.webp
+order: 5
+date: 2026-10-06
+---
+
+## Một khuôn mặt đẹp chưa chắc đang nói đúng
+
+Khi xem video nói chuyện, ta lập tức nhận ra môi đi trước tiếng, mắt vô hồn hoặc đầu rung nhẹ từng frame. Một ảnh riêng có thể rất đẹp nhưng chuỗi ảnh vẫn trông giả. **SyncTalk giải quyết synchronization ở nhiều thành phần**, không chỉ độ nét của ảnh.
+
+Bài này nói về [SyncTalk gốc, CVPR 2024](https://github.com/ziqiaopeng/SyncTalk), không phải SyncTalk_2D. Renderer chính dựa trên **NeRF và tri-plane hash representation**, không phải 3D Gaussian Splatting.
+
+Demo dùng **SyncTalk gốc, train trên video Obama** với Audio-Visual Encoder và AU45 của OpenFace cho vùng mắt. Model train 60.000 iteration, sau đó fine-tune môi thêm 100.000 iteration. Trên 728 frame test chưa từng thấy khi train, kết quả là PSNR 35,49 dB, LPIPS 0,018, LMD 2,73. Clip 10 giây đặt render của SyncTalk cạnh video gốc tại cùng thời điểm, kèm giọng nói thật. Đồ thị AU25, AU45 và audio RMS là tín hiệu đo từ đoạn video đó. Đây là đầu vào quan sát được, không phải embedding bên trong mạng. Ở 25 frame, ray qua từng pixel của khuôn mặt được tính sẵn từ tri-plane field đã train. Bạn sẽ thấy density tập trung ở bề mặt da và transmittance tụt về 0 ngay sau đó.
+
+## Pipeline: Ba nguồn điều khiển, một portrait
+
+Luồng chính gồm:
+
+1. **Facial-Sync Controller:** trích lip feature từ audio và expression feature từ facial capture, đồng thời hạn chế chúng ảnh hưởng sai vùng.
+2. **Head-Sync Stabilizer:** tìm và tinh chỉnh camera/head pose bằng landmarks và optical-flow tracking.
+3. **Dynamic Portrait Renderer:** field nhận vị trí, hướng nhìn và các features để tạo màu cùng density.
+4. **Portrait-Sync Generator:** kết hợp mặt render với thông tin từ ảnh gốc để giữ chi tiết như tóc.
+
+Ta có thể viết cấu trúc điều kiện của field:
+
+$$
+\mathcal{F}^{H}:(\mathbf{x},\mathbf{d},f_l,f_e;\mathcal{H}^{3})
+\longrightarrow(\mathbf{c},\sigma).
+$$
+
+$f_l$ điều khiển vùng môi, $f_e$ điều khiển expression; pose thay cách camera/rays đi qua field. Audio không tự xác định duy nhất expression hoặc head pose: cùng một câu có thể được nói vui, nghiêm túc, cúi đầu hoặc nhìn thẳng.
+
+## Audio-visual encoder: Học quan hệ giữa tiếng và môi
+
+Một phoneme không tương ứng một hình môi cố định: hình môi còn chịu ảnh hưởng các âm trước và sau. Vì vậy model học trên audio và các cửa sổ frame liên tiếp, thay vì gán một âm thành một ảnh.
+
+Trong sync discriminator của paper, gọi $F,A$ là embeddings của cửa sổ mặt và audio:
+
+$$
+s=\operatorname{sim}(F,A)=
+\frac{F\cdot A}{\|F\|_2\|A\|_2},
+$$
+
+$$
+\mathcal{L}_{sync}=
+-\left[y\log s+(1-y)\log(1-s)\right].
+$$
+
+$y=1$ nếu hai cửa sổ trùng thời gian, $y=0$ nếu không trùng. Loss nhỏ khi cặp đồng bộ được đánh giá giống nhau và cặp lệch nhịp được đánh giá khác nhau.
+
+**Chú ý điều kiện toán học:** cosine của vector bất kỳ nằm trong $[-1,1]$, không tự là probability. Biểu thức BCE này theo ký hiệu paper yêu cầu similarity dùng trong discriminator nằm trong miền hợp lệ $(0,1)$; implementation phải có đặc trưng/activation và ổn định số phù hợp. Không đưa cosine âm trực tiếp vào logarithm, cũng không gọi độ lệch thanh trượt trong demo là sync confidence.
+
+Encoder còn học reconstruction:
+
+$$
+\mathcal{L}_{recon}=
+\left\|F-\operatorname{Dec}
+\left(\operatorname{Conv}(A)\oplus\operatorname{Conv}(F)\right)\right\|_1.
+$$
+
+$\oplus$ là concatenation, không phải cộng số. Trong biểu thức reconstruction, $F$ chỉ facial input/target theo ngữ cảnh paper, không phải giữ nguyên kiểu dữ liệu embedding ở công thức cosine. Sau pretraining, phần audio $\operatorname{Conv}(A)$ cung cấp lip-related feature. Loss buộc audio mang thông tin hữu ích cho reconstruction, còn sync supervision khuyến khích đúng nhịp.
+
+### Lệch một vài frame có nghĩa gì?
+
+Ở 25 FPS, một frame là 40 ms. Lệch 5 frame tương ứng 200 ms:
+
+$$
+\Delta t=\frac{\Delta k}{\mathrm{FPS}}.
+$$
+
+Đây là phép đổi đơn vị để hiểu lỗi căn chỉnh, không phải công thức loss của SyncTalk. Trong demo, video gốc là đồng hồ chung: render của SyncTalk, audio và slider frame đều bám theo nó. Nhờ vậy, khi môi trong hai video lệch nhau, lỗi đó nằm ở model chứ không phải do phát lệch.
+
+## Expression capture: Không ép audio quyết định mọi cơ mặt
+
+SyncTalk dùng prior gồm **52 facial blendshape coefficients**, rồi chọn **bảy controls** liên quan vùng lông mày, trán và mắt, có tính độc lập với chuyển động môi. Blendshape có thể hình dung là các hướng biến đổi khuôn mặt: nhướn mày, nheo mắt… Hệ số cho biết dùng mỗi hướng bao nhiêu.
+
+Mô hình blendshape tuyến tính minh họa, không phải nguyên văn phương trình encoder của SyncTalk:
+
+$$
+\mathbf{v}=\mathbf{v}_0+\sum_k b_k\Delta\mathbf{v}_k.
+$$
+
+$\mathbf{v}_0$ là mesh trung tính, $\Delta\mathbf{v}_k$ là biến dạng của một blendshape. Facial capture chuyển frame thành coefficients có ý nghĩa ngữ nghĩa; chúng không phải “bảy loại cảm xúc” rời rạc và cũng không phải AU25 trong demo.
+
+## Disentangle Attention: Thông tin đúng phải đi vào đúng vùng
+
+Nếu một feature audio thay cả lông mày và tóc, model có thể khớp ảnh training nhưng chuyển động không tự nhiên. Paper thêm masks cho attention:
+
+$$
+V_{lip}=V\odot M_{lip},\qquad
+V_{exp}=V\odot M_{exp},
+$$
+
+$$
+f_l=f_{lip}\odot V_{lip},\qquad
+f_e=f_{exp}\odot V_{exp}.
+$$
+
+$\odot$ là element-wise multiplication. $V$ là region attention; masks hạn chế vùng ảnh hưởng. Đây không phải một chứng minh rằng hai features hoàn toàn độc lập về thống kê, mà là thiết kế giảm coupling không mong muốn.
+
+Bản train trong demo dùng AU45 (chớp mắt) của OpenFace cho vùng mắt, vì video Obama không kèm blendshape capture. Trên đồ thị, đường AU45 nhảy lên đúng lúc mắt trong video gốc nhắm lại, và audio không điều khiển phần này.
+
+## Head pose: Vì sao landmarks đúng mà đầu vẫn giật?
+
+Landmark detection thay đổi nhỏ qua từng frame có thể làm rotation và translation bị nhiễu. Camera focal length sai cũng bị model “bù” bằng pose sai.
+
+SyncTalk tìm focal phù hợp bằng lỗi reprojection:
+
+$$
+f_{opt}=\arg\min_{f_i}
+E_i\left(L_{2D},L_{3D}(f_i,R_i,T_i)\right),
+$$
+
+$$
+(R_{opt},T_{opt})=\arg\min_{R,T}
+E\left(L_{2D},L_{3D}(f_{opt},R,T)\right).
+$$
+
+$L_{3D}$ trong ký hiệu này là landmarks 3D **đã chiếu lên ảnh**; không trừ trực tiếp tọa độ pixel với tọa độ world. Paper dùng MSE reprojection để đánh giá focal candidates.
+
+Sau khởi tạo bằng 3DMM, optical flow theo dõi head keypoints giữa các frame. Hai giai đoạn tối ưu dùng:
+
+$$
+\mathcal{L}_{init}=\sum_j\|P_j-K_j\|_2,\qquad
+\mathcal{L}_{sec}=\sum_j\|P_j(R,T)-K_j\|_2.
+$$
+
+$K_j$ là keypoint được tracking, $P_j$ là projection; bước sau tinh chỉnh cả keypoint 3D và pose. Đây không phải chỉ lấy trung bình pose của các frame. Làm mượt quá mạnh có thể xóa head motion thật; tracking và geometric alignment giúp phân biệt chuyển động với nhiễu tốt hơn, nhưng vẫn chịu lỗi khi bị che hay optical flow drift.
+
+## Tri-plane hash và volume rendering
+
+Thay vì giữ một grid 3D lớn, field dùng ba planar hash encoders:
+
+$$
+\mathcal{H}^{AB}:(a,b)\longmapsto f^{AB}_{ab},
+\qquad AB\in\{XY,YZ,XZ\}.
+$$
+
+Một vị trí 3D được truy vấn ở ba phép chiếu và kết hợp features. Multi-resolution hash representations tiết kiệm và biểu diễn chi tiết hiệu quả; đây không phải ba ảnh camera thật hay ba lớp mesh.
+
+Màu được render theo NeRF:
+
+$$
+\hat{\mathbf{C}}(\mathbf{r})=
+\int_{t_n}^{t_f}
+T(t)\sigma(\mathbf{r}(t))
+\mathbf{c}(\mathbf{r}(t),\mathbf{d},f_l,f_e)\,dt,
+$$
+
+$$
+T(t)=\exp\left[-\int_{t_n}^{t}\sigma(\mathbf{r}(s))\,ds\right].
+$$
+
+Bản rời rạc dùng $\alpha_i=1-e^{-\sigma_i\delta_i}$ và $w_i=\alpha_i\prod_{j<i}(1-\alpha_j)$ như [bài NeRF](/kien-thuc/nerf/). Các features làm field thay đổi theo thời gian; không phải dịch một ảnh môi lên trên ảnh mặt cố định.
+
+Renderer học coarse-to-fine: đầu tiên sai số màu, sau đó thêm patch perceptual loss. Phương trình (13) của paper được viết:
+
+$$
+\mathcal{L}_{total}=
+\sum_{\mathbf{r}}\|\mathbf{C}(\mathbf{r})-\hat{\mathbf{C}}(\mathbf{r})\|_2
++\lambda\mathcal{L}_{LPIPS}(\hat{\mathcal{P}},\mathcal{P}).
+$$
+
+Phần mô tả gọi color loss là MSE, nhưng phương trình in dùng norm không có bình phương; hai biểu thức không hoàn toàn tương đương. Khi tái lập training cần đối chiếu code, không tự coi công thức norm trên là định nghĩa MSE. LPIPS so features của patches để chú ý chi tiết mà sai số pixel đơn thuần có thể bỏ qua.
+
+## Portrait-Sync Generator: Tóc không chỉ là “làm nét”
+
+NeRF khó tái tạo sợi tóc và nền động thật sắc. SyncTalk dùng mặt render $F_r$, Gaussian blur $G(F_r)$, synchronized head pose và ảnh gốc $F_o$ để phối hợp mặt mới với chi tiết portrait. Khi kết hợp head và torso tạo dark gap, phương pháp điền bằng average neck color $C_n$.
+
+Vì pipeline dùng thông tin ảnh gốc, đừng hiểu bước này là khôi phục toàn bộ tóc 3D từ audio, hoặc một bộ temporal smoothing chung. Camera và pose lệch vẫn có thể làm đường ghép không tự nhiên.
+
+## Cách kiểm tra thay vì chỉ xem một video đẹp
+
+- Kiểm tra alignment audio/frame trước khi train. Với dataset AU đang dùng, timestamps cách 0.04 s; index ảnh và audio feature cần cùng quy ước.
+- Đánh giá lip-sync riêng với chất lượng ảnh: LSE-C/LSE-D và landmark distance không đo cùng thứ với PSNR/LPIPS.
+- Xem biểu cảm upper-face và head jitter qua chuỗi frame, không chọn riêng frame đẹp.
+- Thử audio ngoài training và các pose phù hợp phạm vi quan sát; view quá xa dữ liệu dễ bị suy diễn sai.
+
+SyncTalk không phải “một ảnh + một file tiếng là chắc chắn có portrait hoàn chỉnh”. Phương pháp gốc học portrait riêng từ video và dùng các module pretrained. Để triển khai thật còn cần preprocessing, checkpoint và GPU; demo trên blog không thay thế pipeline đó.
+
+Đọc chi tiết: [paper SyncTalk, CVPR 2024](https://openaccess.thecvf.com/content/CVPR2024/html/Peng_SyncTalk_The_Devil_is_in_the_Synchronization_for_Talking_Head_CVPR_2024_paper.html). [InsTaG](/du-an/instag/) chuyển sang Gaussian primitives và dùng motion prior để adaptation với ít video hơn.

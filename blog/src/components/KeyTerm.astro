@@ -1,0 +1,23 @@
+---
+/** Vietnamese term with its English original in muted parentheses: <KeyTerm vi="tích chập" en="convolution" /> */
+interface Props {
+  vi: string;
+  en?: string;
+}
+
+const { vi, en } = Astro.props;
+---
+
+<span class="keyterm"><dfn class="keyterm__vi">{vi}</dfn>{en && <span class="keyterm__en"> (<span lang="en">{en}</span>)</span>}</span>
+
+<style>
+  .keyterm__vi {
+    font-style: normal;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+  .keyterm__en {
+    color: var(--color-muted);
+    font-size: 0.95em;
+  }
+</style>

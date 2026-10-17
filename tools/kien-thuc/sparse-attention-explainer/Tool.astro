@@ -1,0 +1,25 @@
+---
+import Lab from '../../_shared/sequence-lab/Lab.astro';
+---
+<Lab id="sparse-attention" title="Sparse Attention · query đọc những key nào?" label="Ma trận attention nhân quả và bảng điểm indexer cho query đang chọn"
+  steps={['Dense', 'Local / global', 'QSA: chọn block', 'QSA: core attention']}
+  scope="Mô phỏng giáo dục: 32 token của một đoạn Python, key/query là vector chủ đề 8 chiều cộng nhiễu cố định, tính softmax thật trong trình duyệt. QSA dùng đúng quy tắc micro-block r = 4, ReLU qua 4 head indexer, top-k block và giữ phần đuôi, nhưng ở quy mô nhỏ (checkpoint thật: budget 2048 token, ngữ cảnh tới 262K) và không chạy trọng số Qwen.">
+  <Fragment slot="controls">
+    <label class="field"><span class="field-row"><span>Query</span><output data-value="query"></output></span><input type="range" name="query" min="3" max="31" step="1" value="28" /></label>
+    <div class="field">Ví dụ nhanh<div class="chips"><button type="button" data-example="28">“2” tìm tham số r</button><button type="button" data-example="22">“3.14” tìm PI</button><button type="button" data-example="31">“print” tìm x</button><button type="button" data-example="15">“diện” trong chú thích</button></div></div>
+    <label class="field"><span class="field-row"><span>Budget</span><output data-value="budget"></output></span><input type="range" name="budget" min="1" max="4" step="1" value="2" /></label>
+    <fieldset class="segmented" data-pattern-field hidden><legend>Mẫu thưa cố định</legend><label><input type="radio" name="pattern" value="local" checked /><span>Local window</span></label><label><input type="radio" name="pattern" value="global" /><span>Global + local</span></label></fieldset>
+    <div class="actions"><button type="button" data-reset>Đặt lại</button></div>
+    <p class="hint">Thử query “2” (vị trí 29) ở bước 2: local window không chạm tới “r” ở đầu chuỗi, còn QSA chọn đúng block chứa nó.</p>
+  </Fragment>
+  <section class="inspector" aria-labelledby="sa-chart-heading">
+    <div class="section-head"><h3 id="sa-chart-heading">Giữ được bao nhiêu khối lượng attention?</h3><p data-chart-note></p></div>
+    <div class="chart"><svg data-chart role="img" aria-labelledby="sa-chart-heading" aria-describedby="sa-chart-caption"></svg></div>
+    <p id="sa-chart-caption" class="caption">Trục ngang: số token complete-block được phép đọc (chưa tính phần đuôi). Trục dọc: tổng trọng số dense rơi vào các key mà mẫu thưa giữ lại. Nhấp để đổi budget. Đây là số đo của ví dụ đồ chơi, không phải kết quả benchmark của Qwen.</p>
+    <details class="table-view"><summary>Xem dạng bảng</summary><div class="table-scroll"><table class="data" data-table></table></div></details>
+  </section>
+</Lab>
+<script>
+  import { initSparseAttentionLab } from './render';
+  initSparseAttentionLab();
+</script>

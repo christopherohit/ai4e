@@ -1,0 +1,98 @@
+---
+import referenceClip from './data/trained/clip/reference.mp4?url';
+import syncTalkClip from './data/trained/clip/synctalk.mp4?url';
+import insTaGClip from './data/trained/clip/instag.mp4?url';
+import speech from './data/trained/clip/speech.m4a?url';
+import poster from './data/trained/clip/reference.jpg';
+import syncTalkPoster from './data/trained/clip/synctalk.jpg';
+import insTaGPoster from './data/trained/clip/instag.jpg';
+interface Props { mode: 'nerf' | 'gaussian-splatting' | 'synctalk' | 'instag' }
+const { mode } = Astro.props;
+const talking = mode === 'synctalk' || mode === 'instag';
+const name = { nerf: 'NeRF', 'gaussian-splatting': '3D Gaussian Splatting', synctalk: 'SyncTalk', instag: 'InsTaG' }[mode];
+const steps = {
+  nerf: ['Ảnh & camera', 'Ray sampling', 'Density σ', 'Volume rendering'],
+  'gaussian-splatting': ['Gaussian 3D', 'Footprint', 'Sort theo depth', 'Alpha compositing'],
+  synctalk: ['Audio & AU', 'Tri-plane field', 'Ray sampling', 'Portrait rendering'],
+  instag: ['Gaussian canonical', 'Motion field', 'Face + mouth', 'Fused rendering'],
+}[mode];
+const metrics = {
+  nerf: [['PSNR', '22.48 dB'], ['SSIM', '0.682'], ['LPIPS', '0.261'], ['Test views', '25 ảnh']],
+  'gaussian-splatting': [['PSNR', '22.48 dB'], ['Gaussians', '1.25 M'], ['SH', 'bậc 3'], ['Test views', '25 ảnh']],
+  synctalk: [['PSNR', '35.49 dB'], ['LPIPS', '0.018'], ['LMD', '2.73'], ['Test frames', '728']],
+  instag: [['PSNR', '33.63 dB'], ['LPIPS', '0.027'], ['LMD', '2.93'], ['Test frames', '727']],
+}[mode];
+const sliders = {
+  nerf: [{ name: 'position', label: 'Góc orbit', min: 0, max: 35, value: 0, unit: '× 10°' }],
+  'gaussian-splatting': [{ name: 'position', label: 'Góc orbit', min: -180, max: 180, value: 0, unit: '°' }, { name: 'detail', label: 'Footprint (σ)', min: 1, max: 3, step: 0.1, value: 2.8, unit: 'σ' }],
+  synctalk: [{ name: 'position', label: 'Frame', min: 0, max: 249, value: 100, unit: '' }],
+  instag: [{ name: 'position', label: 'Frame', min: 0, max: 249, value: 100, unit: '' }, { name: 'detail', label: 'Phóng đại vector', min: 1, max: 10, value: 3, unit: '×' }],
+}[mode];
+const views = mode === 'gaussian-splatting' ? ['Orbit tự do', 'Test view 0002', 'Test view 0118', 'Test view 0229', 'Test view 0329'] : [];
+const layers = {
+  nerf: [['rgb', 'RGB'], ['depth', 'Depth']],
+  'gaussian-splatting': [],
+  synctalk: [['rgb', 'Head render'], ['depth', 'Depth']],
+  instag: [['rgb', 'Render'], ['face', 'Alpha face'], ['mouth', 'Alpha mouth']],
+}[mode];
+const scope = {
+  nerf: 'Nerfacto (nerfstudio) đã train 30k step trên 175 ảnh drone; 25 ảnh còn lại dùng để đo. Orbit và các ray được tính sẵn trên GPU từ model; browser chỉ hiển thị.',
+  'gaussian-splatting': '3DGS (Inria) đã train 30k iteration với ngưỡng densify 0.0006 để vừa kích thước web. Render live bằng WebGL (Spark); Pixel Inspector dùng danh sách Gaussian tính sẵn, khớp CUDA rasterizer trong sai số 6·10⁻⁴.',
+  synctalk: 'SyncTalk (code gốc, AVE + AU45) đã train 160k iteration trên video Obama; đo trên 728 frame test. Clip 10 giây là output thật của model; ray traces tính sẵn trên GPU cho 25 frame.',
+  instag: 'InsTaG (code gốc) pretrain trên 5 người rồi adapt sang Obama với 10 giây dữ liệu; đo trên 727 frame test. Vector chuyển động là Δμ thật từ motion network đã train, tính sẵn cho 25 frame.',
+}[mode];
+---
+<section class="tool-workspace" aria-labelledby="cong-cu">
+  <header class="tool-heading">
+    <h2 id="cong-cu">{name} · mô hình đã train</h2>
+    <a href="#huong-dan">Đọc nguyên lý ↓</a>
+  </header>
+  <section id="native-tool-root" class="radiance-lab" data-radiance-mode={mode} aria-busy="true">
+    <ol class="steps" aria-label="Các bước xử lý">
+      {steps.map((label, stage) => <li><button type="button" data-stage={stage} aria-pressed={stage === 3 ? 'true' : 'false'}><span>{stage + 1}</span>{label}</button></li>)}
+    </ol>
+    <div class="stage">
+      <div class="viewport">
+        <canvas data-scene-canvas role="img" aria-label={'Khung nhìn ' + name + '. Click hoặc Enter để chọn pixel cần xem.'} tabindex="0"></canvas>
+        <canvas data-overlay aria-hidden="true"></canvas>
+        <div class="loading" data-loading role="status"><span data-loading-text>Đang tải mô hình…</span><progress data-progress max="1" value="0"></progress></div>
+        <div class="scene-error" data-error hidden role="alert"></div>
+      </div>
+      <aside class="panel" aria-label="Điều khiển">
+        <div class="step-card"><p class="kicker" data-step-number>Bước 4 / 4</p><h3 data-step-title></h3><p data-step-description></p><p class="formula" data-formula></p></div>
+        {views.length > 0 && <label class="field">Camera<select data-view>{views.map((label, index) => <option value={index - 1}>{label}</option>)}</select></label>}
+        {sliders.map(slider => <label class="field"><span class="field-row"><span>{slider.label}</span><output data-value={slider.name}>{slider.value}{slider.unit ? ' ' + slider.unit : ''}</output></span><input type="range" name={slider.name} min={slider.min} max={slider.max} step={(slider as { step?: number }).step ?? 1} value={slider.value} data-unit={slider.unit} /></label>)}
+        {layers.length > 0 && <fieldset class="segmented"><legend>Lớp hiển thị</legend>{layers.map(([value, label], index) => <label><input type="radio" name="layer" value={value} checked={index === 0} /><span>{label}</span></label>)}</fieldset>}
+        {mode === 'instag' && <label class="toggle"><input type="checkbox" data-vectors checked /> Hiện vector chuyển động Δμ</label>}
+        <div class="actions"><button type="button" data-camera-reset>Camera gốc</button><button type="button" data-reset>Đặt lại</button></div>
+        <p class="hint">Kéo để xoay · cuộn hoặc +/− để zoom · click để chọn pixel · phím mũi tên để đổi góc</p>
+      </aside>
+    </div>
+    {talking && <section class="clips" aria-labelledby="clip-heading">
+      <div class="section-head"><h3 id="clip-heading">So với video thật · 10 giây test</h3><div class="clip-actions"><button type="button" data-play aria-pressed="false">Phát</button><label class="toggle"><input type="checkbox" data-sound /> Âm thanh</label></div></div>
+      <div class="clip-grid">
+        <figure><video data-reference src={referenceClip} poster={poster.src} preload="metadata" playsinline muted></video><figcaption>Video gốc (ground truth)</figcaption></figure>
+        <figure><video data-rendered src={mode === 'synctalk' ? syncTalkClip : insTaGClip} poster={(mode === 'synctalk' ? syncTalkPoster : insTaGPoster).src} preload="metadata" playsinline muted></video><figcaption>{name} render · không dùng frame này khi train</figcaption></figure>
+      </div>
+      <audio data-audio src={speech} preload="metadata"></audio>
+    </section>}
+    <section class="inspector" aria-labelledby="inspector-heading">
+      <div class="section-head"><h3 id="inspector-heading" data-inspector-title>{talking ? 'Tín hiệu điều khiển' : 'Bên trong một pixel'}</h3><p data-selection></p></div>
+      <div class="chart"><svg data-chart role="img" aria-labelledby="inspector-heading" aria-describedby="chart-caption"></svg><div class="chart-tooltip" data-chart-tooltip hidden></div></div>
+      <p id="chart-caption" class="caption" data-caption></p>
+      <dl class="readout" data-readout></dl>
+      <details class="table-view"><summary>Xem dạng bảng</summary><div class="table-scroll"><table data-table></table></div></details>
+      {talking && <section class="ray-panel" aria-labelledby="ray-heading"><div class="section-head"><h3 id="ray-heading" data-ray-title>Ray tại pixel đã chọn</h3><p data-ray-selection></p></div><div class="chart"><svg data-ray-chart role="img" aria-labelledby="ray-heading"></svg><div class="chart-tooltip" data-chart-tooltip hidden></div></div><dl class="readout" data-ray-readout></dl></section>}
+    </section>
+    <footer class="lab-footer">
+      <dl class="metrics">{metrics.map(([label, value]) => <div><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      <p class="scope"><strong>Nguồn số liệu:</strong> {scope}</p>
+    </footer>
+  </section>
+</section>
+<script>
+  import './lab.css';
+  import { initRadianceLabs } from './runtime';
+  initRadianceLabs();
+  document.addEventListener('astro:page-load', initRadianceLabs);
+</script>

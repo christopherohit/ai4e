@@ -1,0 +1,81 @@
+---
+/**
+ * SDVX Modeler deployment for its article: browser → nginx (auth_request via shim) → one dsh process per account →
+ * MCP tools in Codeguard, which alone may write project files. Pure HTML/CSS so it reflows and follows the theme.
+ */
+---
+<figure class="sa" aria-labelledby="sa-caption">
+  <div class="sa-node sa-user"><b>Kỹ sư</b><small>trình duyệt</small></div>
+  <div class="sa-arrow" aria-hidden="true"></div>
+
+  <section class="sa-box sa-harness" aria-label="Harness">
+    <header><b>Harness</b><small>một image · vòng lặp agent và giao diện web (DeepSeek Harness)</small></header>
+    <div class="sa-row">
+      <div class="sa-node"><b>nginx</b><small>cổng công khai duy nhất</small></div>
+      <div class="sa-node"><b>auth-shim</b><small>kiểm tra cookie, trả về cổng của account</small></div>
+    </div>
+    <div class="sa-row sa-users">
+      <div class="sa-node sa-dsh"><b>dsh · account A</b><small>tiến trình riêng, cổng riêng</small></div>
+      <div class="sa-node sa-dsh"><b>dsh · account B</b><small>không thấy workspace của A</small></div>
+    </div>
+    <p class="sa-note"><span class="sa-lock" aria-hidden="true">🔒</span> Thư mục project được mount <b>chỉ đọc</b>. Harness không thể tự ghi file.</p>
+  </section>
+
+  <div class="sa-split">
+    <div class="sa-link"><span class="sa-arrow" aria-hidden="true"></span><small>MCP · <code>mcp__sdvx__*</code><br />kèm session id + workspace</small></div>
+    <div class="sa-link"><span class="sa-arrow" aria-hidden="true"></span><small>chat completion</small></div>
+  </div>
+
+  <div class="sa-bottom">
+    <section class="sa-box sa-guard" aria-label="Codeguard">
+      <header><b>Codeguard</b><small>service Python · nơi duy nhất được ghi</small></header>
+      <ul>
+        <li>Tài khoản, workspace, project</li>
+        <li>Tool đọc · preflight · transaction</li>
+        <li>Baseline, diff, hoàn tác</li>
+      </ul>
+      <div class="sa-node sa-db"><b>PostgreSQL + file project</b></div>
+    </section>
+    <div class="sa-node sa-llm"><b>LLM</b><small>tương thích OpenAI, chạy nội bộ</small><small>chỉ đọc và đề xuất lời gọi tool</small></div>
+  </div>
+  <figcaption id="sa-caption">Kiến trúc triển khai của SDVX Modeler. Đường duy nhất để thay đổi project là gọi tool của Codeguard qua MCP.</figcaption>
+</figure>
+
+<style>
+  .sa { --sa-h: #2a78d6; --sa-g: #1baf7a; --sa-line: var(--color-muted); margin: 2rem 0; padding: clamp(1rem, 3vw, 1.5rem); border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-surface); display: grid; justify-items: center; font-size: var(--text-sm); line-height: 1.4; }
+  :global(:root[data-theme='dark']) .sa { --sa-h: #3987e5; --sa-g: #199e70; }
+  @media (prefers-color-scheme: dark) { :global(:root:not([data-theme='light'])) .sa { --sa-h: #3987e5; --sa-g: #199e70; } }
+  .sa b { font-weight: 600; color: var(--color-text); }
+  .sa small { color: var(--color-text-2); font-size: var(--text-xs); }
+  .sa code { font-size: 11px; }
+  .sa .sa-node { display: grid; justify-items: center; gap: .1rem; padding: .55rem .9rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); text-align: center; }
+  .sa .sa-user { border-width: 2px; }
+  .sa-arrow { position: relative; display: block; width: 1.5px; height: 18px; margin: 0 auto 9px; background: var(--sa-line); }
+  .sa-arrow::after { content: ''; position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); border: 5px solid transparent; border-top: 7px solid var(--sa-line); }
+
+  .sa .sa-box { width: 100%; display: grid; gap: .6rem; padding: .85rem 1rem 1rem; border: 1.5px solid; border-radius: var(--radius-lg); }
+  .sa .sa-box header { display: grid; gap: .1rem; }
+  .sa .sa-harness { max-width: 640px; border-color: var(--sa-h); background: color-mix(in oklab, var(--sa-h) 6%, var(--color-surface)); }
+  .sa .sa-guard { border-color: var(--sa-g); background: color-mix(in oklab, var(--sa-g) 7%, var(--color-surface)); }
+  .sa .sa-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+  .sa .sa-dsh { border-top: 3px solid var(--sa-h); }
+  .sa .sa-note { margin: 0; color: var(--color-text-2); font-size: var(--text-xs); }
+  .sa .sa-guard ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .25rem; }
+  .sa .sa-guard li { margin: 0; padding-left: .9rem; position: relative; color: var(--color-text-2); }
+  .sa .sa-guard li::before { content: ''; position: absolute; left: 0; top: .5em; width: 5px; height: 5px; border-radius: 50%; background: var(--sa-g); }
+  .sa .sa-db { border-style: dashed; }
+
+  .sa-split, .sa-bottom { width: 100%; max-width: 640px; display: grid; grid-template-columns: 3fr 2fr; gap: .75rem; }
+  .sa-link { display: grid; justify-items: center; text-align: center; padding-top: .25rem; }
+  .sa-link .sa-arrow { height: 26px; margin-bottom: 4px; }
+  .sa-link small { margin-bottom: .5rem; }
+  .sa .sa-llm { align-self: start; border-style: dashed; }
+  .sa figcaption { margin-top: 1.1rem; color: var(--color-text-2); font-size: .85rem; line-height: 1.6; text-align: center; max-width: 60ch; }
+
+  @media (max-width: 560px) {
+    .sa .sa-row { grid-template-columns: 1fr; }
+    .sa-split, .sa-bottom { grid-template-columns: 1fr; }
+    .sa-split .sa-link:last-child { display: none; }
+    .sa .sa-llm::before { content: '↔ cũng được dsh gọi để chat'; font-size: 11px; color: var(--color-muted); }
+  }
+</style>

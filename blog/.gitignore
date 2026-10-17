@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.astro/
+.viz-build/
+public/viz/
+public/native/
+test-results/
+playwright-report/

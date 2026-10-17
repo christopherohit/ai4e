@@ -1,0 +1,63 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/Icon.astro';
+import { CATEGORY_LIST } from '../lib/site';
+---
+
+<BaseLayout title="Không tìm thấy trang" description="Trang bạn tìm không tồn tại." noindex>
+  <section class="container section not-found">
+    <p class="not-found__code" aria-hidden="true">404</p>
+    <h1>Không tìm thấy trang</h1>
+    <p class="section-desc">Đường dẫn có thể đã thay đổi hoặc không tồn tại. Hãy thử tìm chủ đề bạn quan tâm:</p>
+    <form class="not-found__search" action="/tim-kiem/" method="get" role="search">
+      <label class="sr-only" for="not-found-q">Từ khóa tìm kiếm</label>
+      <input id="not-found-q" class="input" type="search" name="q" placeholder="Ví dụ: tích chập, attention, GAN…" autocomplete="off" required />
+      <button class="btn btn--primary" type="submit">Tìm kiếm</button>
+    </form>
+    <div class="not-found__links">
+      <a class="btn btn--secondary" href="/"><Icon name="home" size={18} /> Về trang chủ</a>
+      {CATEGORY_LIST.map((category) => <a class="btn btn--ghost" href={category.href}>{category.label}</a>)}
+      <a class="btn btn--ghost" href="/chu-de/">Chủ đề</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .not-found {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-4);
+    min-height: 60vh;
+    align-content: center;
+    text-align: center;
+  }
+  .not-found__code {
+    background: var(--hero-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-size: clamp(5rem, 18vw, 9rem);
+    font-weight: 800;
+    line-height: 1;
+  }
+  .not-found h1 {
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+  }
+  .not-found__search {
+    display: flex;
+    width: min(100%, 520px);
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+  .not-found__search .input {
+    flex: 1;
+    min-width: 0;
+  }
+  .not-found__links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+  }
+</style>

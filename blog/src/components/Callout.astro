@@ -1,0 +1,96 @@
+---
+/**
+ * Callout box for MDX articles.
+ *   <Callout type="try">…</Callout>   → "Thử ngay" (hands-on step in the viz)
+ *   <Callout type="note">…</Callout>  → "Lưu ý"
+ *   <Callout type="key">…</Callout>   → "Ghi nhớ"
+ * `title` overrides the default label.
+ */
+import Icon from './Icon.astro';
+import type { IconName } from '../lib/icons';
+
+type CalloutType = 'try' | 'note' | 'key';
+
+interface Props {
+  type?: CalloutType;
+  title?: string;
+}
+
+const VARIANTS: Record<CalloutType, { label: string; icon: IconName }> = {
+  try: { label: 'Thử ngay', icon: 'mouse-pointer' },
+  note: { label: 'Lưu ý', icon: 'info' },
+  key: { label: 'Ghi nhớ', icon: 'lightbulb' },
+};
+
+const { type = 'note', title } = Astro.props;
+const variant = VARIANTS[type] ?? VARIANTS.note;
+const heading = title ?? variant.label;
+---
+
+<aside class:list={['callout', `callout--${type}`]} aria-label={heading}>
+  <p class="callout__title">
+    <span class="callout__icon"><Icon name={variant.icon} size={18} /></span>
+    {heading}
+  </p>
+  <div class="callout__body">
+    <slot />
+  </div>
+</aside>
+
+<style>
+  .callout {
+    --c-bg: var(--callout-note-bg);
+    --c-border: var(--callout-note-border);
+    margin-block: 1.75em;
+    padding: var(--space-4) var(--space-5);
+    background: var(--c-bg);
+    border: 1px solid color-mix(in srgb, var(--c-border) 30%, transparent);
+    border-left: 4px solid var(--c-border);
+    border-radius: var(--radius-lg);
+    color: var(--color-text-2);
+    font-style: normal;
+  }
+  .callout--try {
+    --c-bg: var(--callout-try-bg);
+    --c-border: var(--callout-try-border);
+  }
+  .callout--key {
+    --c-bg: var(--callout-key-bg);
+    --c-border: var(--callout-key-border);
+  }
+  .callout__title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--color-text);
+  }
+  .callout__icon {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-full);
+    background: var(--c-border);
+    color: #fff;
+    flex: none;
+  }
+  .callout__icon :global(svg) {
+    width: 16px;
+    height: 16px;
+  }
+  .callout__body > :global(* + *) {
+    margin-top: 0.75em;
+  }
+  .callout__body > :global(:first-child) {
+    margin-top: 0;
+  }
+  .callout__body :global(ul),
+  .callout__body :global(ol) {
+    padding-left: 1.25em;
+  }
+</style>

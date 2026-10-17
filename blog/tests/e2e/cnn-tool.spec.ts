@@ -1,0 +1,36 @@
+import { expect, test } from '@playwright/test';
+
+test('CNN main article is the iframe-free Vietnamese hybrid lesson', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.goto('/kien-thuc/cnn-explainer/');
+  await expect(page.locator('iframe.viz__frame')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/kien-thuc\/cnn-explainer\/$/);
+  await expect(page.locator('.site-header')).toBeVisible();
+  await expect(page.locator('#cnn-tool-root #cnn-svg .node-group').first()).toBeVisible({ timeout: 60000 });
+  await expect(page.locator('#cnn-tool-root #header')).toHaveCount(0);
+  await expect(page.locator('iframe')).toHaveCount(0);
+  await expect(page.locator('#cnn-tool-root')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('#cnn-tool-root #detailed-button')).toContainText('Hiện chi tiết');
+  await expect(page.locator('#cnn-tool-root #level-select option').first()).toHaveText('Theo lớp');
+  await expect(page.locator('#cnn-tool-root #description')).toHaveCount(0);
+  await expect(page.locator('#article-convolution')).toHaveCount(1);
+  await expect(page.locator('#huong-dan .prose')).toContainText('Tích chập');
+  await expect(page.locator('.tool-workspace')).toBeVisible();
+  const workspace = await page.locator('.tool-workspace').boundingBox();
+  expect(workspace!.x).toBeGreaterThanOrEqual(16);
+  expect(workspace!.width).toBeLessThanOrEqual(1440 - 32);
+  const options = page.locator('#cnn-tool-root .image-container[data-imageName]');
+  await options.nth(1).click();
+  await expect(options.nth(1)).not.toHaveClass(/inactive/);
+  await expect(page.locator('#cnn-tool-root #detailed-button')).toBeEnabled();
+  const detailedBefore = await page.locator('#cnn-tool-root #detailed-button').getAttribute('class');
+  await page.locator('#cnn-tool-root #detailed-button').click();
+  await expect(page.locator('#cnn-tool-root #detailed-button')).not.toHaveAttribute('class', detailedBefore!);
+  await page.screenshot({ path: 'test-results/cnn-tool-desktop.png', fullPage: false });
+  await page.setViewportSize({ width: 375, height: 812 });
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  expect(errors).toEqual([]);
+});

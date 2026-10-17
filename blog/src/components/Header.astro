@@ -1,0 +1,328 @@
+---
+import ThemeToggle from './ThemeToggle.astro';
+import { NAV_ITEMS, SITE, isActivePath } from '../lib/site';
+
+const pathname = Astro.url.pathname;
+---
+
+<header class="site-header">
+  <div class="container site-header__inner">
+    <a href="/" class="brand" aria-label={`${SITE.name} — Trang chủ`}>
+      <svg class="brand__logo" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <defs>
+          <linearGradient id="brand-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#0ea5e9"></stop>
+            <stop offset="1" stop-color="#0369a1"></stop>
+          </linearGradient>
+        </defs>
+        <rect width="32" height="32" rx="8" fill="url(#brand-grad)"></rect>
+        <g fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round">
+          <path d="M9 11l7 5-7 5M16 16h7M23 16l-7-5M23 16l-7 5"></path>
+        </g>
+        <g fill="#fff">
+          <circle cx="9" cy="11" r="2"></circle>
+          <circle cx="9" cy="21" r="2"></circle>
+          <circle cx="16" cy="16" r="2.2"></circle>
+          <circle cx="23" cy="16" r="2"></circle>
+        </g>
+      </svg>
+      <span class="brand__name">{SITE.name}</span>
+    </a>
+
+    <nav class="site-nav" id="site-nav" aria-label="Điều hướng chính">
+      <ul class="site-nav__list">
+        {
+          NAV_ITEMS.map((item) => {
+            const active = isActivePath(pathname, item.href);
+            return (
+              <li>
+                <a
+                  href={item.href}
+                  class:list={['site-nav__link', { 'is-active': active }]}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  {item.label}
+                </a>
+              </li>
+            );
+          })
+        }
+      </ul>
+    </nav>
+
+    <div class="site-header__actions">
+      <button type="button" class="search-trigger" data-search-open aria-label="Tìm kiếm chủ đề (phím tắt Ctrl+K hoặc /)" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="m20 20-3.5-3.5"></path>
+        </svg>
+        <span class="search-trigger__label">Tìm chủ đề…</span>
+        <kbd class="search-trigger__kbd" data-shortcut-label aria-hidden="true">Ctrl K</kbd>
+      </button>
+      <ThemeToggle />
+      <button
+        type="button"
+        class="icon-btn nav-toggle"
+        data-nav-toggle
+        aria-controls="site-nav"
+        aria-expanded="false"
+        aria-label="Mở menu điều hướng"
+      >
+        <svg class="nav-toggle__open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+          <path d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+        <svg class="nav-toggle__close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+          <path d="M6 6l12 12M18 6 6 18"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(10px);
+    -webkit-backdrop-filter: saturate(180%) blur(10px);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .site-header__inner {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    height: var(--header-h);
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-text);
+    font-weight: 700;
+    font-size: var(--text-xl);
+    letter-spacing: -0.02em;
+    flex: none;
+  }
+
+  .brand:hover {
+    color: var(--color-text);
+  }
+
+  .brand__logo {
+    width: 32px;
+    height: 32px;
+  }
+
+  .site-nav {
+    margin-left: var(--space-4);
+  }
+
+  .site-nav__list {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .site-nav__link {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-md);
+    color: var(--color-text-2);
+    font-weight: 500;
+    font-size: var(--text-sm);
+    white-space: nowrap;
+    transition:
+      background-color var(--dur) var(--ease),
+      color var(--dur) var(--ease);
+  }
+
+  .site-nav__link:hover {
+    color: var(--color-primary-soft-text);
+    background: var(--color-primary-soft);
+  }
+
+  .site-nav__link.is-active {
+    color: var(--color-primary-soft-text);
+    background: var(--color-primary-soft);
+    font-weight: 600;
+  }
+
+  .site-header__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: auto;
+  }
+
+  .search-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 220px;
+    height: 40px;
+    padding: 0 0.5rem 0 0.875rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    background: var(--color-surface-2);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    text-align: left;
+    transition:
+      border-color var(--dur) var(--ease),
+      background-color var(--dur) var(--ease);
+  }
+
+  .search-trigger:hover {
+    border-color: var(--brand-300);
+    background: var(--color-surface);
+  }
+
+  .search-trigger svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+  }
+
+  .search-trigger__label {
+    flex: 1;
+  }
+
+  .search-trigger__kbd {
+    font-family: var(--font-sans);
+    font-size: var(--text-xs);
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-muted);
+  }
+
+  .nav-toggle {
+    display: none;
+  }
+
+  .nav-toggle__close {
+    display: none;
+  }
+
+  .nav-toggle[aria-expanded='true'] .nav-toggle__open {
+    display: none;
+  }
+
+  .nav-toggle[aria-expanded='true'] .nav-toggle__close {
+    display: block;
+  }
+
+  @media (max-width: 1100px) {
+    .search-trigger {
+      min-width: 0;
+    }
+    .search-trigger__kbd {
+      display: none;
+    }
+  }
+
+  /* Mobile: hamburger disclosure */
+  @media (max-width: 899px) {
+    .nav-toggle {
+      display: inline-grid;
+    }
+
+    .site-nav {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      margin: 0;
+      padding: var(--space-2) var(--container-pad) var(--space-4);
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .site-nav.is-open {
+      display: block;
+    }
+
+    .site-nav__list {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .site-nav__link {
+      padding: 0.75rem;
+      font-size: var(--text-base);
+    }
+
+    .search-trigger {
+      width: 40px;
+      padding: 0;
+      justify-content: center;
+      border-radius: var(--radius-lg);
+    }
+
+    .search-trigger__label {
+      display: none;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .site-header__inner {
+      gap: var(--space-2);
+    }
+    .brand__name {
+      font-size: var(--text-lg);
+    }
+    .site-header__actions {
+      gap: 0;
+    }
+  }
+</style>
+
+<script>
+  const toggle = document.querySelector<HTMLButtonElement>('[data-nav-toggle]');
+  const nav = document.getElementById('site-nav');
+
+  if (toggle && nav) {
+    const setOpen = (open: boolean) => {
+      toggle.setAttribute('aria-expanded', String(open));
+      toggle.setAttribute('aria-label', open ? 'Đóng menu điều hướng' : 'Mở menu điều hướng');
+      nav.classList.toggle('is-open', open);
+    };
+
+    toggle.addEventListener('click', () => setOpen(toggle.getAttribute('aria-expanded') !== 'true'));
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && toggle.getAttribute('aria-expanded') === 'true') {
+        setOpen(false);
+        toggle.focus();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      const target = e.target as Node;
+      if (toggle.getAttribute('aria-expanded') === 'true' && !nav.contains(target) && !toggle.contains(target)) {
+        setOpen(false);
+      }
+    });
+
+    window.matchMedia('(min-width: 900px)').addEventListener('change', (e) => {
+      if (e.matches) setOpen(false);
+    });
+  }
+
+  // Show ⌘K on Apple platforms, Ctrl K elsewhere.
+  const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent);
+  if (isMac) {
+    document.querySelectorAll('[data-shortcut-label]').forEach((el) => (el.textContent = '⌘K'));
+  }
+</script>

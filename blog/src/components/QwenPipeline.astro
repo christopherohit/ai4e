@@ -1,0 +1,100 @@
+---
+/**
+ * End-to-end data flow of Qwen3.8-Flash-Next for its article: two inputs merge into the 4-branch residual stream,
+ * 12 hybrid groups, final GR read, prediction head and the MTP draft branch. Pure HTML/CSS so it reflows on phones
+ * and follows the light/dark theme; GDN/QSA colours match the article's lab.
+ */
+---
+<figure class="qp" aria-labelledby="qp-caption">
+  <div class="qp-inputs">
+    <ol class="qp-row" aria-label="Nhánh văn bản">
+      <li>Văn bản</li><li>tokenizer</li><li class="qp-strong">token embedding</li>
+    </ol>
+    <ol class="qp-row" aria-label="Nhánh thị giác">
+      <li>Ảnh / video</li><li>patches</li><li>vision encoder</li><li class="qp-strong">đặc trưng 2560</li>
+    </ol>
+  </div>
+  <div class="qp-merge" aria-hidden="true"><span></span><span></span></div>
+
+  <div class="qp-node qp-stream"><b>Residual stream</b><small>4 nhánh × 2560 chiều cho mỗi token</small></div>
+  <div class="qp-arrow" aria-hidden="true"></div>
+
+  <section class="qp-stack" aria-label="Backbone 48 layer">
+    <header><b>Backbone 48 layer</b><span class="qp-times">× 12 nhóm</span></header>
+    <ol class="qp-group" aria-label="Một nhóm bốn layer">
+      <li class="gdn">GDN</li><li class="gdn">GDN</li><li class="gdn">GDN</li><li class="qsa">QSA</li>
+    </ol>
+    <ul class="qp-notes">
+      <li><b>Mỗi layer:</b> token mixer (GDN hoặc QSA) rồi MoE</li>
+      <li><b>Mỗi sublayer:</b> GR read → F → GR write</li>
+      <li><b>Layer 2:</b> thêm n-gram embedding</li>
+    </ul>
+  </section>
+  <div class="qp-arrow" aria-hidden="true"></div>
+
+  <div class="qp-node"><b>GR read cuối → đầu dự đoán</b><small>248.320 logits</small></div>
+  <div class="qp-arrow" aria-hidden="true"></div>
+
+  <div class="qp-out">
+    <ol class="qp-row qp-main" aria-label="Sinh token">
+      <li>logits</li><li>sampling</li><li class="qp-strong">token tiếp</li>
+    </ol>
+    <div class="qp-node qp-side"><b>MTP</b><small>đề xuất token nháp để backbone kiểm tra</small></div>
+  </div>
+  <figcaption id="qp-caption">Luồng dữ liệu của Qwen3.8-Flash-Next, từ đầu vào đến token tiếp theo. Mỗi bước sinh, token mới được nối vào chuỗi và đi lại từ đầu.</figcaption>
+</figure>
+
+<style>
+  .qp { --qp-gdn: #2a78d6; --qp-qsa: #eb6834; --qp-line: var(--color-muted); margin: 2rem 0; padding: clamp(1rem, 3vw, 1.5rem); border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-surface); display: grid; justify-items: center; font-size: var(--text-sm); line-height: 1.4; }
+  :global(:root[data-theme='dark']) .qp { --qp-gdn: #3987e5; --qp-qsa: #d95926; }
+  @media (prefers-color-scheme: dark) { :global(:root:not([data-theme='light'])) .qp { --qp-gdn: #3987e5; --qp-qsa: #d95926; } }
+  .qp :is(ol, ul) { list-style: none; margin: 0; padding: 0; }
+  /* Article prose spaces list items apart; the diagram's rows must stay aligned. */
+  .qp li { margin: 0 !important; }
+  .qp b { font-weight: 600; }
+
+  .qp-inputs { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+  .qp .qp-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: .15rem .35rem; padding: .6rem .75rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); }
+  .qp-row li { white-space: nowrap; color: var(--color-text-2); }
+  .qp-row li:not(:last-child)::after { content: '→'; margin-left: .35rem; color: var(--color-muted); }
+  .qp-row .qp-strong { color: var(--color-text); font-weight: 600; }
+
+  /* Two inputs converge into one arrow. */
+  .qp-merge { position: relative; width: 50%; height: 18px; border: 1.5px solid var(--qp-line); border-top: 0; border-radius: 0 0 10px 10px; }
+  .qp-merge span { display: none; }
+  .qp-merge::after, .qp-arrow::after { content: ''; position: absolute; left: 50%; bottom: -10px; transform: translateX(-50%); border: 6px solid transparent; border-top: 7px solid var(--qp-line); }
+  .qp-merge::before { content: ''; position: absolute; left: 50%; top: 100%; width: 1.5px; height: 6px; background: var(--qp-line); transform: translateX(-50%); }
+  .qp-arrow { position: relative; width: 1.5px; height: 18px; margin-bottom: 9px; background: var(--qp-line); }
+  .qp-merge { margin-bottom: 16px; }
+
+  .qp-node { display: grid; justify-items: center; gap: .15rem; padding: .6rem 1.1rem; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); text-align: center; }
+  .qp-node small { color: var(--color-text-2); font-size: var(--text-xs); }
+  .qp-stream { border-width: 2px; background: var(--color-surface-2); }
+
+  .qp-stack { width: min(100%, 520px); display: grid; gap: .75rem; padding: .9rem 1rem 1rem; border: 1px dashed var(--color-muted); border-radius: var(--radius-lg); }
+  .qp-stack header { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+  .qp-times { font: 600 var(--text-sm) var(--font-mono); color: var(--color-primary-soft-text); }
+  .qp .qp-group { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .4rem; }
+  .qp-group li { position: relative; padding: .5rem 0; border-radius: var(--radius-sm); text-align: center; font: 600 var(--text-sm) var(--font-mono); color: var(--color-text); border-top: 3px solid; }
+  .qp-group .gdn { border-color: var(--qp-gdn); background: color-mix(in oklab, var(--qp-gdn) 16%, var(--color-surface)); }
+  .qp-group .qsa { border-color: var(--qp-qsa); background: color-mix(in oklab, var(--qp-qsa) 20%, var(--color-surface)); }
+  .qp-group li:not(:last-child)::after { content: '→'; position: absolute; right: -.4rem; top: 50%; transform: translate(50%, -50%); font: 400 11px var(--font-sans); color: var(--color-muted); }
+  .qp .qp-notes { display: grid; gap: .3rem; color: var(--color-text-2); }
+  .qp-notes li { padding-left: .9rem; position: relative; }
+  .qp-notes li::before { content: ''; position: absolute; left: 0; top: .55em; width: 5px; height: 5px; border-radius: 50%; background: var(--color-muted); }
+  .qp-notes b { color: var(--color-text); }
+
+  .qp-out { width: 100%; display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: .75rem; }
+  .qp-out > * { display: flex; flex-direction: column; justify-content: center; }
+  .qp .qp-main { flex-direction: row; align-items: center; border-width: 2px; border-color: var(--color-primary); background: var(--color-primary-soft); padding: .75rem 1.1rem; }
+  .qp-main li { color: var(--color-text); }
+  .qp-side { border-style: dashed; max-width: 260px; }
+  .qp figcaption { margin-top: 1.1rem; color: var(--color-text-2); font-size: .85rem; line-height: 1.6; text-align: center; max-width: 60ch; }
+
+  @media (max-width: 640px) {
+    .qp-inputs { grid-template-columns: 1fr; }
+    .qp-merge { width: 1.5px; height: 18px; border: 0; background: var(--qp-line); border-radius: 0; margin-bottom: 8px; }
+    .qp-merge::before { display: none; }
+    .qp-side { max-width: none; width: 100%; }
+  }
+</style>

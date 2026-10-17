@@ -1,0 +1,34 @@
+---
+import Lab from '../../_shared/sequence-lab/Lab.astro';
+---
+<Lab id="gated-delta-net" title="Gated DeltaNet · bộ nhớ trạng thái" label="Ma trận trạng thái S của Gated DeltaNet tại bước đang chọn"
+  steps={['Decay α', 'Đọc & sai số', 'Ghi β · k eᵀ', 'Truy vấn']}
+  scope="Mô phỏng giáo dục: một head với key 4 kênh và 4 đáp án one-hot, phép tính chạy thật trong trình duyệt theo đúng công thức gated delta rule. α, β cố định cho mọi token (trong model thật chúng do mạng sinh ra theo từng token); không có convolution, nhiều head hay trọng số của Qwen.">
+  <div class="strip" slot="strip">
+    <ol class="tokens" data-tokens aria-label="Chuỗi token, chọn để nhảy tới"></ol>
+    <div class="player">
+      <button type="button" data-prev aria-label="Token trước">◀</button>
+      <button type="button" data-play aria-pressed="false">▶ Phát</button>
+      <button type="button" data-next aria-label="Token sau">▶▶</button>
+      <output data-position></output>
+    </div>
+  </div>
+  <Fragment slot="controls">
+    <label class="field"><span class="field-row"><span>Decay α <small>giữ lại</small></span><output data-value="alpha"></output></span><input type="range" name="alpha" min="0.3" max="1" step="0.01" value="0.95" /></label>
+    <label class="field"><span class="field-row"><span>Write β <small>sửa mạnh</small></span><output data-value="beta"></output></span><input type="range" name="beta" min="0" max="1" step="0.01" value="0.9" /></label>
+    <label class="field">Câu hỏi ở bước 4<select data-query><option value="capital">thủ đô?</option><option value="currency">tiền tệ?</option><option value="language">ngôn ngữ?</option></select></label>
+    <label class="toggle"><input type="checkbox" data-compare checked /> So với linear attention (không có delta rule)</label>
+    <div class="actions"><button type="button" data-reset>Đặt lại</button></div>
+    <p class="hint">Thử: chọn t5 (“thủ đô (nay) → Hà Nội”) ở bước 2 để thấy sai số âm. Kéo β về 0 thì bộ nhớ không học gì; kéo α xuống 0,5 thì quên quá nhanh.</p>
+  </Fragment>
+  <section class="inspector" aria-labelledby="gdn-chart-heading">
+    <div class="section-head"><h3 id="gdn-chart-heading">Lỗi truy xuất qua chuỗi</h3><p>Nhấp vào biểu đồ để nhảy tới token đó</p></div>
+    <div class="chart"><svg data-chart role="img" aria-labelledby="gdn-chart-heading" aria-describedby="gdn-chart-caption"></svg></div>
+    <p id="gdn-chart-caption" class="caption">Trung bình ‖Sᵀk − v‖ trên các câu hỏi đã xuất hiện, so với đáp án mới nhất của từng câu. Lỗi của linear attention tăng dần vì nó cộng dồn mọi liên kết, kể cả liên kết đã lỗi thời; GDN sửa lại bằng sai số.</p>
+    <details class="table-view"><summary>Xem dạng bảng</summary><div class="table-scroll"><table class="data" data-table></table></div></details>
+  </section>
+</Lab>
+<script>
+  import { initGatedDeltaNetLab } from './render';
+  initGatedDeltaNetLab();
+</script>

@@ -1,0 +1,149 @@
+---
+title: 'BSWMD: Luồng xử lý từ định nghĩa BSW đến ràng buộc ECUC'
+description: 'BSWMD là gì, nhận input nào, tạo output nào và được dùng ra sao để kiểm tra cấu hình AUTOSAR an toàn trước khi agent ghi ARXML.'
+category: du-an
+topic: agent-ky-thuat
+tags: ['BSWMD', 'AUTOSAR', 'ECUC', 'ARXML', 'Validation']
+cover: ../../../../assets/covers/bswmd.svg
+order: 8
+date: 2026-10-16
+viz: bswmd
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+<Callout type="key">Thử mô phỏng bên dưới để thấy cùng một giá trị có thể là PASS, FAIL hoặc DEGRADED tùy bằng chứng BSWMD. Tool không chạy parser ARXML thật.</Callout>
+
+## BSWMD là gì? Hãy nghĩ như sách hướng dẫn của module
+
+**BSWMD** (Basic Software Module Description) là bản mô tả chính thức của một module phần mềm nền trong **AUTOSAR** (một chuẩn giúp các phần mềm trong ECU ô tô làm việc theo cùng quy tắc). Nếu module là một thiết bị, BSWMD giống như sách hướng dẫn đi kèm: nó nói thiết bị có nút nào, mỗi nút nhận giá trị gì và giới hạn ra sao.
+
+Ví dụ, module chẩn đoán **Dcm** có thể quy định tham số `DcmDspSecurityLevel` là số nguyên từ 1 đến 63. Khi người dùng muốn đặt giá trị 20, hệ thống có bằng chứng để kiểm tra. Khi người dùng đặt 65, hệ thống phải từ chối vì vượt giới hạn. BSWMD chỉ mô tả luật; nó không tự sửa file cấu hình.
+
+Trong [SDVX Modeler](/du-an/sdvx-modeler/), BSWMD được đọc trước khi agent tạo hoặc sửa **ECUC** (cấu hình cho các module phần mềm nền) trong file **ARXML** (định dạng XML dùng trong AUTOSAR).
+
+## 5 câu cần nhớ
+
+1. BSWMD là hợp đồng cấu hình do nhà cung cấp module phát hành.
+2. Nó mô tả container, tham số, kiểu dữ liệu, giới hạn, số lần lặp và loại tham chiếu được phép.
+3. BSWMD cung cấp bằng chứng để kiểm tra; nó không cấp quyền ghi file.
+4. Không có BSWMD phù hợp thì không được gọi kết quả là đã kiểm chứng đầy đủ.
+5. Kết quả kiểm tra phải chỉ rõ nguồn, đường dẫn và lý do để người khác có thể audit.
+
+## Input và output
+
+### Input
+
+Parser nhận ba nhóm thông tin:
+
+| Input | Nói đơn giản là |
+| --- | --- |
+| File định nghĩa module | Một hoặc nhiều ARXML chứa module, container, tham số và tham chiếu |
+| Revision và điều kiện áp dụng | Phiên bản AUTOSAR, biến thể ECU hoặc điều kiện hệ thống |
+| Giá trị ứng viên | Thay đổi agent muốn thực hiện, ví dụ đặt `DcmDspSecurityLevel = 20` |
+
+Tên file không đủ để biết vai trò. Hệ thống cần ghi lại nguồn: định nghĩa người dùng cung cấp (`SUPPLIED_ECUC_DEFINITIONS`), định nghĩa tìm thấy trong workspace (`WORKSPACE_ECUC_DEFINITIONS`) hoặc chỉ là giá trị quan sát được trong cấu hình cũ (`OBSERVED_CONGRUENCE`). Hai định nghĩa mâu thuẫn phải được giữ thành **conflict** (xung đột), không chọn im lặng một bên.
+
+### Output
+
+Parser tạo một schema nội bộ, tức “bản luật dễ kiểm tra”, gồm:
+
+- Cây module → container → tham số hoặc tham chiếu.
+- Kiểu dữ liệu và các giới hạn như MIN/MAX, độ dài, enum.
+- Nguồn, revision và mức thẩm quyền của schema.
+- Conflict, warning và lỗi cần xử lý.
+
+Validator dùng schema này để trả `PASS`, `FAIL` hoặc `DEGRADED`. Parser không tự ghi ARXML.
+
+## Flow từng bước
+
+```text
+BSWMD / ECUC-MODULE-DEF
+        ↓
+Đọc cây module và liên kết tham chiếu
+        ↓
+Tách các luật thành schema
+        ↓
+Kiểm tra giá trị ứng viên
+        ↓
+Kiểm tra quan hệ của cả project
+        ↓
+Transaction ghi ARXML hoặc từ chối
+```
+
+### 1. Đọc thành cây
+
+Parser tìm module, container, tham số và reference (tham chiếu tới một phần tử khác). Ví dụ:
+
+```text
+Dcm
+└── DcmDspSecurity
+    └── DcmDspSecurityLevel: integer, 1..63, tối đa 1 giá trị
+```
+
+### 2. Tách luật
+
+Mỗi tham số được tách thành các **facet** (mảnh luật có thể kiểm tra): kiểu, khoảng giá trị, literal hoặc enum, số lần xuất hiện, độ dài, đích reference và quyền sở hữu. Câu mô tả trong `DESC` cũng có thể là luật, chẳng hạn “phải là bội số của 4” hoặc “do tool tự tính”.
+
+### 3. Giải quyết liên kết
+
+Một định nghĩa của nhà cung cấp có thể nối với định nghĩa chuẩn bằng refinement. Resolver kiểm tra đường dẫn container có khớp không, đích reference có đúng loại không và có nhiều định nghĩa cùng lúc không.
+
+### 4. Kiểm tra giá trị
+
+Validator kiểm tra kiểu và facet trước khi tạo diff (bản chênh lệch). Sau đó pipeline còn kiểm tra invariant (luật quan hệ trong project), closure (các phần tử liên quan có đủ không) và effect contract (thay đổi có đúng phạm vi cho phép không).
+
+### 5. Ghi hoặc từ chối
+
+Chỉ transaction có journal và receipt mới được ghi file. BSWMD không biến file generated (file sinh tự động) thành file được phép sửa.
+
+## Ví dụ: `DcmDspSecurityLevel`
+
+Giả sử BSWMD khai báo:
+
+| Thuộc tính | Giá trị |
+| --- | --- |
+| Kiểu | Số nguyên |
+| MIN | 1 |
+| MAX | 63 |
+| Số lần xuất hiện | 0 hoặc 1 |
+
+- Đặt `20`: đúng kiểu và nằm trong khoảng → có thể `PASS`.
+- Đặt `65`: vượt MAX → `FAIL`, kèm đường dẫn và gợi ý chọn số từ 1 đến 63.
+- Không có BSWMD, chỉ thấy module khác cũng dùng số 20 → `DEGRADED`; đây là quan sát tương tự, chưa phải bằng chứng chính thức.
+
+## PASS, FAIL và DEGRADED
+
+| Trạng thái | Ý nghĩa | Ví dụ |
+| --- | --- | --- |
+| `PASS` | Có BSWMD phù hợp và giá trị vượt qua luật | `20` nằm trong 1..63 |
+| `FAIL` | Có luật rõ ràng nhưng giá trị hoặc reference vi phạm | `65` lớn hơn 63 |
+| `DEGRADED` | Thiếu định nghĩa có thẩm quyền, chỉ có bằng chứng yếu hơn | Chỉ suy từ cấu hình cũ |
+
+`DEGRADED` không có nghĩa là giá trị chắc chắn sai. Nó có nghĩa hệ thống chưa chứng minh được giá trị đúng, vì vậy agent không nên tự coi đó là `PASS`.
+
+## Bảng thuật ngữ
+
+| Thuật ngữ | Nghĩa dễ hiểu |
+| --- | --- |
+| BSW | Basic Software, phần mềm nền của ECU |
+| BSWMD | Bản mô tả luật của một module BSW |
+| ECUC | Cấu hình cho module BSW |
+| ARXML | File XML theo chuẩn AUTOSAR |
+| Container | Nhóm chứa các tham số liên quan |
+| Parameter/leaf | Một giá trị cấu hình cụ thể |
+| Reference | Đường dẫn trỏ tới phần tử khác |
+| Facet | Một luật nhỏ như kiểu hoặc MIN/MAX |
+| Provenance | Thông tin giá trị đến từ file/revision nào |
+| Multiplicity | Số lần một phần tử được phép xuất hiện |
+| Validator | Bộ kiểm tra giá trị theo schema |
+
+## Phần nâng cao: có thể đọc sau
+
+Khi đã hiểu flow cơ bản, bạn có thể đọc tiếp về refinement giữa định nghĩa vendor và AUTOSAR chuẩn, `DESTINATION-REF`, điều kiện `SW-SYSCOND`, ownership của leaf do tool tính, conflict giữa nhiều revision và cách phân biệt lỗi baseline với lỗi do transaction mới. Các lớp này giúp pipeline an toàn hơn nhưng không thay đổi nguyên tắc chính: BSWMD là bằng chứng cho luật cấu hình, còn transaction chịu trách nhiệm ghi.
+
+## Đọc tiếp
+
+- [SDVX Modeler: Agent cấu hình AUTOSAR](/du-an/sdvx-modeler/): xem BSWMD trong toàn bộ pipeline agent, invariant và transaction.
+- [AUTOSAR Classic Platform](https://www.autosar.org/standards/classic-platform): ngữ cảnh chuẩn AUTOSAR và ECUC.
+- [ECUC trong AUTOSAR](https://www.autosar.org/standards/classic-platform): định nghĩa module và cấu hình Basic Software.

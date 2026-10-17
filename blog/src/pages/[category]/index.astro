@@ -1,0 +1,142 @@
+---
+import { getCollection } from 'astro:content';
+import type { GetStaticPaths, InferGetStaticPropsType } from 'astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
+import PostCard from '../../components/PostCard.astro';
+import { CATEGORY_LIST } from '../../lib/site';
+import { sortPosts } from '../../lib/posts';
+import { collectTags } from '../../lib/tags';
+import { categoryTopics } from '../../lib/topics';
+
+export const getStaticPaths = (async () => {
+  const posts = await getCollection('posts');
+  return CATEGORY_LIST.map((category) => ({
+    params: { category: category.slug },
+    props: { category, posts: sortPosts(posts.filter((post) => post.data.category === category.slug)) },
+  }));
+}) satisfies GetStaticPaths;
+type Props = InferGetStaticPropsType<typeof getStaticPaths>;
+const { category, posts } = Astro.props;
+const tags = collectTags(posts);
+const topics = categoryTopics(category.slug).map(topic => ({ ...topic, posts: posts.filter(post => post.data.topic === topic.slug) }));
+---
+
+<BaseLayout title={category.label} description={category.description}>
+  <section class="container section category-page" data-tag-filter>
+    <Breadcrumb items={[{ label: 'Trang chủ', href: '/' }, { label: category.label }]} />
+    <header class="category-header">
+      <span class="category-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" set:html={category.icon} />
+      </span>
+      <div>
+        <h1>{category.label}</h1>
+        <p class="section-desc">{category.description}</p>
+      </div>
+    </header>
+
+    <nav class="chips category-filter" aria-label="Chuyên mục">
+      {topics.map(topic => <a class="chip" href={`#${topic.slug}`}>{topic.label} <span class="chip__count">{topic.posts.length}</span></a>)}
+    </nav>
+    {tags.length > 0 && (
+      <div class="chips category-filter" role="group" aria-label="Lọc theo chủ đề">
+        <button class="chip" type="button" data-filter-tag="" aria-pressed="true">Tất cả <span class="chip__count">{posts.length}</span></button>
+        {tags.map((tag) => (
+          <button class="chip" type="button" data-filter-tag={tag.name} aria-pressed="false">
+            {tag.name} <span class="chip__count">{tag.count}</span>
+          </button>
+        ))}
+      </div>
+    )}
+
+    <p class="muted category-count" aria-live="polite" data-filter-status>{posts.length} bài viết</p>
+    {posts.length > 0 ? (
+      topics.filter(topic => topic.posts.length > 0).map(topic => (
+        <section id={topic.slug} class="topic-section" data-topic-section>
+          <h2>{topic.label}</h2><p class="muted">{topic.description}</p>
+          <div class="grid">{topic.posts.map((post, index) => <div class="category-item" data-tags={post.data.tags.join('|')}><PostCard post={post} headingLevel={3} eager={index < 2} /></div>)}</div>
+        </section>
+      ))
+    ) : (
+      <p class="muted">Bài viết đang được chuẩn bị.</p>
+    )}
+  </section>
+</BaseLayout>
+
+<script>
+  for (const root of document.querySelectorAll<HTMLElement>('[data-tag-filter]')) {
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>('[data-filter-tag]')];
+    const items = [...root.querySelectorAll<HTMLElement>('.category-item')];
+    const status = root.querySelector<HTMLElement>('[data-filter-status]');
+    for (const button of buttons) {
+      button.addEventListener('click', () => {
+        const tag = button.dataset.filterTag ?? '';
+        let visible = 0;
+        for (const item of items) {
+          const show = !tag || (item.dataset.tags ?? '').split('|').includes(tag);
+          item.hidden = !show;
+          if (show) visible += 1;
+        }
+        for (const other of buttons) other.setAttribute('aria-pressed', String(other === button));
+        for (const section of root.querySelectorAll<HTMLElement>('[data-topic-section]')) section.hidden = !section.querySelector('.category-item:not([hidden])');
+        if (status) status.textContent = `${visible} bài viết${tag ? ` về “${tag}”` : ''}`;
+      });
+    }
+  }
+</script>
+
+<style>
+  .topic-section { margin-block: 2.5rem; scroll-margin-top: 100px; }
+  .topic-section > p { margin-block: .5rem 1.25rem; }
+  .topic-section[hidden] { display: none; }
+  .category-header {
+    display: flex;
+    gap: var(--space-4);
+    align-items: flex-start;
+    margin: var(--space-6) 0 var(--space-8);
+  }
+  .category-header h1 {
+    font-size: clamp(2rem, 5vw, 2.75rem);
+  }
+  .category-header .section-desc {
+    max-width: 70ch;
+    font-size: var(--text-lg);
+  }
+  .category-icon {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: var(--radius-xl);
+    background: var(--color-primary-soft);
+    color: var(--color-primary-soft-text);
+  }
+  .category-filter {
+    margin-bottom: var(--space-4);
+  }
+  .category-filter .chip {
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--text-sm);
+  }
+  .category-count {
+    margin-bottom: var(--space-5);
+  }
+  .category-item[hidden] {
+    display: none;
+  }
+  .category-item > :global(.card) {
+    height: 100%;
+  }
+  .topic-section .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  @media (max-width: 980px) {
+    .topic-section .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 640px) {
+    .topic-section .grid { grid-template-columns: 1fr; }
+  }
+</style>

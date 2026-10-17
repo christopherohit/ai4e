@@ -1,0 +1,33 @@
+{
+  "name": "ai4e-blog",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "npm run build:native-transformer && node scripts/prepare-native.mjs && astro build",
+    "build:native-transformer": ".viz-build/transformer-explainer/node_modules/.bin/vite build --config scripts/transformer-native/vite.config.mjs",
+    "preview": "astro preview",
+    "check": "astro check",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "build:viz": "node scripts/build-viz.mjs"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "^7.3.1",
+    "@astrojs/mdx": "^8.0.2",
+    "@astrojs/sitemap": "^3.7.4",
+    "astro": "^7.3.5",
+    "katex": "^0.19.0",
+    "minisearch": "^7.2.0",
+    "parse5": "^7.3.0",
+    "rehype-katex": "^7.0.1",
+    "remark-math": "^6.0.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@playwright/test": "^1.63.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.3"
+  }
+}

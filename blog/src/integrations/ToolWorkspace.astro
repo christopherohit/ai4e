@@ -1,0 +1,65 @@
+---
+import type { CollectionEntry } from 'astro:content';
+
+interface Props { post: CollectionEntry<'posts'>; }
+const { post } = Astro.props;
+const { viz, title } = post.data;
+const name = title.split(':')[0];
+---
+<section class="tool-workspace" aria-labelledby="cong-cu">
+  <header class="tool-heading">
+    <div class="tool-title">
+      <span class="tool-indicator" aria-hidden="true"></span>
+      <h2 id="cong-cu">Phòng khám phá {name}</h2>
+      <span class="tool-badge">Tương tác trực tiếp</span>
+    </div>
+    <a href="#huong-dan">Đọc phần giải thích <span aria-hidden="true">↓</span></a>
+  </header>
+  <p class="native-status" id="native-tool-status" role="status">Đang tải công cụ và dữ liệu…</p>
+  <section id="native-tool-root" data-native-slug={viz} aria-label={`Công cụ ${name}`} aria-busy="true" tabindex="0"></section>
+  <ol class="tool-steps" aria-label="Cách khám phá công cụ">
+    <li><span class="step-number">1</span><div><strong>Làm quen với công cụ</strong><span>Quan sát dữ liệu và các thành phần chính.</span></div></li>
+    <li><span class="step-number">2</span><div><strong>Thử một thay đổi</strong><span>Dùng các điều khiển và so sánh kết quả.</span></div></li>
+    <li><span class="step-number">3</span><div><strong>Nối với kiến thức</strong><span>Đọc hướng dẫn bên dưới để hiểu điều vừa thấy.</span></div></li>
+  </ol>
+</section>
+<script>
+  import { mountNativeTool } from './runtime/native-tool';
+  const root = document.getElementById('native-tool-root');
+  const status = document.getElementById('native-tool-status');
+  if (root?.dataset.nativeSlug && status) mountNativeTool(root, root.dataset.nativeSlug, status);
+</script>
+<style>
+  .native-status { padding: 1rem 1.5rem; color: var(--color-muted); font-size: .875rem; }
+  #native-tool-root { position: relative; isolation: isolate; transform: translateZ(0); color-scheme: light; background: #fff; color: #222; min-height: 600px; min-width: 0 !important; width: 100% !important; max-width: 100%; overflow: auto; font-family: var(--font-sans); }
+  #native-tool-root :global(.native-content) { min-width: 1200px; position: relative; }
+  #native-tool-root[data-native-slug="ganlab"] :global(.native-content) { min-width: 1442px; }
+  #native-tool-root :global(recommender-overlay), #native-tool-root :global(#description), #native-tool-root :global(.description), #native-tool-root :global(#top-bar) { display: none !important; }
+  #native-tool-root[data-native-slug="dodrio"] :global(.header) { display: none; }
+  #native-tool-root[data-native-slug="diffusion-explainer"] :global(#header) { display: none; }
+  #native-tool-root[data-native-slug="dodrio"] :global(#header) { display: none; }
+  #native-tool-root[data-native-slug="energyvis"] :global(.MuiAppBar-root) { display: none; }
+  #native-tool-root[data-native-slug="transformer-explainer"] :global(.top-bar .logo), #native-tool-root[data-native-slug="transformer-explainer"] :global(.top-bar .icons) { display: none; }
+  #native-tool-root[data-native-slug="ganlab"] :global(#page-title) { display: none; }
+  #native-tool-root[data-native-slug="ganlab"] :global(#description-container) { display: none; }
+  #native-tool-root[data-native-slug="viscuit"] :global(.subgroup-entry-image-incorrect-svg) { pointer-events: none; }
+  .tool-workspace { width: calc(100% - 32px); max-width: 1800px; margin-inline: auto; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 16px; box-shadow: 0 8px 28px rgb(15 23 42 / .04); overflow: hidden; }
+  #native-tool-root { height: auto !important; max-height: none !important; margin: 0 !important; }
+  #native-tool-root[data-native-slug="transformer-explainer"] { overflow-y: hidden; }
+  .tool-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; padding: 1.1rem 1.5rem; border-bottom: 1px solid var(--color-border); }
+  .tool-title { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; }
+  .tool-heading h2 { margin: 0; font-size: 1rem; font-weight: 650; scroll-margin-top: 100px; }
+  .tool-heading a { font-size: .8rem; }
+  .tool-indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary); box-shadow: 0 0 0 4px var(--color-primary-soft); }
+  .tool-badge { padding: .2rem .5rem; border-radius: 5px; font-size: .65rem; font-weight: 600; color: var(--color-primary-soft-text); background: var(--color-primary-soft); }
+  .tool-workspace :global(.viz) { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+  .tool-workspace :global(.viz__stage) { height: 660px; max-height: none; }
+  .tool-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; padding: 1.1rem 1.5rem; margin: 0; list-style: none; border-top: 1px solid var(--color-border); }
+  .tool-steps li { display: flex; align-items: flex-start; gap: .7rem; }
+  .step-number { display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; background: var(--color-surface-2); color: var(--color-muted); font-size: .75rem; font-weight: 600; }
+  .tool-steps strong { display: block; font-size: .8rem; margin-bottom: .2rem; }
+  .tool-steps div > span { display: block; font-size: .75rem; color: var(--color-muted); }
+  .tool-workspace :global(.viz:fullscreen .viz__stage), .tool-workspace :global(.viz.is-fullscreen .viz__stage) { height: auto; max-height: none; }
+  @media (max-width: 720px) { .tool-steps { grid-template-columns: 1fr; gap: .8rem; } .tool-workspace :global(.viz__stage) { height: 560px; } }
+  @media (max-width: 600px) { .tool-workspace { width: calc(100% - 32px); } .tool-heading, .tool-steps { padding: 1rem; } .tool-badge { display: none; } }
+</style>

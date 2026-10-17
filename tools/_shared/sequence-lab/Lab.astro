@@ -1,0 +1,28 @@
+---
+// Shared chrome for the sequence-model labs (GDN, sparse attention, Qwen): step bar, stage view, step card + controls,
+// a free-form bottom section and the scope footer. Tool-specific drawing lives in each tool's render.ts.
+import './lab.css';
+interface Props { id: string; title: string; steps: string[]; scope: string; label: string }
+const { id, title, steps, scope, label } = Astro.props;
+---
+<section class="tool-workspace" aria-labelledby="cong-cu">
+  <header class="tool-heading">
+    <h2 id="cong-cu">{title}</h2>
+    <a href="#huong-dan">Đọc nguyên lý <span aria-hidden="true">↓</span></a>
+  </header>
+  <section id="native-tool-root" class="seq-lab" data-seq-lab={id} aria-busy="true">
+    <ol class="steps" aria-label="Các bước">
+      {steps.map((step, stage) => <li><button type="button" data-stage={stage} aria-pressed={stage === 0 ? 'true' : 'false'}><span>{stage + 1}</span>{step}</button></li>)}
+    </ol>
+    <slot name="strip" />
+    <div class="stage">
+      <div class="viewport" data-stage-view role="group" aria-label={label}></div>
+      <aside class="panel" aria-label="Điều khiển">
+        <div class="step-card" aria-live="polite"><p class="kicker" data-step-number></p><h3 data-step-title></h3><p data-step-description></p><p class="formula" data-formula></p></div>
+        <slot name="controls" />
+      </aside>
+    </div>
+    <slot />
+    <footer class="lab-footer"><p class="scope"><strong>Phạm vi:</strong> {scope}</p></footer>
+  </section>
+</section>

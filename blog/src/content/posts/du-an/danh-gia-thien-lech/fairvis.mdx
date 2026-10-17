@@ -1,0 +1,208 @@
+---
+title: 'FairVis: tìm thiên lệch ẩn sau độ chính xác của AI'
+description: 'Khám phá FairVis để so sánh các nhóm giao thoa, đọc chỉ số phân loại và tìm những chênh lệch mà độ chính xác toàn cục có thể che khuất.'
+category: du-an
+topic: danh-gia-thien-lech
+order: 2
+tags: ['AI có trách nhiệm', 'Diễn giải mô hình', 'Trực quan hóa']
+viz: fairvis
+vizHeight: 900
+cover: ../../../../assets/covers/fairvis.webp
+date: 2026-10-03
+---
+
+import Callout from '../../../../components/Callout.astro';
+import KeyTerm from '../../../../components/KeyTerm.astro';
+
+## Khi điểm trung bình che khuất người chịu thiệt
+
+Một mô hình có thể dự đoán đúng phần lớn trường hợp nhưng sai nhiều hơn ở một nhóm nhỏ. Nếu chỉ nhìn điểm toàn bộ dữ liệu, chúng ta dễ bỏ qua những người mà hệ thống phục vụ kém nhất. FairVis giúp đặt câu hỏi khác: mô hình sai với ai, sai theo cách nào, và sự khác biệt có còn rõ khi chia dữ liệu thành các nhóm chi tiết hơn?
+
+Trong một ví dụ giả định về xét duyệt hồ sơ, báo cáo riêng theo giới hoặc nghề nghiệp có thể trông ổn, nhưng tổ hợp giới và nghề nghiệp lại bộc lộ một nhóm thường bị từ chối nhầm. Phần lớn người dùng không thuộc nhóm ấy nên kết quả trung bình vẫn đẹp. Câu hỏi công bằng không thể chỉ gói trong một con số.
+
+FairVis là hệ thống <KeyTerm vi="phân tích trực quan" en="visual analytics" /> của Polo Club, được giới thiệu tại IEEE VAST 2019. Thay vì tự động tuyên bố mô hình có thiên lệch, công cụ kết hợp biểu đồ, nhóm do người dùng tạo và nhóm được gợi ý để hỗ trợ điều tra. Dữ liệu mẫu gồm dự đoán có sẵn: bạn đang kiểm tra kết quả, không huấn luyện một mô hình trong trình duyệt.
+
+## Khái niệm cốt lõi: nhóm giao thoa và chỉ số phân loại
+
+<KeyTerm vi="Thiên lệch giao thoa" en="intersectional bias" /> nói đến bất lợi có thể xuất hiện tại tổ hợp nhiều thuộc tính, thay vì chỉ ở từng thuộc tính riêng lẻ. FairVis cho phép tạo nhóm theo các đặc trưng và so sánh dự đoán đã có với <KeyTerm vi="nhãn thực tế" en="ground truth" />.
+
+### Nhóm là một câu hỏi cụ thể
+
+Một <KeyTerm vi="nhóm con" en="subgroup" /> có thể gồm các bản ghi cùng giá trị của một hoặc nhiều thuộc tính. Chọn hai thuộc tính là cách hỏi về những tổ hợp chi tiết hơn, không chỉ đặt hai báo cáo độc lập cạnh nhau. Các nhóm do bạn tạo giúp kiểm tra giả thuyết; các nhóm gợi ý mở ra những hướng có thể chưa nghĩ tới.
+
+### Đúng nhiều chưa chắc sai ít theo cách quan trọng
+
+Với <KeyTerm vi="phân loại nhị phân" en="binary classification" />, ký hiệu nhãn thực tế là $y$ và dự đoán là $\hat y$, đều nhận giá trị $0$ hoặc $1$. Ta có bốn trường hợp: $TP$ là dự đoán $1$ đúng, $TN$ là dự đoán $0$ đúng, $FP$ là dự đoán $1$ nhầm, còn $FN$ là bỏ sót một trường hợp thật sự mang nhãn $1$.
+
+<KeyTerm vi="Độ chính xác" en="accuracy" /> đếm tỷ lệ dự đoán đúng trên toàn bộ nhóm:
+
+$$
+\mathrm{Accuracy}=\frac{TP+TN}{TP+TN+FP+FN}.
+$$
+
+Nhưng khi một lớp chiếm đa số, dự đoán thiên về lớp ấy có thể làm Accuracy cao mà vẫn xử lý kém lớp còn lại. <KeyTerm vi="Độ chuẩn xác" en="precision" /> hỏi trong những trường hợp được dự đoán là $1$, bao nhiêu trường hợp đúng. <KeyTerm vi="Độ bao phủ" en="recall" /> hỏi trong những trường hợp thật sự mang nhãn $1$, mô hình tìm được bao nhiêu:
+
+$$
+\mathrm{Precision}=\frac{TP}{TP+FP},\qquad
+\mathrm{Recall}=\frac{TP}{TP+FN}.
+$$
+
+Đừng đổi chỗ hai mẫu số: chúng phản ánh hai kiểu đánh giá khác nhau.
+
+Khi quan tâm đến lỗi, hãy đọc <KeyTerm vi="tỷ lệ dương tính giả" en="false positive rate" /> và <KeyTerm vi="tỷ lệ âm tính giả" en="false negative rate" />:
+
+$$
+\mathrm{FPR}=\frac{FP}{FP+TN},\qquad
+\mathrm{FNR}=\frac{FN}{FN+TP}.
+$$
+
+FPR đo lỗi trên những trường hợp có nhãn thực tế $0$; FNR đo lỗi trên những trường hợp có nhãn thực tế $1$. Các công thức trên cho tỷ lệ từ $0$ đến $1$ khi mẫu số khác $0$; mã nguồn FairVis nhân chúng với $100$ để hiển thị theo phần trăm. Một nhóm tốt trên Accuracy chưa chắc tốt trên FPR hoặc FNR, nên cần chọn chỉ số gắn với hậu quả của quyết định.
+
+<Callout type="note">
+
+“Dương tính” chỉ là lớp được mã hóa bằng $1$, không mặc nhiên là kết quả tốt. Với dữ liệu **UCI Adult** được đóng gói ở đây, `class = 1` tương ứng mức thu nhập `<=50K`, dù màn hình giới thiệu ghi mục tiêu **Predict income >$50K**. Vì vậy, đừng diễn giải Recall thành khả năng tìm người thu nhập cao; hãy kiểm tra mã hóa nhãn trước khi gán ý nghĩa xã hội cho chỉ số.
+
+</Callout>
+
+## Khám phá FairVis từng bước
+
+### 1. Chọn dữ liệu và đọc bố cục
+
+Ở màn hình chào, **UCI Adult** minh họa dự đoán thu nhập, còn **COMPAS** minh họa dự đoán tái phạm. Bài này dùng Adult để làm quen thao tác. Giao diện khá rộng; trên màn hình nhỏ, nên dùng **Toàn màn hình** hoặc **Mở tab mới** của khung nhúng để đọc các cột dễ hơn.
+
+<Callout type="try">
+
+Trong **Select a Dataset**, nhấn **Select** ở dòng **UCI Adult**. Quan sát ba chỉ số ban đầu: **Accuracy**, **Precision** và **Recall**.
+
+</Callout>
+
+Bên trái là danh sách đặc trưng và các biểu đồ phân bố. Ở giữa là những trục chỉ số và vùng **Suggested Subgroups**. Bên phải, **Group Details** dành cho so sánh nhóm được chọn với nhóm đang trỏ chuột. Ban đầu, các trục có mốc **avg:** nhưng chưa có các nhóm do bạn tạo.
+
+Mốc **avg:** là chỉ số tính trên toàn bộ dữ liệu đang nạp, không phải trung bình cộng đơn giản của các nhóm. Hãy xem đây là đường tham chiếu: nó giúp thấy nhóm lệch khỏi kết quả chung, nhưng không phải một ngưỡng chứng nhận công bằng.
+
+### 2. Tạo nhóm theo hai thuộc tính
+
+<Callout type="try">
+
+Đánh dấu ô bên cạnh **Sex** và **Race**, rồi nhấn **Generate Subgroups**. Quan sát các nhóm mới trên những trục chỉ số ở giữa màn hình.
+
+</Callout>
+
+FairVis tạo nhóm từ các tổ hợp giá trị thực sự có trong dữ liệu. Mỗi nhóm xuất hiện bằng một vạch trên từng trục. Các vạch có thể chồng lên nhau khi chỉ số gần bằng nhau, nên đừng dùng số vạch nhìn thấy để suy ra số nhóm.
+
+Nhấp vào tên đặc trưng để mở danh sách giá trị nếu muốn chọn hẹp hơn. Ví dụ, chỉ đánh dấu một giá trị trong **Sex** sẽ giới hạn nhóm theo giá trị đó. Chọn cả đặc trưng bằng ô bên cạnh tên khác với chọn từng giá trị bên trong: cách đầu chia theo mọi giá trị hiện có của đặc trưng ấy.
+
+Đừng bắt đầu với quá nhiều thuộc tính. Số tổ hợp tăng nhanh và có thể tạo nhiều nhóm rất nhỏ. Hai thuộc tính giúp bạn đọc cơ chế trước; sau đó mới thêm một thuộc tính khác để kiểm tra một giả thuyết cụ thể.
+
+Sau mỗi lần nhấn **Generate Subgroups**, các ô chọn được bỏ đánh dấu, nhưng nhóm đã tạo vẫn còn trên biểu đồ. Lần tạo tiếp theo bổ sung nhóm, không thay thế các nhóm trước đó; dùng **Reset Groups** nếu muốn bắt đầu lại từ đầu.
+
+### 3. Ghim một nhóm làm điểm so sánh
+
+<Callout type="try">
+
+Nhấp vào một vạch nhóm trên trục **Accuracy**, rồi rê chuột lên vạch khác. Trong **Group Details**, đối chiếu hai cột **Pinned** và **Hovered**, hàng **Size**, cùng biểu đồ **Ground Truth Label Balance**.
+
+</Callout>
+
+Nhóm được ghim là điểm so sánh cố định; nhóm đang trỏ chuột thay đổi khi bạn di chuyển con trỏ. Kiểm tra các giá trị thuộc tính trước để biết mình đang so ai với ai. Sau đó đọc kích thước nhóm và phân bố nhãn thực tế, rồi mới diễn giải chênh lệch chỉ số.
+
+Nếu một nhóm có tỷ lệ lớp $1$ rất khác nhóm kia, Accuracy hoặc Precision có thể thay đổi một phần do thành phần dữ liệu. Điều đó không khiến chênh lệch vô nghĩa, nhưng cho thấy cần nhiều thông tin hơn một vị trí trên trục.
+
+### 4. Đổi loại lỗi cần quan sát
+
+<Callout type="try">
+
+Nhấp vào bộ chọn đang chứa **Accuracy**, **Precision** và **Recall** phía trên các trục, rồi chọn thêm **False Positive Rate** trong danh sách. So sánh thứ tự các nhóm với thứ tự trên **Accuracy**.
+
+</Callout>
+
+Bạn có thể bỏ một chỉ số bằng dấu × trên thẻ đang chọn. Bộ chọn còn có **Specificity**, **False Negative Rate**, **F1** và các chỉ số khác. Các trục nằm ngang, tăng từ trái sang phải. Với Accuracy, Precision, Recall, giá trị lớn hơn thường là tốt hơn theo chỉ số đó; với các tỷ lệ lỗi, giá trị lớn hơn lại là nhiều lỗi hơn. Không thể đọc mọi trục theo cùng quy tắc “càng sang phải càng tốt”.
+
+Hãy giữ một cặp chỉ số dễ đối chiếu, chẳng hạn Accuracy và False Negative Rate. Ghi lại nhóm có vị trí khác biệt rõ trên hai trục, rồi kiểm tra **Size** và nhãn thực tế trong bảng chi tiết. Đây là cách biến sự tò mò thành một câu hỏi có thể kiểm tra lại.
+
+### 5. Khám phá gợi ý nhưng kiểm tra ý nghĩa xếp hạng
+
+Vùng **Suggested Subgroups** hiển thị các cụm đã có trong dữ liệu xử lý trước. Những biểu đồ nhỏ trên thẻ mô tả phân bố đặc trưng, còn **Instances** cho biết số bản ghi. Mô tả bằng vài đặc trưng nổi bật không có nghĩa mọi thành viên đều mang chính xác các giá trị ấy.
+
+<Callout type="try">
+
+Trong **Suggested Subgroups**, đổi **Sort by:** từ **Accuracy** sang **Recall**. Rê chuột lên một thẻ **Group** để xem chi tiết, rồi dùng các mũi tên phân trang để xem những gợi ý tiếp theo.
+
+</Callout>
+
+Trong bản này, danh sách sắp theo giá trị chỉ số tăng dần. Với Accuracy hay Recall, các nhóm đầu danh sách có điểm thấp. Nhưng nếu chọn False Positive Rate, các nhóm đầu lại có tỷ lệ lỗi thấp, không phải cao nhất. Đừng đồng nhất “được đưa lên đầu” với “đáng lo nhất” cho mọi lựa chọn.
+
+Bạn cũng có thể đối chiếu các nhóm đã tạo từ cùng một cặp thuộc tính:
+
+<Callout type="try">
+
+Ghim một nhóm đã tạo theo **Sex** và **Race** bằng cách nhấp vạch của nó trên trục **Accuracy**. Mở danh sách đang ghi **Suggested Subgroups**, chọn **Similar Subgroups**, rồi đọc bảng **Feature Difference** và hai cột **Pinned**, **Similar** trên thẻ.
+
+</Callout>
+
+Với các nhóm cùng hai thuộc tính này, chức năng trên tìm trong danh sách nhóm đang có những nhóm khác nhóm ghim đúng một giá trị thuộc tính. Nó không chạy một lượt phân cụm mới. Nếu không có nhóm phù hợp, giao diện có thể vẫn hiển thị các thẻ gợi ý; đừng coi chúng là những nhóm chỉ khác một giá trị.
+
+### 6. Lọc kích thước và bắt đầu lượt kiểm tra mới
+
+<Callout type="try">
+
+Kéo thanh **Minimum Size** ở đầu màn hình sau khi đã tạo nhóm. Quan sát các nhóm nhỏ bị ẩn khỏi các trục và danh sách **Suggested Subgroups**. Sau đó nhấn **Reset Groups** để xóa các nhóm đang so sánh và thử một cặp thuộc tính khác.
+
+</Callout>
+
+Bộ lọc giữ các nhóm có kích thước **lớn hơn** giá trị đang chọn, không phải lớn hơn hoặc bằng. Nó áp dụng cho các vạch nhóm trên trục và danh sách Suggested Subgroups, không thay đổi dữ liệu hay dự đoán. **Reset Groups** xóa danh sách nhóm đang so sánh, bỏ ghim và đưa Minimum Size về $0$, nhưng giữ bộ dữ liệu cùng các chỉ số đang chọn. Muốn trở lại màn hình chọn dữ liệu để thử COMPAS, hãy dùng **Tải lại** trên thanh công cụ của khung nhúng.
+
+## Góc nhìn sâu hơn: phát hiện chênh lệch chưa phải kết luận
+
+Một chênh lệch là điểm khởi đầu cho điều tra, không tự nó chứng minh nguyên nhân hay xác nhận mô hình công bằng. Cần đọc cùng kích thước nhóm, phân bố nhãn và bối cảnh sử dụng dữ liệu.
+
+### Mẫu số nhỏ khiến chỉ số dễ dao động
+
+Một nhóm có nhiều bản ghi vẫn có thể có rất ít trường hợp thuộc lớp cần đo. Recall phụ thuộc số trường hợp mang nhãn $1$; FPR phụ thuộc số trường hợp mang nhãn $0$. Vì thế, **Minimum Size** hữu ích để giảm nhiễu khi khám phá nhưng không bảo đảm mọi tỷ lệ đều đáng tin cậy.
+
+<Callout type="note">
+
+Mã tính chỉ số thay kết quả `NaN` bằng $0$. Nếu một nhóm không có trường hợp mang nhãn $1$, Recall có mẫu số bằng $0$ nhưng có thể vẫn hiện $0$ trên giao diện. Đừng vội kết luận mô hình bỏ sót toàn bộ nhóm: trước hết hãy đọc **Ground Truth Label Balance**. FairVis cũng không vẽ khoảng tin cậy để thể hiện bất định của các tỷ lệ.
+
+</Callout>
+
+Khi rà rất nhiều nhóm, ta dễ gặp một kết quả cực đoan chỉ do ít mẫu. Nên ghi lại nhóm đáng chú ý để kiểm tra trên dữ liệu độc lập, thay vì xem mỗi điểm thấp là bằng chứng đủ mạnh. Đó là bước tiếp theo ngoài phạm vi công cụ này.
+
+### Gợi ý không phải cuộc tìm kiếm toàn bộ thiên lệch
+
+Theo quy trình tiền xử lý trong repo, các cụm gợi ý được tạo bằng K-means trước khi nạp vào giao diện; tệp CSV lưu sẵn mã cụm ở cột `cluster`. Trong trình duyệt, FairVis gom các bản ghi theo mã đó, tính chỉ số và sắp xếp các thuộc tính theo entropy Shannon tăng dần. Thuộc tính có phân bố tập trung xuất hiện trước, kèm giá trị phổ biến nhất trong cụm. Đây là cách giúp người đọc hiểu cụm nhanh hơn, không phải lời bảo đảm đã tìm được mọi nhóm bị ảnh hưởng.
+
+Khác biệt này rất quan trọng: nhóm do bạn tạo theo **Sex** và **Race** có điều kiện rõ ràng; một cụm gợi ý được mô tả bằng các giá trị phổ biến chỉ là một tập bản ghi với phân bố riêng. Không nên lấy tên mô tả của cụm làm điều kiện lọc chính xác mà bỏ qua các biểu đồ phân bố.
+
+### Giao diện phân tích kết quả đã có
+
+Trong mã nguồn, cột `out` được làm tròn để thành dự đoán nhị phân, tương ứng <KeyTerm vi="ngưỡng quyết định" en="decision threshold" /> $0{,}5$ với đầu ra từ $0$ đến $1$. Thanh **Minimum Size** không phải thanh chỉnh ngưỡng dự đoán. Bạn không thể dùng nó để đánh đổi Precision và Recall bằng cách thay đổi quyết định của mô hình.
+
+Bản nhúng chạy với các tệp dữ liệu đóng gói, không cần máy chủ suy luận. README hướng dẫn thêm dữ liệu bằng tiền xử lý, đưa tệp vào mã nguồn rồi bổ sung lựa chọn trong giao diện; đây không phải chức năng tải CSV tùy ý ngay trên trang. Vì vậy, các thao tác ở bài này chỉ tập trung vào dữ liệu mẫu và những điều khiển đang có.
+
+### Đặt chỉ số trong bối cảnh con người
+
+Nhãn thực tế cũng cần được xem xét: đó là dữ liệu quan sát, không nhất thiết là sự thật hoàn hảo về năng lực hay hành vi của một người. Chênh lệch có thể liên quan đến thành phần dữ liệu, quá trình ghi nhận nhãn, cách chọn mẫu hoặc mô hình. Biểu đồ so sánh không tách riêng được các nguyên nhân ấy.
+
+Nếu chuyển sang COMPAS, hãy hỏi lỗi dương tính giả và âm tính giả có ý nghĩa gì trong bối cảnh tái phạm, thay vì áp nguyên cách diễn giải từ Adult. FairVis làm tốt vai trò hỗ trợ <KeyTerm vi="kiểm toán mô hình" en="model auditing" />: làm rõ nơi cần điều tra. Việc lựa chọn tiêu chí công bằng, đánh giá tác động và quyết định có nên triển khai hệ thống vẫn cần chuyên môn cùng tiếng nói của người chịu ảnh hưởng.
+
+## Tóm tắt
+
+Một lượt khám phá hữu ích kết thúc bằng câu hỏi rõ ràng: nhóm nào khác biệt, trên chỉ số nào, với mẫu số ra sao? Hãy giữ câu hỏi đó khi rời biểu đồ, thay vì chỉ mang theo một thứ hạng.
+
+<Callout type="key">
+
+- Điểm toàn cục có thể che khuất lỗi của nhóm nhỏ.
+- Nhóm giao thoa giúp nhìn xa hơn từng thuộc tính riêng lẻ.
+- Mỗi chỉ số phản ánh một loại lỗi hoặc thành công khác nhau.
+- Luôn đọc chỉ số cùng kích thước nhóm và nhãn thực tế.
+- FairVis hỗ trợ khám phá, không thay thế đánh giá trong bối cảnh thực tế.
+
+</Callout>
+
+## Nguồn tham khảo
+
+- [Bài báo FairVis, IEEE VAST 2019](https://arxiv.org/abs/1904.05419).
+- [Mã nguồn FairVis, giấy phép MIT](https://github.com/poloclub/FairVis).
+- [Bản demo chính thức](https://poloclub.github.io/FairVis/).
+- [UCI Adult: thông tin bộ dữ liệu](https://archive.ics.uci.edu/dataset/2/adult).

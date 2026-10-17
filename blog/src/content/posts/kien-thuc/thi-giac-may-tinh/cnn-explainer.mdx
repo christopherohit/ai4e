@@ -1,0 +1,222 @@
+---
+title: 'CNN Explainer: Nhìn từng bước máy tính nhận ra một bức ảnh'
+description: 'Khám phá CNN qua ảnh, bộ lọc, ReLU và pooling; theo dõi từng phép tính trong CNN Explainer để hiểu cách mạng đưa ra dự đoán.'
+category: kien-thuc
+topic: thi-giac-may-tinh
+order: 1
+tags: ['CNN', 'Học sâu', 'Thị giác máy tính', 'Diễn giải mô hình', 'Trực quan hóa']
+viz: cnn-explainer
+vizHeight: 900
+cover: ../../../../assets/covers/cnn-explainer.webp
+date: 2026-10-03
+---
+
+import Callout from '../../../../components/Callout.astro';
+import KeyTerm from '../../../../components/KeyTerm.astro';
+
+<Callout type="try">
+
+[Thử trực quan hóa phía trên](#cong-cu), rồi đọc tiếp để hiểu các phép tính. Nhấp tên một lớp trong mạng để tới phần giải thích tương ứng ngay trên trang này.
+
+</Callout>
+
+## Mở đầu: Từ điểm ảnh đến tên đồ vật
+
+Bạn nhìn một tách cà phê và nhận ra nó gần như ngay lập tức. Máy tính chỉ nhận được các con số biểu diễn màu sắc. Làm thế nào từ những con số ấy, một mô hình có thể chọn nhãn **espresso** thay vì **pizza**?
+
+<KeyTerm vi="Mạng nơ-ron tích chập" en="Convolutional Neural Network" />, viết tắt CNN, biến đổi ảnh qua nhiều lớp trước khi đưa ra dự đoán. CNN Explainer cho phép nhìn vào chuỗi biến đổi này: từ các kênh màu đầu vào, qua những ô màu ở từng lớp, đến các thanh điểm số bên phải. Thay vì học thuộc tên các lớp, ta sẽ theo dõi một ảnh cụ thể và giải thích điều gì xảy ra với nó.
+
+## Khái niệm cốt lõi: CNN biến đổi ảnh như thế nào?
+
+<span id="article-input" />
+
+### Ảnh là một khối số
+
+Ảnh đầu vào trong công cụ có kích thước $64 \times 64 \times 3$. Hai chiều đầu là chiều cao và chiều rộng; chiều cuối gồm ba <KeyTerm vi="kênh màu" en="color channels" /> đỏ, lục và lam. Giao diện tách chúng thành **Red channel**, **Green** và **Blue** để ta thấy cùng một cảnh dưới ba thành phần màu khác nhau.
+
+Các kênh đầu vào được hiển thị bằng thang xám, không phải bằng màu RGB gốc. Trước khi tính toán, mã xử lý ảnh chia giá trị màu từ 0–255 cho 255, đưa chúng về khoảng $[0,1]$.
+
+Một <KeyTerm vi="tensor" en="tensor" /> là cấu trúc dữ liệu nhiều chiều. Khi đọc kích thước dưới tên lớp, hãy phân biệt kích thước không gian với số kênh: mười bản đồ nhỏ không có nghĩa là mười ảnh đầu vào độc lập.
+
+<span id="article-convolution" />
+
+### Tích chập: Dùng một bộ lọc ở nhiều vị trí
+
+<KeyTerm vi="Tích chập" en="convolution" /> lấy một vùng nhỏ của đầu vào, nhân từng giá trị với <KeyTerm vi="trọng số" en="weights" /> tương ứng rồi cộng lại. Một <KeyTerm vi="bộ lọc" en="filter" /> tạo ra một kênh đầu ra; với ảnh RGB, nó gồm ba ma trận nhỏ, mỗi ma trận ứng với một kênh màu. Bài giải thích trong ứng dụng gọi từng ma trận $3 \times 3$ này là kernel: lớp đầu có mười bộ lọc, tương ứng ba mươi kernel hai chiều.
+
+Với lớp đầu tiên của mạng trong công cụ, một giá trị đầu ra được tính như sau:
+
+$$
+Y_{i,j,o}=b_o+\sum_{c=1}^{3}\sum_{u=0}^{2}\sum_{v=0}^{2}W_{u,v,c,o}X_{i+u,j+v,c}
+$$
+
+Ở đây, $X$ là đầu vào, $W$ là trọng số và $b_o$ là <KeyTerm vi="hệ số chệch" en="bias" /> của kênh đầu ra $o$. Chỉ số $i,j$ xác định vị trí đang xét; $u,v$ chạy trong cửa sổ $3 \times 3$. Tổng theo $c$ cho thấy một kết quả tích chập nhận thông tin từ cả ba kênh, không chỉ riêng màu đỏ.
+
+Chính xác hơn, phép tính này là <KeyTerm vi="tương quan chéo" en="cross-correlation" />: kernel không bị lật như trong định nghĩa tích chập toán học. CNN vẫn thường gọi nó là tích chập; công thức trên khớp cách công cụ tính toán.
+
+Bộ lọc được dùng lại khi cửa sổ trượt sang vị trí khác. Đây là <KeyTerm vi="chia sẻ trọng số" en="weight sharing" />: mạng không học một bộ trọng số riêng cho từng vị trí của ảnh. Kết quả là một <KeyTerm vi="bản đồ đặc trưng" en="feature map" />, hay bản đồ kích hoạt, thể hiện phản hồi của bộ lọc trên toàn vùng ảnh có thể quét.
+
+Trong `conv_1_1`, mười bộ lọc tạo ra mười bản đồ kích thước $62 \times 62$. Các kernel có kích thước $3 \times 3$, <KeyTerm vi="bước trượt" en="stride" /> bằng một và không dùng <KeyTerm vi="đệm" en="padding" />. Với chiều đầu vào $n$, kernel $k$, đệm $p$ mỗi phía và bước trượt $s$, khi không giãn kernel, chiều đầu ra là:
+
+$$
+n_{\mathrm{out}}=\left\lfloor\frac{n+2p-k}{s}\right\rfloor+1
+$$
+
+Ở đây, $n=64$, $k=3$, $p=0$, $s=1$, nên mỗi chiều giảm xuống 62. Kích thước xuất hiện dưới tên lớp khi bật chi tiết.
+
+<span id="article-relu" />
+
+### ReLU: Giữ giá trị dương, đưa giá trị âm về không
+
+<KeyTerm vi="Hàm kích hoạt" en="activation function" /> bổ sung tính phi tuyến, giúp mạng không chỉ là một chuỗi biến đổi tuyến tính. ReLU có quy tắc rất đơn giản:
+
+$$
+\operatorname{ReLU}(x)=\max(0,x)
+$$
+
+Nếu đầu vào là $-2$, kết quả là 0; nếu đầu vào là 3, kết quả vẫn là 3. Lớp `relu_1_1` không thay đổi kích thước $62 \times 62 \times 10$ của `conv_1_1`. Nó cũng không học một bộ lọc mới. Điều thay đổi là giá trị tại từng ô: những vùng âm bị đưa về không, còn vùng dương được giữ nguyên.
+
+Trên giao diện, màu đỏ và xanh mã hóa các giá trị trên thang phân kỳ, không phải hai nhóm “sai” và “đúng”. Hãy đọc chú giải bên dưới thay vì kết luận rằng vùng xanh luôn là phần quan trọng nhất của vật thể.
+
+<span id="article-pooling" />
+
+### Pooling: Giữ phản hồi lớn nhất trong một vùng
+
+<KeyTerm vi="Gộp cực đại" en="max pooling" /> chọn giá trị lớn nhất trong mỗi cửa sổ. Tiny VGG của CNN Explainer dùng cửa sổ $2 \times 2$ với bước trượt hai. Chẳng hạn, từ bốn giá trị 0, 1, 4 và 2, phép gộp giữ lại 4; nó không lấy trung bình và không cộng cả bốn số.
+
+Với đầu vào $A$ sau ReLU, đầu ra pooling $P$ ở kênh $c$ là:
+
+$$
+P_{i,j,c}=\max_{u,v\in\{0,1\}} A_{2i+u,2j+v,c}
+$$
+
+Phép gộp thực hiện riêng trên từng kênh, không trộn các kênh và không có trọng số cần học.
+
+Sau `conv_1_2` và `relu_1_2`, dữ liệu có kích thước $60 \times 60 \times 10$. `max_pool_1` giảm hai chiều không gian xuống $30 \times 30$ nhưng vẫn giữ mười kênh. Như vậy, một bản đồ nhỏ hơn không nhất thiết đồng nghĩa với ít loại đặc trưng hơn; nó có ít vị trí để lưu phản hồi hơn.
+
+Mạng tiếp tục với hai lớp tích chập, ReLU và `max_pool_2`. Đến đây, khối dữ liệu còn $13 \times 13 \times 10$. Chuỗi kích thước giúp nối hình ảnh với toán học: tích chập không đệm làm giảm chiều từng chút, còn pooling giảm nhanh hơn.
+
+<span id="article-flatten" />
+<span id="article-softmax" />
+
+### Từ bản đồ đặc trưng đến điểm số của lớp
+
+<KeyTerm vi="Làm phẳng" en="flatten" /> sắp các giá trị cuối thành một vector; $13 \times 13 \times 10$ trở thành 1.690 phần tử. Đây là đổi cách tổ chức dữ liệu, không phải một phép nhận diện mới. Lớp <KeyTerm vi="kết nối đầy đủ" en="fully connected layer" /> dùng vector ấy để tính mười điểm số trước softmax, thường gọi là <KeyTerm vi="logit" en="logit" />.
+
+Với vector đã làm phẳng $f$, trọng số $V$ và hệ số chệch $\beta$, mỗi điểm số là:
+
+$$
+z_k=\beta_k+\sum_{r=1}^{1690}V_{r,k}f_r
+$$
+
+Softmax chuẩn hóa chúng thành các giá trị dương có tổng bằng một:
+
+$$
+p_k=\frac{\exp(z_k)}{\sum_{j=1}^{10}\exp(z_j)}
+$$
+
+Thanh ở cột **output** biểu diễn kết quả phân loại giữa mười nhãn có sẵn. Độ dài thanh tỷ lệ với giá trị softmax, nhưng thang vẽ được co theo điểm cao nhất của ảnh đang xét, không cố định ở 1. Đừng đọc thanh dài nhất thành “chắc chắn 100%”. Một ảnh ngoài các lớp đã học vẫn được phân phối điểm số vào chính mười lớp đó.
+
+## Hướng dẫn khám phá: Theo dấu một bức ảnh
+
+Sơ đồ phía trên dùng toàn chiều rộng trang; trên màn hình nhỏ, cuộn ngang bên trong công cụ để thấy trọn mạng. Thanh ảnh mẫu nằm ở phía trên, còn **Hiện chi tiết** và danh sách thang màu nằm bên phải. Chi tiết mặc định đã bật; nếu không thấy tên đầy đủ và kích thước lớp, hãy nhấp **Hiện chi tiết**. Bắt đầu bằng ảnh có sẵn, chưa cần tải ảnh riêng.
+
+### Bước 1: Đổi đầu vào, giữ nguyên mạng
+
+Ảnh tách cà phê **espresso** là lựa chọn ban đầu. Các ảnh mẫu khác gồm **pizza**, **koala**, **orange** và nhiều đối tượng nữa. Khi chọn ảnh, mạng tính lại các giá trị trung gian và đầu ra bằng cùng những trọng số đã học. Bạn đang thay dữ liệu đầu vào, không huấn luyện mạng lại.
+
+<Callout type="try">
+
+Nhấp ảnh mẫu **pizza** trên thanh phía trên, rồi quay lại **espresso**. Quan sát ba kênh **input**, các bản đồ ở `conv_1_1` và thanh điểm số cạnh nhãn **espresso** trong **output**. Những vùng phản hồi nào thay đổi rõ nhất? Đừng chỉ nhìn nhãn có thanh dài nhất.
+
+</Callout>
+
+Hãy chọn một bản đồ ở lớp đầu và theo dõi nó qua hai ảnh. Vị trí của bản đồ không đổi, nhưng màu và hình dạng phản hồi có thể đổi. Đây là cách trực tiếp để thấy một bộ lọc cố định phản ứng với dữ liệu khác nhau. Chưa cần đặt tên cho nó là “bộ lọc cạnh” hay “bộ lọc tách cà phê”.
+
+### Bước 2: Đọc tên lớp và kích thước
+
+Nút **Hiện chi tiết** bật hoặc tắt thông tin chi tiết của sơ đồ tổng quan, gồm tên lớp, kích thước và chú giải màu. Nhìn từ `input` sang `conv_1_1`, `relu_1_1`, rồi `conv_1_2`, `relu_1_2` và `max_pool_1` để nối lại những phép toán vừa học.
+
+<Callout type="try">
+
+Nhấp **Hiện chi tiết** nếu thông tin đang ẩn. Dưới `conv_1_1` và `relu_1_1`, giao diện ghi `(62, 62, 10)`, tức $62 \times 62 \times 10$. Tìm `max_pool_1` với `(30, 30, 10)`. Lớp nào đổi giá trị mà giữ kích thước, lớp nào giảm kích thước?
+
+</Callout>
+
+Điểm cần nhớ là hình dạng dữ liệu và phép toán có liên hệ nhưng không đồng nhất. Hai lớp có cùng kích thước vẫn có thể chứa giá trị khác nhau; hai lớp có kích thước khác nhau vẫn có thể giữ cùng số kênh. Nếu chỉ đếm các ô vuông trên sơ đồ, ta rất dễ bỏ qua điều này.
+
+### Bước 3: Mở một phép tích chập
+
+Rê chuột lên bản đồ của `conv_1_1` để xem các kết nối, rồi nhấp vào bản đồ đó. Phần giải thích mở ra giúp tách đóng góp từ từng kênh đầu vào, các kernel tương ứng, phép cộng và hệ số chệch. Một bản đồ đầu ra là kết quả kết hợp, không phải bản sao của một kênh RGB.
+
+<Callout type="try">
+
+Ở tổng quan, xác định các kênh **Đỏ**, **Lục** và **Lam**, rồi nhấp bản đồ trên cùng ở `conv_1_1`. Các nhãn kênh sẽ ẩn trong phần mở rộng; ba bản đồ đầu vào vẫn theo thứ tự đỏ, lục, lam từ trên xuống. Theo dõi ba nhánh đến kết quả trung gian và phép cộng: chúng cùng góp vào một bản đồ đầu ra.
+
+</Callout>
+
+Nhấp bản đồ đầu vào trên cùng trong phần mở rộng để mở bảng **Tích chập**. Nút biểu tượng có chú thích **Chạy hoặc tạm dừng mô phỏng** bật hoặc tạm dừng chuyển động. Quan sát cửa sổ trên đầu vào và ô kết quả: trọng số giữ nguyên, vùng dữ liệu thay đổi. Đóng bảng bằng **Đóng**, rồi nhấp vùng trống của sơ đồ để trở lại tổng quan.
+
+### Bước 4: So sánh trước và sau ReLU, pooling
+
+Trở lại tổng quan, so sánh một bản đồ của `conv_1_1` với bản đồ cùng hàng trong `relu_1_1`. Những giá trị âm bị loại bỏ theo đúng quy tắc ReLU. Sau đó theo dõi `relu_1_2` sang `max_pool_1`: cùng một kênh được biểu diễn trên lưới nhỏ hơn.
+
+Bạn cũng có thể nhấp bản đồ ở lớp ReLU hoặc pooling để xem phép tính tương ứng. Hãy kiểm tra một vùng cụ thể: với ReLU, dấu của giá trị quyết định đầu ra; với pooling, giá trị lớn nhất trong cửa sổ quyết định đầu ra. Hai phép toán này có vai trò khác nhau dù đều có thể làm hình trông đơn giản hơn.
+
+### Bước 5: Đổi thang màu trước khi so sánh
+
+Danh sách có ba lựa chọn **Theo lớp** (Unit), **Theo khối** (Module) và **Toàn mạng** (Global). **Theo lớp** lấy phạm vi chung cho tất cả bản đồ của một lớp tích chập, rồi dùng lại cho ReLU và pooling kế tiếp, đến lớp tích chập tiếp theo. Nó không chuẩn hóa riêng từng bản đồ. **Theo khối** dùng phạm vi chung cho một khối gồm hai cặp tích chập–ReLU và một pooling. **Toàn mạng** dùng chung cho cả hai khối. Đầu vào và đầu ra có thang riêng.
+
+<Callout type="try">
+
+Giữ nguyên ảnh **cà phê espresso**; chỉ nhấp **Hiện chi tiết** nếu thông tin đang ẩn. Trong danh sách có chú thích **Đổi phạm vi thang màu**, đổi **Theo lớp** sang **Toàn mạng**. Quan sát `conv_1_1`, `conv_2_2` và chú giải bên dưới. Màu có thể nhạt đi dù ảnh và điểm số không đổi: bạn đổi cách biểu diễn, không đổi mô hình.
+
+</Callout>
+
+Sau cùng, thử **Theo khối** rồi quay về **Theo lớp**. Nếu hai vùng có cùng màu ở những thang khác nhau, chưa thể kết luận chúng có cùng giá trị. Ngược lại, dùng thang chung giúp so sánh độ lớn giữa các lớp, nhưng có thể làm những biến thiên nhỏ khó thấy hơn.
+
+## Góc nhìn sâu hơn: Thấy phép tính chưa phải hiểu mọi quyết định
+
+### Công cụ cho thấy suy luận, không phải quá trình học
+
+CNN Explainer chạy một mô hình Tiny VGG đã huấn luyện. Các phép tính bạn quan sát là <KeyTerm vi="lan truyền tiến" en="forward pass" />: dữ liệu đi qua mạng với trọng số cố định để tạo dự đoán. Việc đổi ảnh không cho thấy trọng số được cập nhật như thế nào. Mã huấn luyện nằm trong thư mục `tiny-vgg` của kho nguồn; đó là một công việc riêng, không phải thao tác trên sơ đồ này.
+
+<Callout type="note">
+
+Bản nhúng tự lưu trữ vẫn tải một số thư viện từ dịch vụ bên ngoài, gồm D3 và TensorFlow.js; vì vậy, không nên coi đây là công cụ hoạt động hoàn toàn ngoại tuyến. Bài hướng dẫn dùng ảnh mẫu có sẵn. Nút dấu cộng **Add new input image** không cần thiết cho các bài tập; tải ảnh bằng URL còn phụ thuộc khả năng truy cập ảnh và chính sách của máy chủ ảnh.
+
+</Callout>
+
+### Một bản đồ kích hoạt không phải bản đồ giải thích nguyên nhân
+
+Một vùng phản hồi mạnh cho biết bộ lọc sinh giá trị lớn ở vùng đó. Chỉ riêng điều này chưa chứng minh vùng ấy quyết định nhãn cuối cùng. Các lớp sau còn kết hợp và biến đổi nhiều giá trị; trọng số kết nối cuối có thể tăng hoặc giảm đóng góp của chúng.
+
+Vì vậy, đừng vội kể câu chuyện “mạng nhìn thấy chiếc quai nên biết đây là cà phê”. Trực quan hóa phù hợp để hiểu luồng tính toán và kiểm tra giả thuyết, nhưng một tên gọi trực giác cho bộ lọc vẫn cần bằng chứng. Đổi hai ảnh mẫu cũng thay đổi nhiều yếu tố cùng lúc, nên không phải thí nghiệm tách riêng ảnh hưởng của một chi tiết.
+
+### Mô hình nhỏ làm rõ nguyên lý, không đại diện cho mọi CNN
+
+Mạng trong công cụ có bốn lớp tích chập và mười nhãn phân loại ở đầu ra. Kiến trúc gọn giúp ta theo dõi từng bước. Tuy nhiên, không phải CNN nào cũng dùng cùng số kênh, cùng chuỗi lớp, hoặc tích chập không đệm như ở đây.
+
+Chia sẻ trọng số giúp cùng bộ lọc tìm mẫu ở nhiều vị trí, nhưng không bảo đảm dự đoán bất biến với mọi dịch chuyển. Biên ảnh, pooling và phần kết nối đầy đủ đều có thể ảnh hưởng đến kết quả. Tương tự, giảm kích thước qua pooling tiết kiệm biểu diễn không gian nhưng cũng mất chi tiết vị trí. Đây là những đánh đổi cần nhớ khi chuyển từ mô hình minh họa sang bài toán thực tế.
+
+## Tóm tắt: Những điều nên mang theo
+
+Lần khám phá tiếp theo, hãy thử tự giải thích một đường đi từ ảnh đến đầu ra mà không nhìn lại công thức. Nếu bạn phân biệt được phép toán làm đổi kích thước, phép toán làm đổi giá trị và thao tác chỉ làm đổi màu hiển thị, bạn đã nắm được nền tảng để đọc kiến trúc CNN.
+
+<Callout type="key">
+
+- CNN biến đổi các kênh ảnh thành bản đồ đặc trưng trước khi tính điểm phân loại.
+- Tích chập dùng trọng số chung ở nhiều vị trí và cộng đóng góp từ các kênh đầu vào.
+- ReLU đưa giá trị âm về không; max pooling giữ cực đại trong từng cửa sổ.
+- **Show detail** giúp đọc kích thước; **Unit**, **Module**, **Global** chỉ đổi thang hiển thị.
+- Softmax so sánh các lớp đã biết, không bảo đảm dự đoán đúng hay nhận diện được lớp mới.
+
+</Callout>
+
+## Nguồn tham khảo
+
+- [Wang và cộng sự — CNN Explainer: Learning Convolutional Neural Networks with Interactive Visualization](https://arxiv.org/abs/2004.15004), TVCG, 2020: công trình giới thiệu hệ thống.
+- [Kho mã nguồn poloclub/cnn-explainer](https://github.com/poloclub/cnn-explainer), giấy phép MIT: README, bài giải thích trong ứng dụng và mã Tiny VGG.
+- [Demo chính thức CNN Explainer](https://poloclub.github.io/cnn-explainer/): phiên bản do nhóm tác giả cung cấp.
+- [Stanford CS231n — Convolutional Neural Networks](https://cs231n.github.io/convolutional-networks/): đọc thêm về cấu trúc lớp, kích thước đầu ra và chia sẻ tham số.
+- [Dumoulin và Visin — A guide to convolution arithmetic for deep learning](https://arxiv.org/abs/1603.07285): hình dung tác động của kernel, bước trượt và đệm.

@@ -1,0 +1,10 @@
+---
+import './bswmd.css';
+---
+<section id="native-tool-root" class="bswmd-tool" data-bswmd aria-busy="true">
+  <header><p class="eyebrow">BSWMD explainer</p><h2>Định nghĩa thành bằng chứng kiểm tra</h2><p>Chọn một input để xem pipeline mô phỏng. Đây là mô hình giáo dục, không chạy parser ARXML thật.</p></header>
+  <div class="bswmd-controls" role="group" aria-label="Kịch bản"><button type="button" data-scenario="valid" aria-pressed="false">Giá trị hợp lệ</button><button type="button" data-scenario="invalid" aria-pressed="false">Vượt MAX</button><button type="button" data-scenario="missing" aria-pressed="false">Thiếu BSWMD</button></div>
+  <ol class="bswmd-pipeline"><li>Input ứng viên</li><li>Parse / schema</li><li>Provenance</li><li>Validate</li></ol>
+  <div class="bswmd-result" data-result aria-live="polite"></div>
+</section>
+<script>import { initBswmd } from './render'; initBswmd();</script>

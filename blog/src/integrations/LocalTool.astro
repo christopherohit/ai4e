@@ -1,0 +1,28 @@
+---
+import NerfExplainer from '../../../tools/kien-thuc/nerf-explainer/Tool.astro';
+import GaussianSplattingExplainer from '../../../tools/kien-thuc/gaussian-splatting-explainer/Tool.astro';
+import SyncTalk from '../../../tools/du-an/synctalk/Tool.astro';
+import InsTaG from '../../../tools/du-an/instag/Tool.astro';
+import SdvxModeler from '../../../tools/du-an/sdvx-modeler/Tool.astro';
+import Bswmd from '../../../tools/du-an/bswmd/Tool.astro';
+import QwenExplainer from '../../../tools/kien-thuc/qwen3-8-flash-next-explainer/Tool.astro';
+import GatedDeltaNetExplainer from '../../../tools/kien-thuc/gated-delta-net-explainer/Tool.astro';
+import SparseAttentionExplainer from '../../../tools/kien-thuc/sparse-attention-explainer/Tool.astro';
+
+const components = {
+  'qwen3-8-flash-next-explainer': QwenExplainer,
+  'gated-delta-net-explainer': GatedDeltaNetExplainer,
+  'sparse-attention-explainer': SparseAttentionExplainer,
+  'nerf-explainer': NerfExplainer,
+  'gaussian-splatting-explainer': GaussianSplattingExplainer,
+  synctalk: SyncTalk,
+  instag: InsTaG,
+  'sdvx-modeler': SdvxModeler,
+  bswmd: Bswmd,
+};
+interface Props { slug: string }
+const { slug } = Astro.props;
+const Tool = components[slug as keyof typeof components];
+if (!Tool) throw new Error(`Unknown local tool: ${slug}`);
+---
+<Tool />

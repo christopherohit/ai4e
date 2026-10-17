@@ -1,0 +1,185 @@
+---
+title: 'Dodrio: Đọc attention của Transformer bằng ngữ nghĩa và cú pháp'
+description: 'Khám phá Dodrio để đối chiếu attention của BERT với độ nổi bật của token và quan hệ cú pháp, rồi nhận diện giới hạn của việc diễn giải mô hình.'
+category: du-an
+topic: giai-thich-mo-hinh
+order: 1
+tags: ['Transformer', 'Xử lý ngôn ngữ tự nhiên', 'Diễn giải mô hình', 'Trực quan hóa']
+viz: dodrio
+vizHeight: 900
+cover: ../../../../assets/covers/dodrio.webp
+date: 2026-10-03
+---
+
+import Callout from '../../../../components/Callout.astro';
+import KeyTerm from '../../../../components/KeyTerm.astro';
+
+## Vì sao một bản đồ chú ý chưa đủ?
+
+Một mô hình phân loại nhận xét phim dự đoán câu là tích cực. Bạn muốn biết nó dựa vào từ nào, nhưng một hình đầy đường nối không tự trả lời được câu hỏi ấy. Đường đậm chỉ cho thấy một trọng số lớn; nó chưa chứng minh mô hình hiểu lời khen, phủ định hay quan hệ giữa các từ.
+
+Dodrio đặt <KeyTerm vi="cơ chế chú ý" en="attention" /> bên cạnh hai nguồn đối chiếu: <KeyTerm vi="độ nổi bật" en="saliency" /> của các đơn vị văn bản đối với dự đoán và <KeyTerm vi="quan hệ phụ thuộc cú pháp" en="syntactic dependency" /> trong câu. Thay vì nhìn từng ma trận riêng lẻ, bạn chọn một <KeyTerm vi="đầu chú ý" en="attention head" /> từ tổng quan rồi quan sát cùng câu ở nhiều góc nhìn.
+
+Bản nhúng dùng dữ liệu tính sẵn của BERT-Base đã tinh chỉnh cho phân loại cảm xúc trên SST-2. Không thể nhập câu tiếng Việt tùy ý để chạy suy luận. Để dễ quan sát, dùng **Toàn màn hình**, hoặc [mở trực quan hóa trong tab riêng](/viz/dodrio/).
+
+## Khái niệm cốt lõi: ba lớp thông tin
+
+### Attention nối các vị trí trong câu
+
+Một <KeyTerm vi="đơn vị văn bản" en="token" /> không nhất thiết là một từ hoàn chỉnh. Trong giao diện, bạn có thể thấy một từ bị tách thành nhiều mảnh, trong đó các mảnh nối tiếp có tiền tố `##`. Các ký hiệu `[CLS]` và `[SEP]` cũng là token của BERT, nhưng không phải những từ người viết đưa vào câu. Vì thế, số nút trong đồ thị có thể khác số từ trong hàng văn bản phía trên.
+
+Trong <KeyTerm vi="tự chú ý" en="self-attention" />, mỗi vị trí tạo ra các biểu diễn truy vấn, khóa và giá trị. Công thức quen thuộc là:
+
+$$
+A = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}} + M\right), \qquad Z = AV
+$$
+
+$Q$, $K$ và $V$ chứa truy vấn, khóa và giá trị; $d_k$ là chiều của khóa. $M$ che các vị trí đệm. Softmax áp dụng theo từng hàng: $A_{ij}$ là trọng số vị trí $i$ dành cho vị trí $j$. Trước khi làm tròn, tổng mỗi hàng bằng một; dữ liệu xuất ra giữ bốn chữ số thập phân nên có sai lệch nhỏ. Đây là hệ số trộn thông tin, không phải xác suất một từ gây ra dự đoán.
+
+BERT-Base mặc định có 12 lớp, mỗi lớp 12 đầu: 144 ma trận cho một câu. Với $n$ token, bỏ qua phần đệm, có $144n^2$ trọng số. Tệp dữ liệu có thể chứa thêm vị trí đệm; đồ thị chỉ lấy các token hợp lệ. Dodrio giúp bạn đi từ tổng quan tới một đầu cụ thể.
+
+### Độ nổi bật không đồng nghĩa với trọng số attention
+
+Độ nổi bật đo độ nhạy của điểm đầu ra đối với biểu diễn đầu vào. Mã tạo dữ liệu lấy gradient của điểm lớp trước softmax, rồi dùng chuẩn L1 để tổng hợp theo chiều biểu diễn. Với $e_j$ là biểu diễn token $j$, $f_c$ là điểm lớp mà mô hình dự đoán và $d$ là số chiều:
+
+$$
+s_j = \sum_{k=1}^{d}\left|\frac{\partial f_c}{\partial e_{jk}}\right|
+$$
+
+Trong **Semantic Attention Graph**, màu nút biểu diễn $s_j$; **Force Layout** còn dùng nó cho bán kính. **Radial Layout** và **Grid Layout** giữ bán kính cố định. Vì lấy trị tuyệt đối, saliency không cho biết token làm tăng hay giảm điểm lớp. Đường nối biểu diễn attention của đầu đang chọn.
+
+Hai tín hiệu khác nhau: saliency gợi ý độ nhạy của điểm lớp, còn đường nối cho biết phân bổ attention trong một đầu. Token nổi bật không nhất thiết được mọi đầu chú ý tới; một đầu cũng có thể tập trung vào ký hiệu đặc biệt.
+
+Điểm **Semantic** dùng độ tương đồng cosine giữa saliency và tổng attention nhận được ở từng token. Với một câu và một đầu, đặt $r_j=\sum_i A_{ij}$:
+
+$$
+S = \frac{\mathbf{r}\cdot\mathbf{s}}{\lVert\mathbf{r}\rVert_2\lVert\mathbf{s}\rVert_2}
+$$
+
+Lưới tổng quan lấy trung bình điểm này trên các câu đã xuất. Đây không phải hệ số tương quan Pearson hay chứng nhận mô hình hiểu nghĩa câu.
+
+### Cú pháp cung cấp một hệ quy chiếu độc lập
+
+Quan hệ phụ thuộc cú pháp nối một từ với từ chi phối nó trong cấu trúc câu. Hàng **Current Sentence** hiển thị các cung và nhãn như `amod`, `det`, `obj` hoặc `punct`. Chẳng hạn, `amod` liên quan đến bổ nghĩa bằng tính từ, còn `punct` gắn với dấu câu. Chúng giúp bạn đặt câu hỏi cụ thể: một đầu có thường nối tính từ với danh từ được bổ nghĩa không?
+
+Các quan hệ cú pháp được tạo riêng bằng Stanza, không phải cây do BERT sinh ra. Để chấm điểm, quy trình gộp attention về mức từ, bỏ liên kết tới chính nó và `[CLS]`/`[SEP]`, rồi đối chiếu đích có trọng số lớn nhất với từ chi phối do bộ phân tích xác định. Nó xét cả ma trận gốc lẫn chuyển vị, so với đường cơ sở chọn từ ở khoảng cách cố định. Điểm **Syntactic** trong tổng quan là độ khớp cao nhất trong các quan hệ mà đầu có điểm không thấp hơn đường cơ sở, hoặc bằng không nếu không có.
+
+<Callout type="note">
+
+Trong **Attention Head Overview**, hồng nghiêng về **Semantic**, xanh nghiêng về **Syntactic**, còn **Both** chỉ vùng kết hợp. Màu tím không đảm bảo cả hai điểm đều cao; độ đậm còn phụ thuộc độ lớn của điểm. Kích thước dấu tròn biểu diễn **Importance**. Theo mã xuất dữ liệu, với đầu $h$ và $N$ câu dùng để tổng hợp:
+
+$$
+I_h = \frac{1}{N}\sum_{t=1}^{N}\max_{i,j} A_{ij}^{(t,h)}
+$$
+
+Đây là trung bình trọng số lớn nhất trong mỗi ma trận, không phải trung bình các cực đại theo hàng, độ chính xác phân loại hay đóng góp nhân quả. Menu **importance scores** trong vùng so sánh dùng cực đại của riêng câu hiện tại.
+
+</Callout>
+
+## Khám phá Dodrio từng bước
+
+### 1. Đọc câu trước khi đọc đồ thị
+
+Bắt đầu với câu đã được nạp sẵn. Đọc hàng **Current Sentence**, xác định các từ khen, chê và đoạn có thể làm đổi nghĩa. Không cần hiểu hết câu ngay: hãy chọn một cụm có quan hệ rõ, chẳng hạn tính từ đứng cạnh danh từ, để theo dõi xuyên suốt các bước sau. Với câu dài, mở tab riêng giúp có thêm chiều ngang thay vì cố đọc đồ thị trong một khung hẹp.
+
+Danh sách đang hiển thị mặc định là **Dependency List**. Bạn nhìn thấy các cung cú pháp phía dưới câu và nhãn ngay trên cung. Trước khi đổi đầu chú ý, hãy coi phần này như bản ghi cấu trúc cần đối chiếu, không phải đáp án mà mọi đầu bắt buộc phải khớp.
+
+<Callout type="try">
+
+Nhấp **Syntactic Relations** bên cạnh **Show Comparison**. Trong danh sách mở ra, thử bỏ chọn rồi chọn lại `punct`. Quan sát các cung liên quan đến dấu câu biến mất hoặc xuất hiện; giữ nguyên câu để thấy đây là thao tác lọc phần hiển thị, không phải thay đổi mô hình.
+
+</Callout>
+
+### 2. Chọn một đầu từ tổng quan
+
+Ở bên phải, **Attention Head Overview** sắp các đầu thành lưới theo lớp và số đầu. Di chuột lên một dấu tròn để đọc tooltip có **Layer**, **Head**, **Semantic**, **Syntactic** và **Importance**. Nên ghi lại lớp và đầu vừa chọn: màu sắc giúp tìm ứng viên, còn các chỉ số cho phép bạn mô tả điều quan sát được chính xác hơn.
+
+Nhấp một dấu tròn để chọn đầu. Phần **Semantic Attention Graph** bên trái cập nhật theo lựa chọn ấy, đồng thời các ô **Layer** và **Head** phản ánh đầu hiện tại. Bạn cũng có thể chọn trực tiếp bằng hai menu này. Trên giao diện, số lớp và đầu bắt đầu từ 1; đừng nhầm với chỉ số bắt đầu từ 0 thường gặp trong mã nguồn.
+
+<Callout type="try">
+
+Trong **Attention Head Overview**, nhấp một dấu thiên hồng, rồi nhấp một dấu thiên xanh. Giữ nguyên **Current Sentence** và quan sát **Layer**, **Head** cùng các đường trong **Semantic Attention Graph** đổi như thế nào. Có đầu nào nối nhiều token với `[CLS]` hoặc `[SEP]`, thay vì với từ mang nội dung?
+
+</Callout>
+
+Đừng kỳ vọng mọi đầu cùng một lớp có hình giống nhau. Cũng đừng vội gọi đầu thiên xanh là “tốt hơn” đầu thiên hồng: chúng được tóm tắt bằng các tiêu chí khác nhau. Mục tiêu ở bước này là tìm hai đầu có mẫu phân bổ khác biệt để phân tích tiếp, không phải xếp hạng mô hình chỉ bằng màu.
+
+### 3. Làm đồ thị dễ đọc hơn
+
+Đồ thị mặc định dùng **Radial Layout**, đặt các token quanh vòng tròn. Menu bố cục còn có **Force Layout** và **Grid Layout**. Thay đổi bố cục là thay đổi cách sắp xếp cùng dữ liệu, không phải tính lại attention. Vì vậy, hãy cố định câu, lớp và đầu khi so sánh các bố cục, rồi tìm xem cách nào giúp bạn lần theo đường nối rõ nhất.
+
+Biểu tượng thanh trượt gần menu bố cục mở bảng tham số. Trong đó, **Edge Threshold** chứa thanh **Attention >**, dùng để lọc các cạnh theo trọng số. Khi nâng ngưỡng, đồ thị bớt rối vì các đường yếu không còn được vẽ. Một cạnh biến mất chỉ có nghĩa nó không vượt ngưỡng hiển thị; không có nghĩa trọng số đã trở thành không.
+
+<Callout type="try">
+
+Giữ nguyên **Layer** và **Head**, đổi **Radial Layout** sang **Grid Layout**, rồi quay lại. Sau đó mở biểu tượng thanh trượt và tăng **Attention >** trong **Edge Threshold**. Quan sát những đường còn lại: có một vài token nhận nhiều liên kết mạnh, hay các liên kết phân tán khắp câu?
+
+</Callout>
+
+Để tránh bị bố cục đánh lừa, hãy giảm ngưỡng trở lại sau khi tìm được mẫu nổi bật. Những đường yếu có thể tạo thành một xu hướng mà bản lọc mạnh che mất. Đặc biệt, đường nối dài hoặc nút nằm gần trung tâm trong một bố cục không tự chứng minh token quan trọng hơn: đó còn là kết quả của cách sắp xếp hình học.
+
+### 4. Đối chiếu attention với cú pháp
+
+Nhấp **Show Comparison** trên thanh **Current Sentence**. Mỗi hàng phía dưới biểu diễn quan hệ suy ra từ một đầu được xếp hạng cao, dựa trên đích nhận attention lớn nhất sau khi xử lý token con. Menu có **syntactic correlations**, **semantic correlations** và **importance scores**. Xếp hạng cú pháp dùng dữ liệu tổng hợp và các quan hệ được chọn khi dựng vùng so sánh; hai tiêu chí còn lại dùng câu hiện tại. Đây không phải cây cú pháp do mô hình xuất trực tiếp.
+
+<Callout type="try">
+
+Nhấp **Show Comparison**, chọn **syntactic correlations**, rồi chuyển sang **semantic correlations**. So sánh các cung được hiển thị với các quan hệ trong **Dependency List** của cùng câu. Một quan hệ rõ với nhóm đầu này có còn rõ với nhóm đầu kia không? Chú ý đây là so sánh nhóm đầu theo tiêu chí xếp hạng, không chỉ riêng đầu đang chọn ở đồ thị bên trái.
+
+</Callout>
+
+Nếu các cung không khớp, hãy xem phần lệch nằm ở token con, dấu câu hay quan hệ khó hơn. Câu hỏi cụ thể như “đầu này có theo bổ nghĩa tính từ không?” hữu ích hơn nhận xét chung rằng đồ thị phức tạp.
+
+### 5. Kiểm tra lại trên một câu có sẵn khác
+
+Biểu tượng chỉnh sửa cạnh **Current Sentence** mở hộp **Select Input Sentence**. Chọn một dòng trong bảng rồi nhấp **Add** để áp dụng câu đó; **Cancel** đóng hộp mà không đổi lựa chọn. Tên nút **Add** dễ gây hiểu nhầm: đây là xác nhận chọn mẫu trong dữ liệu có sẵn, không phải gửi văn bản mới cho BERT xử lý.
+
+Hãy giữ một đầu bạn thấy thú vị và đổi sang câu khác. Mẫu liên kết có lặp lại không? Một đầu trông “chuyên về cú pháp” trên câu đầu có thể không hiện rõ chức năng ấy trên câu kế tiếp. Ghi lại câu, lớp, đầu và ngưỡng cạnh giúp bạn so sánh công bằng, thay vì vô tình thay nhiều yếu tố rồi gán mọi khác biệt cho mô hình.
+
+## Góc nhìn sâu hơn: quan sát không phải lời giải thích cuối cùng
+
+### Tương quan khác với vai trò nhân quả
+
+Một đường attention lớn chưa đủ để kết luận rằng token đích quyết định nhãn cảm xúc. Đầu ra còn phụ thuộc vào các giá trị được tổng hợp, các đầu khác và những phép biến đổi phía sau. Saliency cũng có giới hạn: gradient phản ánh độ nhạy cục bộ quanh đầu vào đang xét, không trực tiếp cho biết điều gì xảy ra nếu thay cả một từ bằng từ khác.
+
+Đây là điểm nối với nghiên cứu *Attention is not Explanation*: cần thận trọng khi biến một hình attention thành lời giải thích duy nhất cho dự đoán. Dodrio hữu ích vì cho phép đối chiếu nhiều tín hiệu, nhưng các tín hiệu phù hợp với nhau vẫn chưa phải kiểm chứng nhân quả. Muốn đi xa hơn, cần thí nghiệm như che token hoặc vô hiệu hóa đầu, rồi đo lại hành vi mô hình; bản nhúng này không cung cấp các thao tác đó.
+
+### Điểm tổng quan không thay thế phân tích từng câu
+
+Lưới **Attention Head Overview** dùng các điểm tổng hợp đã được tính trước. Ngược lại, đồ thị attention và saliency bạn đang đọc gắn với câu hiện tại. Vì vậy, một đầu có điểm ngữ nghĩa cao trong tổng quan không nhất thiết cho ra mẫu dễ giải thích trên mọi câu. Sự khác nhau giữa mức tổng hợp và mức từng mẫu là lý do nên lặp lại khám phá trên vài câu có sẵn.
+
+Quan hệ cú pháp cũng chỉ là một hệ quy chiếu. Kết quả phân tích tự động có thể sai hoặc không phản ánh hết sắc thái của câu. Đồng thời, BERT dùng token con trong khi quan hệ ngôn ngữ thường được mô tả ở mức từ. Sự lệch nhau giữa hai cách chia văn bản có thể khiến một mẫu tưởng như bất thường thực ra đến từ cách biểu diễn dữ liệu.
+
+### Bản tự lưu trữ làm gì, và không làm gì?
+
+Bản đang nhúng tải các tệp dữ liệu SST-2 đã được tạo ngoại tuyến, rồi dùng Svelte và D3.js để vẽ và phối hợp các góc nhìn. Chọn câu, đổi đầu, lọc cạnh hay đổi bố cục đều là thao tác khám phá dữ liệu này. Không có bước huấn luyện trực tiếp trong trình duyệt, cũng không có chức năng tải lên mô hình tùy ý từ thanh công cụ.
+
+Muốn áp dụng Dodrio cho bộ dữ liệu hoặc mô hình khác, cần tạo lại dữ liệu bằng quy trình trong thư mục `data-generation` của dự án và cấu hình lại các đường dẫn. Đó là công việc tích hợp riêng, không phải thao tác mà người đọc có thể thực hiện ngay trong bản nhúng. Các tài nguyên giao diện như phông chữ, biểu tượng và phần gợi ý dự án vẫn có phụ thuộc ngoài; tự lưu trữ dữ liệu không đồng nghĩa toàn bộ trang hoạt động ngoại tuyến.
+
+<Callout type="note">
+
+Các điểm số ở đây mô tả cách mã nguồn Dodrio tạo dữ liệu. Không nên thay chúng bằng công thức khác chỉ vì cùng mang tên “importance” trong một tài liệu khác. Bài tập trung vào dữ liệu có sẵn, không yêu cầu nhập câu mới hay chạy thí nghiệm can thiệp.
+
+</Callout>
+
+## Tóm tắt
+
+Giá trị của Dodrio không nằm ở việc tô màu cho một ma trận lớn, mà ở cách tổ chức một vòng khám phá: đọc câu, chọn đầu, làm đồ thị dễ đọc, đối chiếu cú pháp, rồi kiểm tra lại trên mẫu khác. Mỗi bước giúp thu hẹp một giả thuyết về hành vi của mô hình mà không biến quan sát thành kết luận quá mạnh.
+
+<Callout type="key">
+
+- Attention cho biết cách một đầu trộn thông tin giữa các token, không tự chứng minh nguyên nhân của dự đoán.
+- Saliency và các cung cú pháp là hai nguồn đối chiếu khác nhau; hãy phân biệt chúng với trọng số attention.
+- Dùng **Attention Head Overview**, **Layer** và **Head** để đi từ tổng quan đến một đầu cụ thể.
+- **Attention >** và các menu bố cục chỉ thay đổi phần hiển thị; giữ nguyên các yếu tố khác khi so sánh.
+- Bản nhúng dùng dữ liệu BERT/SST-2 tính sẵn; kết luận nên được kiểm tra trên nhiều câu và bằng thí nghiệm bổ sung.
+
+</Callout>
+
+## Nguồn tham khảo
+
+- [Bài báo Dodrio, ACL-IJCNLP 2021](https://aclanthology.org/2021.acl-demo.16/).
+- [Mã nguồn Dodrio và giấy phép MIT](https://github.com/poloclub/dodrio).
+- [Demo chính thức của nhóm tác giả](https://poloclub.github.io/dodrio/).
+- [Attention Is All You Need](https://arxiv.org/abs/1706.03762).
+- [Attention is not Explanation](https://aclanthology.org/N19-1357/).

@@ -1,0 +1,205 @@
+/* Sequence labs (GDN, sparse attention, Qwen). Same chrome as the radiance labs, built on the blog tokens so light/dark
+   swap in one place. Roles: --seq-1 positive / GDN, --seq-2 negative / QSA / selected, --seq-3 third series. Values
+   are always printed or listed in a table, so colour is never the only carrier of meaning. */
+.tool-workspace:has(.seq-lab) {
+  --seq-1: #2a78d6; --seq-2: #eb6834; --seq-3: #1baf7a; --seq-ink-on: #ffffff;
+  width: calc(100% - 32px); max-width: 1800px; margin-inline: auto; border: 1px solid var(--color-border); border-radius: var(--radius-2xl);
+  background: var(--color-surface); overflow: hidden; box-shadow: var(--shadow-md); color: var(--color-text);
+}
+@media (prefers-color-scheme: dark) { :root:where(:not([data-theme='light'])) .tool-workspace:has(.seq-lab) { --seq-1: #3987e5; --seq-2: #d95926; --seq-3: #199e70; } }
+:root[data-theme='dark'] .tool-workspace:has(.seq-lab) { --seq-1: #3987e5; --seq-2: #d95926; --seq-3: #199e70; }
+
+.tool-workspace:has(.seq-lab) .tool-heading { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--color-border); }
+.tool-workspace:has(.seq-lab) .tool-heading h2 { font-size: var(--text-lg); line-height: var(--leading-tight); margin: 0; scroll-margin-top: 100px; }
+.tool-workspace:has(.seq-lab) .tool-heading a { font-size: var(--text-sm); }
+
+.seq-lab { padding: var(--space-6) max(var(--space-6), (100% - 1440px) / 2); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); font-size: var(--text-sm); line-height: var(--leading-normal); min-width: 0; }
+.seq-lab [hidden] { display: none !important; }
+.seq-lab h3 { font-size: var(--text-base); line-height: var(--leading-tight); margin: 0; }
+.seq-lab h4 { font-size: var(--text-sm); margin: 0; font-weight: 600; }
+.seq-lab :is(button, select, input, summary, [tabindex]):focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+
+/* Step bar */
+.seq-lab .steps { list-style: none; margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-1); background: var(--color-surface-2); border-radius: var(--radius-lg); padding: var(--space-1); }
+.seq-lab .steps button { width: 100%; min-height: 44px; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-2); font: 500 var(--text-sm)/1.3 var(--font-sans); text-align: left; cursor: pointer; transition: background-color .15s, color .15s; }
+.seq-lab .steps button span { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid currentColor; font: 600 var(--text-xs)/1 var(--font-mono); }
+.seq-lab .steps button:hover { color: var(--color-text); }
+.seq-lab .steps button[aria-pressed='true'] { background: var(--color-surface); color: var(--color-primary-soft-text); box-shadow: var(--shadow-sm); }
+.seq-lab .steps button[aria-pressed='true'] span { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-primary-contrast); }
+
+/* Token strip + player */
+.seq-lab .strip { display: grid; gap: var(--space-3); }
+.seq-lab .tokens { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.seq-lab .token { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 34px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text-2); font: 500 var(--text-sm)/1.2 var(--font-sans); cursor: pointer; }
+.seq-lab .token small { color: var(--color-muted); font: 500 var(--text-xs) var(--font-mono); }
+.seq-lab .token.past { color: var(--color-text); }
+.seq-lab .token.future { opacity: .5; }
+.seq-lab .token[aria-current='true'] { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-primary-soft-text); font-weight: 600; }
+.seq-lab .player { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.seq-lab .player button, .seq-lab .actions button { min-height: 36px; min-width: 40px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: inherit; font: 500 var(--text-sm) var(--font-sans); cursor: pointer; }
+.seq-lab .player button:hover, .seq-lab .actions button:hover { background: var(--color-surface-2); }
+.seq-lab .player [data-play] { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-primary-contrast); min-width: 84px; }
+.seq-lab .player output { font: 600 var(--text-sm) var(--font-mono); font-variant-numeric: tabular-nums; color: var(--color-text-2); margin-left: var(--space-2); }
+
+/* Stage */
+.seq-lab .stage { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--space-4); align-items: start; }
+.seq-lab .viewport { min-width: 0; border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-4); background: var(--color-surface); display: grid; gap: var(--space-4); }
+.seq-lab .duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--space-4); align-items: start; }
+.seq-lab .note { margin: 0; color: var(--color-text-2); }
+.seq-lab .muted { color: var(--color-muted); }
+
+.seq-lab .panel { display: grid; gap: var(--space-4); padding: var(--space-4); border: 1px solid var(--color-border); border-radius: var(--radius-lg); min-width: 0; }
+.seq-lab .kicker { margin: 0 0 var(--space-1); font: 600 var(--text-xs)/1.4 var(--font-mono); color: var(--color-primary-soft-text); letter-spacing: .02em; }
+.seq-lab .step-card p { margin: var(--space-2) 0 0; color: var(--color-text-2); }
+.seq-lab .step-card .formula { font: 500 var(--text-sm)/1.6 var(--font-mono); color: var(--color-text); background: var(--color-surface-2); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); overflow-wrap: anywhere; white-space: pre-line; }
+.seq-lab .field { display: grid; gap: var(--space-2); font-weight: 500; }
+.seq-lab .field-row { display: flex; justify-content: space-between; gap: var(--space-2); }
+.seq-lab .field output { font: 600 var(--text-sm) var(--font-mono); color: var(--color-primary-soft-text); font-variant-numeric: tabular-nums; }
+.seq-lab .field small { color: var(--color-muted); font-weight: 400; }
+.seq-lab .field select { min-height: 40px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: inherit; font: inherit; }
+.seq-lab input[type='range'] { width: 100%; min-height: 28px; accent-color: var(--color-primary); }
+.seq-lab .toggle { display: flex; align-items: flex-start; gap: var(--space-2); min-height: 32px; cursor: pointer; font-weight: 500; }
+.seq-lab .toggle input { flex: none; width: 18px; height: 18px; margin-top: 1px; accent-color: var(--color-primary); }
+.seq-lab .segmented { border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.seq-lab .segmented legend { font-weight: 500; margin-bottom: var(--space-2); }
+.seq-lab .segmented label { position: relative; }
+.seq-lab .segmented input { position: absolute; opacity: 0; }
+.seq-lab .segmented span { display: inline-flex; align-items: center; min-height: 34px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); cursor: pointer; }
+.seq-lab .segmented input:checked + span { background: var(--color-primary-soft); border-color: var(--color-primary); color: var(--color-primary-soft-text); font-weight: 600; }
+.seq-lab .segmented input:focus-visible + span { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.seq-lab .actions { display: flex; gap: var(--space-2); }
+.seq-lab .actions button { flex: 1; }
+.seq-lab .hint { margin: 0; color: var(--color-muted); font-size: var(--text-xs); line-height: 1.5; }
+
+/* Heat tables: matrices and vectors share columns so a vector lines up under the matrix it was read from. */
+.seq-lab .heat { border-collapse: separate; border-spacing: 2px; font: 500 11px/1 var(--font-mono); font-variant-numeric: tabular-nums; width: 100%; table-layout: fixed; }
+.seq-lab .heat caption { caption-side: top; text-align: left; font: 600 var(--text-sm)/1.4 var(--font-sans); color: var(--color-text); padding-bottom: var(--space-2); }
+.seq-lab .heat caption small { display: block; font-weight: 400; color: var(--color-text-2); }
+.seq-lab .heat th { font: 500 11px/1.2 var(--font-sans); color: var(--color-text-2); padding: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seq-lab .heat thead th { text-align: center; height: 26px; vertical-align: bottom; }
+.seq-lab .heat tbody th { text-align: right; padding-right: var(--space-2); width: 78px; }
+.seq-lab .heat td { height: 30px; text-align: center; border-radius: 4px; background: var(--color-surface-2); color: var(--color-text-2); --w: 0%; }
+.seq-lab .heat td.pos { background: color-mix(in oklab, var(--seq-1) var(--w), var(--color-surface-2)); }
+.seq-lab .heat td.neg { background: color-mix(in oklab, var(--seq-2) var(--w), var(--color-surface-2)); }
+.seq-lab .heat td.strong { color: var(--seq-ink-on); }
+.seq-lab .heat td.changed { box-shadow: inset 0 0 0 2px var(--color-text); }
+.seq-lab .heat tr.focus th { color: var(--color-primary-soft-text); font-weight: 700; }
+.seq-lab .heat tr.focus th::before { content: '▸ '; }
+.seq-lab .heat tr.gap td, .seq-lab .heat tr.gap th { height: 6px; background: none; }
+
+/* Bars */
+.seq-lab .bars { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.seq-lab .bars li { display: grid; grid-template-columns: minmax(64px, 30%) minmax(0, 1fr) 52px; gap: var(--space-2); align-items: center; }
+.seq-lab .bars .label { color: var(--color-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seq-lab .bars .track { height: 14px; border-radius: 3px; background: var(--color-surface-2); position: relative; overflow: hidden; }
+.seq-lab .bars .fill { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--seq-1); }
+.seq-lab .bars .fill.tone-2 { background: var(--seq-2); }
+.seq-lab .bars .fill.tone-3 { background: var(--seq-3); }
+.seq-lab .bars .fill.tone-0 { background: var(--color-muted); opacity: .45; }
+.seq-lab .bars .value { font: 600 var(--text-xs) var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.seq-lab .bars li.on .label { color: var(--color-text); font-weight: 600; }
+
+.seq-lab .answer { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: 0; }
+.seq-lab .answer div { padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--color-surface-2); min-width: 0; }
+.seq-lab .answer dt { color: var(--color-text-2); font-size: var(--text-xs); }
+.seq-lab .answer dd { margin: 2px 0 0; font: 600 var(--text-base) var(--font-sans); }
+.seq-lab .badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font: 600 10px/1.5 var(--font-sans); letter-spacing: .02em; background: var(--color-surface-2); color: var(--color-text-2); }
+.seq-lab .badge.ok { background: color-mix(in oklab, var(--seq-3) 22%, transparent); color: var(--color-text); }
+.seq-lab .badge.bad { background: color-mix(in oklab, var(--seq-2) 22%, transparent); color: var(--color-text); }
+
+/* Chart */
+.seq-lab .inspector { border-top: 1px solid var(--color-border); padding-top: var(--space-5); display: grid; gap: var(--space-3); min-width: 0; }
+.seq-lab .section-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.seq-lab .section-head p { margin: 0; color: var(--color-text-2); }
+.seq-lab .chart { position: relative; }
+.seq-lab .chart svg { display: block; width: 100%; height: auto; overflow: visible; font-family: var(--font-sans); }
+.seq-lab .chart .grid { stroke: var(--color-border); stroke-width: 1; }
+.seq-lab .chart .tick { fill: var(--color-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.seq-lab .chart .direct-label { fill: var(--color-text-2); font-size: 13px; }
+.seq-lab .chart .series { fill: none; stroke-width: 2.25; stroke-linejoin: round; }
+.seq-lab .chart .dot { stroke: var(--color-surface); stroke-width: 1.5; }
+.seq-lab .chart .tone-1 { stroke: var(--seq-1); } .seq-lab .chart .dot.tone-1 { fill: var(--seq-1); }
+.seq-lab .chart .tone-2 { stroke: var(--seq-2); } .seq-lab .chart .dot.tone-2 { fill: var(--seq-2); }
+.seq-lab .chart .tone-3 { stroke: var(--seq-3); stroke-dasharray: 5 3; } .seq-lab .chart .dot.tone-3 { fill: var(--seq-3); }
+.seq-lab .chart .key { stroke-width: 2.5; stroke-linecap: round; }
+.seq-lab .chart .cursor { stroke: var(--color-text); stroke-width: 1; stroke-dasharray: 3 3; opacity: .7; }
+.seq-lab .chart .hit { fill: transparent; cursor: pointer; }
+.seq-lab .caption { margin: 0; color: var(--color-text-2); max-width: 80ch; }
+.seq-lab .table-view summary { cursor: pointer; color: var(--color-link); min-height: 32px; display: flex; align-items: center; }
+.seq-lab .table-scroll { max-height: 280px; max-width: 100%; overflow: auto; border: 1px solid var(--color-border); border-radius: var(--radius-md); margin-top: var(--space-2); }
+.seq-lab .data { width: 100%; border-collapse: collapse; font: var(--text-xs)/1.5 var(--font-mono); font-variant-numeric: tabular-nums; }
+.seq-lab .data th, .seq-lab .data td { padding: var(--space-1) var(--space-3); text-align: right; border-bottom: 1px solid var(--color-border); }
+.seq-lab .data th { position: sticky; top: 0; background: var(--color-surface-2); font-family: var(--font-sans); font-weight: 600; }
+
+.seq-lab .lab-footer { border-top: 1px solid var(--color-border); padding-top: var(--space-4); }
+.seq-lab .scope { margin: 0; color: var(--color-text-2); max-width: 90ch; }
+
+@media (prefers-reduced-motion: reduce) { .seq-lab * { transition: none !important; } }
+@media (max-width: 1020px) {
+  .seq-lab .stage { grid-template-columns: 1fr; }
+  .seq-lab .panel { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+}
+@media (max-width: 640px) {
+  .tool-workspace:has(.seq-lab) { width: 100%; border-radius: 0; border-inline: 0; }
+  .tool-workspace:has(.seq-lab) .tool-heading { padding: var(--space-3) var(--space-4); }
+  .seq-lab { padding: var(--space-4); gap: var(--space-4); }
+  .seq-lab .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .seq-lab .viewport { padding: var(--space-3); }
+  .seq-lab .panel { grid-template-columns: 1fr; }
+  .seq-lab .heat { border-spacing: 1px; font-size: 9px; }
+  .seq-lab .heat tbody th { width: 58px; }
+  .seq-lab .heat thead th { font-size: 9px; }
+  .seq-lab .chart .direct-label { font-size: 12px; }
+}
+
+/* Attention matrices (SVG). Cell shade is --w of the selected/positive role; masked keys keep only an outline. */
+.seq-lab .attn-figure { margin: 0; display: grid; gap: var(--space-2); }
+.seq-lab .attn { display: block; width: 100%; max-width: 640px; height: auto; font-family: var(--font-sans); }
+.seq-lab .attn .lbl { font-size: 9px; fill: var(--color-muted); }
+.seq-lab .attn .lbl.on { fill: var(--color-primary-soft-text); font-weight: 700; }
+.seq-lab .attn .lbl.col.alt { fill: var(--color-text-2); }
+.seq-lab .attn .cell { fill: color-mix(in oklab, var(--seq-1) var(--w, 0%), var(--color-surface-2)); }
+.seq-lab .attn .cell.picked { fill: color-mix(in oklab, var(--seq-2) calc(var(--w, 0%) + 15%), var(--color-surface-2)); }
+.seq-lab .attn .cell.masked { fill: none; stroke: var(--color-border); stroke-width: 1; }
+.seq-lab .attn .cell.tail { fill: var(--color-surface-2); stroke: var(--seq-3); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.seq-lab .attn .block-line { stroke: var(--color-border); stroke-width: 1; }
+.seq-lab .attn .row-hit { fill: transparent; cursor: pointer; }
+.seq-lab .attn .row:hover .cell:not(.masked) { stroke: var(--color-text-2); stroke-width: .75; }
+.seq-lab .attn .row-focus { fill: none; stroke: var(--color-text); stroke-width: 1.5; rx: 3; pointer-events: none; }
+.seq-lab .chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.seq-lab .chips button { min-height: 32px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: inherit; font: 500 var(--text-xs) var(--font-sans); cursor: pointer; }
+.seq-lab .chips button:hover { background: var(--color-surface-2); }
+
+/* Qwen: layer map, per-layer flow, expert grid, gate controls */
+.seq-lab .legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); color: var(--color-text-2); font-size: var(--text-xs); }
+.seq-lab .swatch { display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 3px; margin-right: -4px; font: 700 9px/1 var(--font-mono); color: var(--seq-ink-on); }
+.seq-lab .swatch.gdn { background: var(--seq-1); } .seq-lab .swatch.qsa { background: var(--seq-2); } .seq-lab .swatch.ngram { background: var(--seq-3); }
+.seq-lab .layer-map { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--space-1); }
+.seq-lab .layer-group { display: grid; gap: 3px; padding: 4px; border-radius: var(--radius-md); background: var(--color-surface-2); }
+.seq-lab .group-label { font: 500 10px/1.2 var(--font-sans); color: var(--color-muted); text-align: center; white-space: nowrap; }
+.seq-lab .layer { position: relative; display: grid; gap: 1px; min-height: 40px; padding: 4px 2px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; font: 500 10px/1.15 var(--font-sans); text-align: center; color: var(--color-text); background: color-mix(in oklab, var(--seq-1) 18%, var(--color-surface)); }
+.seq-lab .layer b { font: 600 11px/1.1 var(--font-mono); }
+.seq-lab .layer span { color: var(--color-text-2); }
+.seq-lab .layer.qsa { background: color-mix(in oklab, var(--seq-2) 24%, var(--color-surface)); }
+.seq-lab .layer:hover { border-color: var(--color-text-2); }
+.seq-lab .layer[aria-pressed='true'] { border-color: var(--color-text); box-shadow: 0 0 0 1px var(--color-text); }
+.seq-lab .layer .ngram { position: absolute; top: -5px; right: -4px; display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; background: var(--seq-3); color: var(--seq-ink-on); font: 700 9px/1 var(--font-mono); font-style: normal; }
+.seq-lab .layer-detail { display: grid; gap: var(--space-3); padding-top: var(--space-2); border-top: 1px solid var(--color-border); }
+.seq-lab .flow { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--space-2); }
+.seq-lab .flow li { position: relative; display: grid; align-content: center; gap: 2px; min-width: 92px; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--color-surface-2); border-left: 3px solid var(--color-border); }
+.seq-lab .flow li:not(:last-child)::after { content: '→'; position: absolute; right: calc(-1 * var(--space-2) - 2px); top: 50%; transform: translate(50%, -50%); color: var(--color-muted); font-size: 12px; }
+.seq-lab .flow b { font-size: var(--text-xs); }
+.seq-lab .flow small { color: var(--color-text-2); font-size: 11px; line-height: 1.35; }
+.seq-lab .flow .gdn { border-left-color: var(--seq-1); } .seq-lab .flow .qsa { border-left-color: var(--seq-2); } .seq-lab .flow .ngram { border-left-color: var(--seq-3); }
+.seq-lab .flow .moe { border-left-color: var(--color-text-2); } .seq-lab .flow .gr { background: transparent; border: 1px dashed var(--color-border); min-width: 0; }
+.seq-lab .experts { display: block; width: 100%; max-width: 620px; height: auto; }
+.seq-lab .experts .expert { fill: var(--color-surface-2); stroke: var(--color-border); stroke-width: .75; }
+.seq-lab .experts .expert.on { fill: color-mix(in oklab, var(--seq-2) var(--w), var(--color-surface-2)); stroke: var(--seq-2); }
+.seq-lab .experts .expert.shared { fill: var(--seq-3); stroke: none; }
+.seq-lab .experts .grid-label { fill: var(--color-text-2); font: 12px var(--font-sans); }
+.seq-lab .answer.stack { flex-direction: column; align-content: start; }
+.seq-lab .gate-set { border: 0; margin: 0; padding: 0; }
+.seq-lab .gate-set legend { padding: 0; margin-bottom: var(--space-2); }
+.seq-lab .gate-set .field-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) 40px; align-items: center; gap: var(--space-2); font-weight: 500; }
+.seq-lab .gate-set output { text-align: right; }
+@media (max-width: 760px) { .seq-lab .layer-map { grid-template-columns: repeat(6, minmax(0, 1fr)); } .seq-lab .flow li::after { display: none; } }

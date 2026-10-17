@@ -1,0 +1,158 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostCard from '../components/PostCard.astro';
+import TagChip from '../components/TagChip.astro';
+import Icon from '../components/Icon.astro';
+import { CATEGORY_LIST, SITE } from '../lib/site';
+import { sortPosts } from '../lib/posts';
+import { collectTags } from '../lib/tags';
+import { categoryTopics } from '../lib/topics';
+
+const posts = sortPosts(await getCollection('posts'));
+const tags = collectTags(posts);
+const vizCount = new Set(posts.map((post) => post.data.viz).filter(Boolean)).size;
+const sections = CATEGORY_LIST.map((category) => ({
+  category,
+  posts: posts.filter((post) => post.data.category === category.slug),
+  topics: categoryTopics(category.slug).map(topic => ({
+    ...topic,
+    posts: posts.filter(post => post.data.category === category.slug && post.data.topic === topic.slug),
+  })).filter(topic => topic.posts.length > 0),
+}));
+const stats = [
+  { value: vizCount, label: 'trực quan hóa' },
+  { value: CATEGORY_LIST.length, label: 'chuyên mục' },
+  { value: tags.length, label: 'chủ đề' },
+  { value: '100%', label: 'tương tác trực tiếp' },
+];
+---
+
+<BaseLayout>
+  <section class="hero home-hero">
+    <div class="container home-hero__inner">
+      <p class="home-hero__eyebrow">{SITE.tagline}</p>
+      <h1>Học AI bằng cách <span class="text-gradient">nhìn thấy</span> nó hoạt động</h1>
+      <p class="home-hero__lead">{SITE.description}</p>
+      <div class="home-hero__actions">
+        {CATEGORY_LIST.map((category, index) => (
+          <a class:list={['btn', index === 0 ? 'btn--light' : 'btn--outline-light']} href={category.href}>
+            {index === 0 ? 'Bắt đầu với Kiến thức' : 'Khám phá Dự án'}
+            <Icon name="chevron-right" size={18} />
+          </a>
+        ))}
+      </div>
+      <dl class="home-stats">
+        {stats.map((stat) => (
+          <div class="home-stats__item">
+            <dt>{stat.label}</dt>
+            <dd>{stat.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  </section>
+
+  {sections.map(({ category, posts: categoryPosts, topics }, sectionIndex) => (
+    <section class="container section" aria-labelledby={`section-${category.slug}`}>
+      <div class="section-head">
+        <div>
+          <h2 class="section-title" id={`section-${category.slug}`}>{category.label}</h2>
+          <p class="section-desc">{category.description}</p>
+        </div>
+        <a class="btn btn--ghost" href={category.href}>Xem tất cả <Icon name="chevron-right" size={16} /></a>
+      </div>
+      {categoryPosts.length > 0 ? (
+        topics.map((topic, topicIndex) => <div class="home-article-group">
+          <div class="home-group-heading"><h3>{topic.label}</h3><a href={`${category.href}#${topic.slug}`}>Xem chuyên mục <Icon name="chevron-right" size={14} /></a></div>
+          <div class="grid">
+            {topic.posts.map((post, index) => <PostCard post={post} headingLevel={4} eager={sectionIndex === 0 && topicIndex === 0 && index < 2} />)}
+          </div>
+        </div>)
+      ) : (
+        <p class="muted">Bài viết đang được chuẩn bị.</p>
+      )}
+    </section>
+  ))}
+
+  <section class="container section home-topics" aria-labelledby="topics-title">
+    <div class="section-head">
+      <div>
+        <h2 class="section-title" id="topics-title">Chủ đề</h2>
+        <p class="section-desc">Chọn một chủ đề để xem các bài viết liên quan.</p>
+      </div>
+      <a class="btn btn--ghost" href="/chu-de/">Tất cả chủ đề <Icon name="chevron-right" size={16} /></a>
+    </div>
+    <div class="chips">{tags.map((tag) => <TagChip tag={tag.name} count={tag.count} />)}</div>
+  </section>
+</BaseLayout>
+
+<style>
+  .home-article-group + .home-article-group { margin-top: 2.5rem; }
+  .home-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; padding-bottom: .75rem; border-bottom: 1px solid var(--color-border); }
+  .home-group-heading h3 { font-size: 1.15rem; }
+  .home-group-heading a { display: inline-flex; align-items: center; font-size: .8rem; gap: .3rem; }
+  .home-article-group .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 980px) { .home-article-group .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 640px) { .home-article-group .grid { grid-template-columns: 1fr; } }
+  .home-hero__inner {
+    padding-block: clamp(3rem, 8vw, 6rem);
+  }
+  .home-hero__eyebrow {
+    color: var(--brand-100);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin-bottom: var(--space-3);
+  }
+  .home-hero h1 {
+    max-width: 18ch;
+    font-size: clamp(2.25rem, 6vw, 3.75rem);
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+  .home-hero__lead {
+    max-width: 60ch;
+    margin-top: var(--space-5);
+    font-size: var(--text-lg);
+    color: rgb(255 255 255 / 0.85);
+  }
+  .home-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-top: var(--space-8);
+  }
+  .home-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-4);
+    max-width: 760px;
+    margin: var(--space-10) 0 0;
+  }
+  .home-stats__item {
+    display: flex;
+    flex-direction: column-reverse;
+    padding: var(--space-4);
+    border: 1px solid rgb(255 255 255 / 0.18);
+    border-radius: var(--radius-xl);
+    background: rgb(255 255 255 / 0.08);
+  }
+  .home-stats dd {
+    margin: 0;
+    font-size: var(--text-3xl);
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .home-stats dt {
+    color: rgb(255 255 255 / 0.78);
+    font-size: var(--text-sm);
+  }
+  .home-topics {
+    padding-top: 0;
+  }
+  @media (min-width: 640px) {
+    .home-stats {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+</style>

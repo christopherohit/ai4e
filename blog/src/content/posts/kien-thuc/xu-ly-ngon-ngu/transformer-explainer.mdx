@@ -1,0 +1,171 @@
+---
+title: 'Transformer Explainer: Theo dấu cách GPT-2 dự đoán token tiếp theo'
+description: 'Khám phá token, attention và cách lấy mẫu của GPT-2 bằng Transformer Explainer: đi từ câu đầu vào đến xác suất của token tiếp theo.'
+category: kien-thuc
+topic: xu-ly-ngon-ngu
+order: 2
+tags: ['Transformer', 'Học sâu', 'Xử lý ngôn ngữ tự nhiên', 'Mô hình sinh', 'Trực quan hóa']
+viz: transformer-explainer
+vizHeight: 900
+cover: ../../../../assets/covers/transformer-explainer.webp
+date: 2026-10-03
+---
+
+import Callout from '../../../../components/Callout.astro';
+import KeyTerm from '../../../../components/KeyTerm.astro';
+
+## Mở đầu: Máy viết tiếp một câu như thế nào?
+
+Với câu `Data visualization empowers users to`, bạn có thể nghĩ đến nhiều cách viết tiếp. Transformer Explainer cho phép quan sát cách GPT-2 xử lý các <KeyTerm vi="đơn vị văn bản" en="token" /> để dự đoán phần tiếp theo. Mục tiêu không phải tìm một đáp án duy nhất, mà hiểu đường đi từ văn bản đến phân phối xác suất và quyết định chọn token.
+
+Hãy đọc sơ đồ từ trái sang phải: **Embedding**, **Multi-head Self Attention**, **MLP**, rồi **Probabilities**. Mỗi vùng giải quyết một phần của bài toán: biểu diễn văn bản, kết hợp ngữ cảnh, biến đổi thông tin và chọn phần viết tiếp. GPT-2 trong công cụ đã được huấn luyện; bạn đang quan sát quá trình suy luận, không huấn luyện mô hình mới.
+
+<Callout type="note">
+
+Trên máy tính, ứng dụng tải mô hình về trình duyệt; giao diện thông báo dung lượng khoảng 600 MB. Trong lúc chờ, **Examples** dùng dữ liệu tính sẵn. Trên thiết bị được nhận diện là di động, ứng dụng không tải mô hình và khuyên dùng ví dụ. Muốn nhập câu riêng, hãy dùng máy tính và chờ **Generate** khả dụng.
+
+</Callout>
+
+## Khái niệm cốt lõi
+
+Token không nhất thiết là một từ hoàn chỉnh. Dữ liệu của ví dụ mặc định chứa sáu token: `Data`, ` visualization`, ` em`, `powers`, ` users`, ` to`. Khoảng trắng đầu token cũng thuộc văn bản được giải mã; `empowers` được chia thành hai phần. Vì vậy, số từ và số token không đồng nhất.
+
+### Từ token đến biểu diễn số
+
+<KeyTerm vi="Biểu diễn nhúng" en="embedding" /> biến mỗi mã token thành một véc-tơ đã được học. GPT-2 nhỏ trong công cụ có từ vựng gồm 50.257 token và véc-tơ nhúng 768 chiều. Những hình chữ nhật ở cột **Embedding** minh họa cấu trúc véc-tơ, không phải các ô chứa nghĩa của từ theo một bảng từ điển. Một tọa độ riêng lẻ không nhất thiết mang nghĩa dễ gọi tên.
+
+GPT-2 còn thêm <KeyTerm vi="Biểu diễn vị trí" en="positional embedding" /> để phân biệt thứ tự. Cùng token nhưng ở vị trí khác sẽ đi vào mạng với biểu diễn khác. Với token thứ $i$, ta có thể viết:
+
+$$
+x_i = E[t_i] + P[i]
+$$
+
+$E[t_i]$ là véc-tơ của token, còn $P[i]$ là véc-tơ vị trí. Trong GPT-2, các véc-tơ vị trí này được học; đừng mặc định chúng là công thức sin và cos của kiến trúc Transformer gốc.
+
+### Attention: mỗi vị trí lấy thông tin từ đâu?
+
+<KeyTerm vi="Cơ chế tự chú ý" en="self-attention" /> cho phép một vị trí kết hợp thông tin từ các vị trí trong chính chuỗi đầu vào. Mỗi biểu diễn được chiếu qua ba bộ trọng số để tạo **Query**, **Key**, **Value**, ký hiệu $Q$, $K$, $V$. Có thể hình dung Query là điều vị trí đang tìm, Key là tín hiệu để so khớp, còn Value là thông tin được chuyển đi. Đây là phép ví von, không phải ba câu hỏi bằng ngôn ngữ nằm bên trong mô hình.
+
+$$
+Q = HW_Q + b_Q,\qquad K = HW_K + b_K,\qquad V = HW_V + b_V
+$$
+
+Ở đây, $H = \operatorname{LN}(X)$ là đầu vào đã qua <KeyTerm vi="chuẩn hóa lớp" en="layer normalization" />; $W$ và $b$ là trọng số và độ lệch được học. GPT-2 dùng chuẩn hóa trước nhánh attention, không chiếu trực tiếp biểu diễn chưa chuẩn hóa. Độ tương hợp giữa Query và Key được chuẩn hóa thành trọng số, rồi dùng để cộng có trọng số các Value:
+
+$$
+\operatorname{Attention}(Q,K,V)
+= \operatorname{softmax}\left(\frac{QK^\top}{\sqrt{d_k}} + M\right)V
+$$
+
+$d_k$ là số chiều của Key trong một đầu, bằng $768/12=64$ ở đây. Hàm softmax được áp dụng theo từng hàng. <KeyTerm vi="Mặt nạ nhân quả" en="causal mask" /> $M$ có giá trị $0$ tại các vị trí được phép đọc và $-\infty$ tại các vị trí tương lai. Sau softmax, những vị trí bị chặn có trọng số bằng $0$. Token hiện tại đọc được chính nó và các token trước nó, không đọc được token phía sau.
+
+<KeyTerm vi="Tự chú ý nhiều đầu" en="multi-head self-attention" /> chạy nhiều phép chú ý với các phép chiếu khác nhau. Mỗi đầu có thể tạo một mẫu kết nối khác; mô hình nối đầu ra của các đầu rồi chiếu về 768 chiều bằng một phép biến đổi có độ lệch. GPT-2 nhỏ trong công cụ có 12 đầu ở mỗi khối. Chuyển đầu chỉ đổi phần bạn đang quan sát, không tắt những đầu còn lại.
+
+### MLP, kết nối tắt và nhiều khối liên tiếp
+
+<KeyTerm vi="Mạng perceptron nhiều lớp" en="multilayer perceptron" /> xuất hiện dưới nhãn **MLP**. Nếu attention trộn thông tin giữa các vị trí, MLP biến đổi biểu diễn tại từng vị trí bằng cùng một mạng truyền thẳng. Sau attention, biểu diễn của token đã chứa ngữ cảnh; vì vậy xử lý từng vị trí không đồng nghĩa bỏ qua ngữ cảnh.
+
+MLP gồm hai phép biến đổi tuyến tính có độ lệch, với hàm kích hoạt GELU ở giữa. Số chiều tăng từ 768 lên 3.072 rồi trở về 768. Nhánh này có thể viết:
+
+$$
+\operatorname{MLP}(h) = \operatorname{GELU}(hW_1+b_1)W_2+b_2
+$$
+
+Các đường **Residual** minh họa <KeyTerm vi="Kết nối tắt" en="residual connection" />: cộng đầu ra của một nhánh biến đổi vào biểu diễn đầu vào của nhánh đó. Một khối GPT-2 khi suy luận được tóm tắt như sau, với $\operatorname{MHA}$ bao gồm cả phép chiếu đầu ra của attention:
+
+$$
+U = X + \operatorname{MHA}(\operatorname{LN}_1(X)),\qquad
+Y = U + \operatorname{MLP}(\operatorname{LN}_2(U))
+$$
+
+Hai phép chuẩn hóa lớp nằm trước hai nhánh biến đổi, không thay thế các phép cộng tắt. Công cụ xếp 12 khối Transformer; khối sau nhận biểu diễn đã được khối trước biến đổi. Các khối có cùng cấu trúc, nhưng không dùng chung toàn bộ trọng số.
+
+### Từ điểm số đến token được chọn
+
+Sau khối cuối và một bước chuẩn hóa lớp cuối cùng, biểu diễn ở vị trí cuối được ánh xạ thành <KeyTerm vi="điểm số chưa chuẩn hóa" en="logit" /> cho các token trong từ vựng. Hàm softmax chuyển các điểm $z_j$ thành xác suất. Với <KeyTerm vi="nhiệt độ lấy mẫu" en="temperature" /> $T$ dương, phân phối trên toàn bộ từ vựng có dạng:
+
+$$
+p_j = \frac{\exp(z_j/T)}{\sum_r \exp(z_r/T)}
+$$
+
+Giảm $T$ khiến phân phối tập trung hơn vào token điểm cao; tăng $T$ làm nó phẳng hơn. Việc chia cùng một số dương không đổi thứ hạng logit. Temperature không bổ sung kiến thức hay sửa một phát biểu sai, mà thay đổi mức độ ngẫu nhiên khi chọn token.
+
+<KeyTerm vi="Lấy mẫu" en="sampling" /> quyết định chọn token từ phân phối ấy. Về nguyên tắc, **Top-k** giữ $k$ ứng viên đứng đầu; **Top-p** giữ nhóm nhỏ nhất gồm các ứng viên đứng đầu có xác suất tích lũy đạt hoặc vượt ngưỡng $p$. Xác suất được chuẩn hóa lại trong nhóm được giữ. Token được chọn không nhất thiết đứng đầu, trừ trường hợp chỉ giữ một ứng viên.
+
+Tuy nhiên, cách triển khai trong công cụ có một giới hạn quan trọng: cả hai chế độ chỉ xét 50 logit cao nhất. **Top-k** lọc trước rồi tính softmax; **Top-p** tính softmax trên 50 ứng viên ấy, tìm điểm cắt theo tổng tích lũy rồi chuẩn hóa lại. Vì vậy, ngưỡng $p$ ở đây không được tính trên toàn bộ 50.257 token. Các phần trăm hiển thị là xác suất sau lọc, không phải xác suất nguyên gốc trên toàn bộ từ vựng.
+
+## Khám phá Transformer Explainer từng bước
+
+### Bước 1: Nhìn rõ token và vị trí
+
+Hãy bắt đầu bằng câu có sẵn thay vì nhập một đoạn dài. Bạn sẽ dễ theo dõi từng hàng và xác định đâu là token cuối, nơi mô hình lấy biểu diễn để dự đoán phần tiếp theo. Một từ bị chia nhỏ không phải lỗi hiển thị: đó là cách bộ tách token đã mã hóa văn bản.
+
+<Callout type="try">
+
+Mở **Examples**, chọn `Data visualization empowers users to`, rồi nhấp tiêu đề **Embedding**. Quan sát các cột **Token Embedding** và **Positional Encoding**: token ` em` và `powers` có mã riêng, còn mỗi hàng có vị trí riêng. Nhấp lại **Embedding** để thu gọn trước bước tiếp theo.
+
+</Callout>
+
+### Bước 2: So sánh các đầu attention
+
+Đợi hoạt ảnh kết thúc rồi xem nhãn **Head 1 of 12** trong vùng **Multi-head Self Attention**. Hai nút mũi tên bên cạnh đổi đầu đang hiển thị. Chúng không chạy một mô hình khác: đầu vào và toàn bộ các đầu vẫn cùng tham gia phép tính. Điều thay đổi là lát cắt bạn đang xem.
+
+<Callout type="try">
+
+Dùng mũi tên phải cạnh **Head 1 of 12** để chuyển sang **Head 2 of 12**. So sánh các ô sáng tối trong ma trận attention, rồi nhấp ma trận để mở chi tiết. Quan sát phần bị mặt nạ chặn và phần trọng số sau softmax. Nhấp bên ngoài vùng chi tiết để đóng trước khi đổi đầu tiếp.
+
+</Callout>
+
+Ở ma trận sau softmax, màu biểu diễn trọng số chú ý, không phải mức độ đúng của câu. Trong mô hình, mỗi hàng ứng với một Query; các cột ứng với những Key mà vị trí ấy được phép đọc. Tổng trọng số của các vị trí được phép đọc trên một hàng bằng một. Một ô đậm cho biết đóng góp lớn hơn trong phép cộng Value của đầu đó, chưa đủ để kết luận mô hình hiểu một quan hệ ngôn ngữ cụ thể.
+
+### Bước 3: Tách ảnh hưởng của nhiệt độ khỏi cách lọc
+
+Giữ nguyên câu đầu vào khi thử tham số. Nếu đồng thời sửa câu và đổi nhiệt độ, bạn sẽ không biết thay đổi quan sát được đến từ ngữ cảnh hay từ cách lấy mẫu. Thanh **Temperature** có các mức từ 0,2 đến 10; không có mức bằng không.
+
+<Callout type="try">
+
+Trong **Sampling**, chọn **Top-k** và kéo thanh tới `k=5`. Đổi **Temperature** từ 0,8 sang 0,2 rồi sang 2. Quan sát các thanh trong **Probabilities**: nhiệt độ thấp làm xác suất tập trung hơn, nhiệt độ cao làm chúng đều hơn. Sau đó đặt `k=1`: ứng viên được giữ có xác suất 100% bất kể nhiệt độ.
+
+</Callout>
+
+Khi chỉnh các tham số này, ứng dụng tính lại xác suất và lấy mẫu từ logit đã có; không cần chạy lại các khối Transformer. Token được đề xuất có thể thay đổi ngay. Với `k=1`, con số 100% chỉ nói rằng nhóm lấy mẫu còn một phần tử, không có nghĩa mô hình chắc chắn câu tiếp theo là đúng.
+
+<Callout type="try">
+
+Giữ nguyên câu, đặt **Temperature** về 0,8, rồi chọn **Top-p** trong **Sampling**. So sánh `p=0.5` với `p=0.9`. Nhấp **Probabilities** để xem các cột **Softmax & Top-p** và **Normalization** cùng tổng tích lũy. Quan sát nhóm ứng viên được giữ; số lượng có thể tăng hoặc giữ nguyên khi tăng ngưỡng.
+
+</Callout>
+
+### Bước 4: Viết tiếp bằng câu riêng
+
+Sau khi mô hình tải xong trên máy tính, nhấp ô nhập văn bản bên cạnh **Examples** và thay câu bằng `The cat sat on the`. Thu gọn các vùng chi tiết nếu **Generate** đang bị khóa, rồi nhấp **Generate**. Mỗi lần sinh tiếp, token dự đoán trước đó được nối vào đầu vào; mô hình dùng chuỗi mới để dự đoán token kế tiếp. Đây là quá trình <KeyTerm vi="tự hồi quy" en="autoregression" />, không phải tạo toàn bộ câu trong một phép chọn.
+
+Hãy dùng câu ngắn. Giao diện thông báo giới hạn 12 từ, nhưng mã kiểm tra khóa thao tác khi số phần tách bằng dấu cách đạt 12. Để tránh ngưỡng này, bắt đầu dưới 12 phần, không thêm nhiều khoảng trắng liên tiếp. Đây là giới hạn của giao diện, không phải độ dài ngữ cảnh tối đa của GPT-2.
+
+## Góc nhìn sâu hơn
+
+Bản trực quan hóa này dùng GPT-2 để giải thích cơ chế dự đoán token. Nó không phải chatbot đã được tối ưu để làm theo chỉ dẫn, cũng không phải công cụ kiểm chứng độ đúng của câu trả lời.
+
+Một giới hạn dễ bỏ qua là không phải mọi mảng màu đều thể hiện dữ liệu thật của lần suy luận. Mã xuất mô hình cung cấp các ma trận attention và logit cuối; một số véc-tơ minh họa cùng ma trận trong cửa sổ phép chiếu dùng dữ liệu ngẫu nhiên. Vì vậy, nên dùng chúng để hiểu hình dạng và luồng phép toán, không suy diễn ý nghĩa từ một vạch màu hay một giá trị minh họa. Các ví dụ tính sẵn cũng cần được phân biệt với việc chạy mô hình trên câu riêng.
+
+Tương tự, một đầu attention chú ý mạnh tới token trước không tự chứng minh quan hệ nhân quả giữa token ấy và đáp án. Đầu ra còn phụ thuộc Value, phép chiếu đầu ra, MLP, kết nối tắt và các khối sau. Nếu muốn so sánh, hãy đổi một yếu tố mỗi lần và ghi lại câu đầu vào cùng thiết lập lấy mẫu, thay vì chỉ nhớ token cuối được chọn.
+
+## Tóm tắt
+
+<Callout type="key">
+
+- Token có thể nhỏ hơn một từ.
+- Attention có mặt nạ chỉ đọc vị trí hiện tại và các vị trí trước đó.
+- MLP dùng GELU; chuẩn hóa lớp và kết nối tắt nằm trong mỗi khối GPT-2.
+- Nhiệt độ đổi độ tập trung của phân phối; Top-k và Top-p quyết định nhóm ứng viên.
+- Công cụ chỉ xét 50 logit cao nhất khi lấy mẫu; phần trăm sau lọc không đo độ đúng của câu.
+- Một số véc-tơ và ma trận là minh họa, không phải toàn bộ trạng thái thật của mô hình.
+
+</Callout>
+
+## Nguồn tham khảo
+
+- [Bài báo Transformer Explainer, CHI 2026](https://doi.org/10.1145/3772318.3791725).
+- [Mã nguồn và giấy phép MIT](https://github.com/poloclub/transformer-explainer).
+- [Demo chính thức](https://poloclub.github.io/transformer-explainer/).
+- [nanoGPT, nền tảng mã PyTorch được dự án sử dụng](https://github.com/karpathy/nanoGPT).

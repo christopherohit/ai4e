@@ -1,0 +1,22 @@
+.backups/
+**/node_modules/
+blog/dist/
+blog/.astro/
+blog/.viz-build/
+blog/public/viz/
+blog/public/native/
+blog/test-results/
+blog/playwright-report/
+
+# Internal agent/workspace files
+.handoff/
+.claude/
+.superpowers/
+
+# Large data/model assets (kept locally, not in git)
+tools/du-an/dodrio/public/data/
+tools/kien-thuc/transformer-explainer/static/model-v2/
+tools/kien-thuc/diffusion-explainer/assets/img/
+tools/du-an/FairVis/models/data/
+tools/du-an/FairVis/models/processed/
+tools/du-an/FairVis/src/data/

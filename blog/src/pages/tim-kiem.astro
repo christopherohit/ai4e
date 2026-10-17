@@ -1,0 +1,210 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Breadcrumb from '../components/Breadcrumb.astro';
+import { CATEGORY_LIST } from '../lib/site';
+---
+
+<BaseLayout title="Tìm kiếm" description="Tìm bài viết AI4E theo chủ đề, có dấu hoặc không dấu, tiếng Việt hoặc tiếng Anh.">
+  <section class="container section search-page">
+    <Breadcrumb items={[{ label: 'Trang chủ', href: '/' }, { label: 'Tìm kiếm' }]} />
+    <header class="search-page__header">
+      <h1>Tìm kiếm</h1>
+      <p class="section-desc">Gõ có dấu hoặc không dấu, tiếng Việt hoặc tiếng Anh — ví dụ “mang no ron”, “attention”, “công bằng”.</p>
+    </header>
+
+    <form class="search-form" action="/tim-kiem/" method="get" role="search" data-search-page-form>
+      <label class="sr-only" for="search-page-input">Từ khóa tìm kiếm</label>
+      <div class="search-form__field">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        <input id="search-page-input" class="input" type="search" name="q" placeholder="Tìm chủ đề…" autocomplete="off" spellcheck="false" />
+      </div>
+      <fieldset class="chips search-form__filters">
+        <legend class="sr-only">Chuyên mục</legend>
+        <label class="chip search-filter"><input class="sr-only" type="radio" name="c" value="" checked /> Tất cả</label>
+        {CATEGORY_LIST.map((category) => (
+          <label class="chip search-filter"><input class="sr-only" type="radio" name="c" value={category.slug} /> {category.label}</label>
+        ))}
+      </fieldset>
+    </form>
+
+    <p class="muted search-status" aria-live="polite" data-search-status>Nhập từ khóa để bắt đầu.</p>
+    <ol class="search-results" data-search-page-results></ol>
+    <noscript><p class="muted">Tìm kiếm cần JavaScript. Bạn có thể duyệt theo <a href="/chu-de/">chủ đề</a>.</p></noscript>
+  </section>
+</BaseLayout>
+
+<script>
+  import { highlight, search, snippet } from '../scripts/search';
+  import { CATEGORIES, isCategorySlug } from '../lib/site';
+
+  const form = document.querySelector<HTMLFormElement>('[data-search-page-form]')!;
+  const input = form.querySelector<HTMLInputElement>('input[name="q"]')!;
+  const status = document.querySelector<HTMLElement>('[data-search-status]')!;
+  const list = document.querySelector<HTMLOListElement>('[data-search-page-results]')!;
+  let runId = 0;
+
+  function selectedCategory(): string {
+    return form.querySelector<HTMLInputElement>('input[name="c"]:checked')?.value ?? '';
+  }
+
+  function syncUrl(query: string, category: string) {
+    const url = new URL(location.href);
+    url.search = '';
+    if (query) url.searchParams.set('q', query);
+    if (category) url.searchParams.set('c', category);
+    history.replaceState(null, '', url);
+  }
+
+  async function run() {
+    const id = ++runId;
+    const query = input.value.trim();
+    const category = selectedCategory();
+    syncUrl(query, category);
+    if (!query) {
+      list.replaceChildren();
+      status.textContent = 'Nhập từ khóa để bắt đầu.';
+      return;
+    }
+    status.textContent = 'Đang tìm…';
+    try {
+      const hits = await search(query, { category: isCategorySlug(category) ? category : '' });
+      if (id !== runId) return;
+      status.textContent = hits.length ? `${hits.length} kết quả cho “${query}”` : `Không tìm thấy kết quả cho “${query}”. Thử từ khóa khác hoặc xem danh sách chủ đề.`;
+      list.innerHTML = hits
+        .map(({ doc, terms }) => {
+          const label = isCategorySlug(doc.category) ? CATEGORIES[doc.category].label : doc.category;
+          const tags = doc.tags.map((tag) => `<span class="chip chip--sm">#${highlight(tag, terms)}</span>`).join('');
+          return `<li class="card search-result">
+            <a class="search-result__link" href="${doc.url}">
+              <span class="badge">${label}</span>
+              <h2 class="search-result__title">${highlight(doc.title, terms)}</h2>
+              <p class="search-result__desc">${highlight(doc.description, terms)}</p>
+              <p class="search-result__snippet">${highlight(snippet(doc.body, terms), terms)}</p>
+              <span class="search-result__tags">${tags}</span>
+            </a>
+          </li>`;
+        })
+        .join('');
+    } catch {
+      if (id === runId) status.textContent = 'Không tải được chỉ mục tìm kiếm. Vui lòng thử lại.';
+    }
+  }
+
+  const params = new URLSearchParams(location.search);
+  input.value = params.get('q') ?? '';
+  const initialCategory = params.get('c') ?? '';
+  const radio = form.querySelector<HTMLInputElement>(`input[name="c"][value="${CSS.escape(initialCategory)}"]`);
+  if (radio) radio.checked = true;
+
+  let timer: number | undefined;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(run, 120);
+  });
+  form.addEventListener('change', run);
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    run();
+  });
+  if (!input.value) input.focus();
+  run();
+</script>
+
+<style>
+  .search-page__header {
+    margin: var(--space-6) 0 var(--space-6);
+  }
+  .search-page__header h1 {
+    font-size: clamp(2rem, 5vw, 2.75rem);
+  }
+  .search-form {
+    display: grid;
+    gap: var(--space-4);
+    max-width: 760px;
+  }
+  .search-form__field {
+    position: relative;
+  }
+  .search-form__field svg {
+    position: absolute;
+    top: 50%;
+    left: 0.9rem;
+    color: var(--color-muted);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+  .search-form__field .input {
+    width: 100%;
+    height: 3.25rem;
+    padding-left: 2.75rem;
+    font-size: var(--text-lg);
+  }
+  .search-form__filters {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .search-filter {
+    cursor: pointer;
+  }
+  .search-filter:has(input:checked) {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-primary-contrast);
+  }
+  .search-filter:has(input:focus-visible) {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  .search-status {
+    margin: var(--space-6) 0 var(--space-4);
+  }
+  .search-results {
+    display: grid;
+    gap: var(--space-4);
+    max-width: 860px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .search-results :global(.search-result) {
+    transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  }
+  .search-results :global(.search-result:hover),
+  .search-results :global(.search-result:focus-within) {
+    border-color: var(--brand-300);
+    box-shadow: var(--shadow-lg);
+  }
+  .search-results :global(.search-result__link) {
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-5);
+    color: inherit;
+    text-decoration: none;
+  }
+  .search-results :global(.badge) {
+    justify-self: start;
+  }
+  .search-results :global(.search-result__title) {
+    color: var(--color-text);
+    font-size: var(--text-xl);
+  }
+  .search-results :global(.search-result__desc) {
+    color: var(--color-text-2);
+  }
+  .search-results :global(.search-result__snippet) {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+  .search-results :global(.search-result__tags) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+  .search-results :global(mark) {
+    padding: 0 0.1em;
+    border-radius: 0.2em;
+    background: var(--color-mark);
+    color: var(--color-mark-text);
+  }
+</style>

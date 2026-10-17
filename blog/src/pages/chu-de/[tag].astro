@@ -1,0 +1,65 @@
+---
+import { getCollection } from 'astro:content';
+import type { GetStaticPaths, InferGetStaticPropsType } from 'astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
+import PostCard from '../../components/PostCard.astro';
+import TagChip from '../../components/TagChip.astro';
+import { sortPosts } from '../../lib/posts';
+import { collectTags, tagSlug } from '../../lib/tags';
+
+export const getStaticPaths = (async () => {
+  const posts = sortPosts(await getCollection('posts'));
+  const tags = collectTags(posts);
+  return tags.map((tag) => ({
+    params: { tag: tag.slug },
+    props: {
+      tag,
+      tags,
+      posts: posts.filter((post) => post.data.tags.some((name) => tagSlug(name) === tag.slug)),
+    },
+  }));
+}) satisfies GetStaticPaths;
+type Props = InferGetStaticPropsType<typeof getStaticPaths>;
+const { tag, tags, posts } = Astro.props;
+---
+
+<BaseLayout title={`Chủ đề: ${tag.name}`} description={`${tag.count} bài viết về ${tag.name} trên AI4E.`}>
+  <section class="container section">
+    <Breadcrumb items={[{ label: 'Trang chủ', href: '/' }, { label: 'Chủ đề', href: '/chu-de/' }, { label: tag.name }]} />
+    <header class="tag-header">
+      <p class="tag-header__eyebrow">Chủ đề</p>
+      <h1><span aria-hidden="true">#</span>{tag.name}</h1>
+      <p class="section-desc">{tag.count} bài viết</p>
+    </header>
+    <div class="grid">{posts.map((post, index) => <PostCard post={post} headingLevel={2} eager={index < 2} />)}</div>
+  </section>
+  {tags.length > 1 && (
+    <section class="container section other-tags" aria-labelledby="other-tags-title">
+      <h2 class="section-title" id="other-tags-title">Chủ đề khác</h2>
+      <div class="chips">{tags.filter((item) => item.slug !== tag.slug).map((item) => <TagChip tag={item.name} count={item.count} />)}</div>
+    </section>
+  )}
+</BaseLayout>
+
+<style>
+  .tag-header {
+    margin: var(--space-6) 0 var(--space-8);
+  }
+  .tag-header__eyebrow {
+    color: var(--color-primary);
+    font-weight: 600;
+  }
+  .tag-header h1 {
+    font-size: clamp(2rem, 5vw, 2.75rem);
+  }
+  .tag-header h1 span {
+    color: var(--color-primary);
+  }
+  .other-tags {
+    padding-top: 0;
+  }
+  .other-tags .chips {
+    margin-top: var(--space-4);
+  }
+</style>

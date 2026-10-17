@@ -1,0 +1,82 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import type { MarkdownHeading } from 'astro';
+import BaseLayout from './BaseLayout.astro';
+import Breadcrumb from '../components/Breadcrumb.astro';
+import Toc from '../components/Toc.astro';
+import PostCard from '../components/PostCard.astro';
+import TagChip from '../components/TagChip.astro';
+import { CATEGORIES } from '../lib/site';
+import { TOPICS } from '../lib/topics';
+
+interface Props {
+  post: CollectionEntry<'posts'>;
+  headings: MarkdownHeading[];
+  related: CollectionEntry<'posts'>[];
+}
+const { post, headings, related } = Astro.props;
+const { title, description, cover, tags, category } = post.data;
+const categoryMeta = CATEGORIES[category];
+---
+<BaseLayout title={title} description={description} ogImage={cover.src}>
+  <article>
+    <header class="lesson-shell hybrid-header">
+      <Breadcrumb items={[{ label: 'Trang chủ', href: '/' }, { label: categoryMeta.label, href: categoryMeta.href }, { label: TOPICS[post.data.topic].label, href: `${categoryMeta.href}#${post.data.topic}` }, { label: title }]} />
+      <div class="lesson-intro">
+        <div>
+          <p class="lesson-eyebrow">BÀI HỌC TƯƠNG TÁC</p>
+          <h1>{title}</h1>
+          <p class="intro">{description}</p>
+        </div>
+        <nav class="hybrid-nav" aria-label="Nội dung bài học">
+          <a class="btn btn--primary" href="#cong-cu">Khám phá mô hình</a>
+          <a class="lesson-guide-link" href="#huong-dan">Đọc phần giải thích <span aria-hidden="true">↓</span></a>
+        </nav>
+      </div>
+      <div class="chips">{tags.map(tag => <TagChip tag={tag} />)}</div>
+    </header>
+    <slot name="tool" />
+    <section id="huong-dan" class="container section reading">
+      <div class="reading-body">
+        <div class="reading-heading">
+          <p class="lesson-eyebrow">HIỂU NHỮNG GÌ BẠN VỪA QUAN SÁT</p>
+          <h2>Hiểu nguyên lý, khám phá từng bước</h2>
+          <p class="muted">Đọc theo thứ tự, hoặc chọn một mục để quay lại phần bạn đang khám phá.</p>
+        </div>
+        <div class="prose"><slot /></div>
+      </div>
+      <aside><Toc headings={headings} /></aside>
+    </section>
+  </article>
+  {related.length > 0 && <section class="container section">
+    <h2>Bài liên quan</h2>
+    <div class="grid related-grid">{related.map(item => <PostCard post={item} />)}</div>
+  </section>}
+</BaseLayout>
+<style>
+  .lesson-shell { width: calc(100% - 32px); max-width: 1440px; margin-inline: auto; }
+  .hybrid-header { display: grid; gap: 1.25rem; padding-block: 1.75rem 1.5rem; }
+  .lesson-intro { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+  .lesson-eyebrow { color: var(--color-primary); font-size: .7rem; font-weight: 700; letter-spacing: .12em; margin-bottom: .5rem; }
+  h1 { max-width: 980px; font-size: clamp(1.7rem, 2.6vw, 2.5rem); line-height: 1.18; letter-spacing: -.035em; text-wrap: balance; }
+  .intro { max-width: 850px; margin-top: .75rem; color: var(--color-text-2); font-size: 1rem; line-height: 1.65; }
+  .hybrid-nav { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 1.25rem; }
+  .lesson-guide-link { font-size: .875rem; font-weight: 500; }
+  .reading { display: grid; gap: 3rem; max-width: 1440px; padding-block: 3.5rem; scroll-margin-top: 90px; }
+  .reading-heading { padding-bottom: 1.5rem; margin-bottom: 1.75rem; border-bottom: 1px solid var(--color-border); }
+  .reading-heading h2 { font-size: 1.6rem; margin-bottom: .5rem; }
+  .reading-body { min-width: 0; }
+  .reading-body .prose { max-width: 100%; }
+  .reading aside { min-width: 0; }
+  .related-grid { margin-top: 1.5rem; }
+  @media (min-width: 1024px) { .reading { grid-template-columns: minmax(0, 1fr) 240px; } }
+  @media (max-width: 900px) {
+    .lesson-intro { grid-template-columns: 1fr; gap: 1rem; }
+    .hybrid-nav { flex-direction: row; justify-content: flex-start; flex-wrap: wrap; }
+  }
+  @media (max-width: 600px) {
+    .lesson-shell { width: calc(100% - 32px); }
+    .hybrid-header { padding-block: 1.25rem; gap: 1rem; }
+    .reading { padding-block: 2rem; }
+  }
+</style>
