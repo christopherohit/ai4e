@@ -1,4 +1,6 @@
 export const nativeTools = {
+  'gradient-descent-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/gradient-descent-explainer', article: 'gradient-descent' },
+  'mini-batch-sgd-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/mini-batch-sgd-explainer', article: 'batch-mini-batch-sgd' },
   'qwen3-8-flash-next-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/qwen3-8-flash-next-explainer', article: 'qwen3-8-flash-next' },
   'gated-delta-net-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/gated-delta-net-explainer', article: 'gated-delta-net' },
   'sparse-attention-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/sparse-attention-explainer', article: 'sparse-attention' },

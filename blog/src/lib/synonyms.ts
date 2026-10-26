@@ -34,6 +34,11 @@ export const SYNONYM_GROUPS: string[][] = [
   ['prompt', 'câu lệnh', 'lời nhắc'],
   ['computer vision', 'thị giác máy tính'],
   ['nlp', 'xử lý ngôn ngữ tự nhiên', 'natural language processing'],
+  ['gradient descent', 'hạ gradient', 'giảm gradient'],
+  ['sgd', 'stochastic gradient descent', 'gradient descent ngẫu nhiên'],
+  ['learning rate', 'tốc độ học'],
+  ['optimization', 'tối ưu hóa', 'tối ưu'],
+  ['loss', 'hàm mất mát', 'hàm loss'],
 ];
 
 /** Canonical phrase key: normalized, punctuation/hyphens → single spaces. */

@@ -1,4 +1,4 @@
-/* Sequence labs (GDN, sparse attention, Qwen). Same chrome as the radiance labs, built on the blog tokens so light/dark
+/* Sequence labs (GDN, sparse attention, Qwen), also the chrome of the optimization labs. Same chrome as the radiance labs, built on the blog tokens so light/dark
    swap in one place. Roles: --seq-1 positive / GDN, --seq-2 negative / QSA / selected, --seq-3 third series. Values
    are always printed or listed in a table, so colour is never the only carrier of meaning. */
 .tool-workspace:has(.seq-lab) {

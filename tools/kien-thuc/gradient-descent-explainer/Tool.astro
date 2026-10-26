@@ -1,0 +1,34 @@
+---
+import Lab from '../../_shared/sequence-lab/Lab.astro';
+import '../../_shared/optimization-lab/plots.css';
+---
+<Lab id="gradient-descent" title="Gradient Descent · đi xuống dốc từng bước" label="Đồ thị loss và đường đi của gradient descent ở bước đang chọn"
+  steps={['Đạo hàm = độ dốc', 'Learning rate', 'Hai tham số', 'Mặt loss không lồi']}
+  scope="Mô phỏng giáo dục: hồi quy tuyến tính ŷ = w·x + b trên 64 điểm dữ liệu tổng hợp (y = 1,5x + 0,8 cộng nhiễu, không phải giá nhà thật), loss MSE và gradient tính chính xác trong trình duyệt. Bước 4 dùng một hàm một biến tự dựng để minh họa mặt loss không lồi; loss của mạng nơ-ron thật có hàng triệu chiều.">
+  <div class="strip" slot="strip">
+    <div class="player">
+      <button type="button" data-prev aria-label="Bước trước">◀</button>
+      <button type="button" data-play aria-pressed="false">▶ Chạy</button>
+      <button type="button" data-next aria-label="Bước sau">▶▶</button>
+      <output data-position></output>
+    </div>
+  </div>
+  <Fragment slot="controls">
+    <label class="field"><span class="field-row"><span>Learning rate η</span><output data-value="lr"></output></span><input type="range" name="lr" min="0.01" max="0.7" step="0.01" value="0.1" /></label>
+    <div class="field" data-lr-field>Thử nhanh η<div class="chips"><button type="button" data-lr="0.05">0.05 · chậm</button><button type="button" data-lr="0.2">0.2 · vừa</button><button type="button" data-lr="0.45">0.45 · dao động</button><button type="button" data-lr="0.6">0.6 · quá lớn</button></div></div>
+    <label class="field" data-start-field><span class="field-row"><span>Điểm xuất phát w₀</span><output data-value="start"></output></span><input type="range" name="start" min="-1" max="4" step="0.1" value="-0.5" /></label>
+    <p class="hint" data-map-hint hidden>Nhấp lên bản đồ đường đồng mức để chọn điểm xuất phát (w₀, b₀).</p>
+    <div class="actions"><button type="button" data-reset>Đặt lại</button></div>
+    <p class="hint">Thử: ở bước 2, bấm lần lượt 0.05, 0.2, 0.45 rồi 0.6. Ở bước 4, đặt w₀ = 0.1 rồi 0.2: chỉ lệch 0,1 nhưng kết thúc ở hai thung lũng khác nhau.</p>
+  </Fragment>
+  <section class="inspector" aria-labelledby="gd-chart-heading">
+    <div class="section-head"><h3 id="gd-chart-heading">Loss qua từng bước</h3><p data-chart-note></p></div>
+    <div class="chart"><svg data-chart role="img" aria-labelledby="gd-chart-heading" aria-describedby="gd-chart-caption"></svg></div>
+    <p id="gd-chart-caption" class="caption">Cùng điểm xuất phát, ba learning rate khác nhau. Đường chạm mép trên là loss vượt khỏi khung (phân kỳ). Nhấp vào biểu đồ để nhảy tới bước đó.</p>
+    <details class="table-view"><summary>Xem dạng bảng</summary><div class="table-scroll"><table class="data" data-table></table></div></details>
+  </section>
+</Lab>
+<script>
+  import { initGradientDescentLab } from './render';
+  initGradientDescentLab();
+</script>

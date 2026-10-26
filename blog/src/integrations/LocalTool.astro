@@ -8,11 +8,15 @@ import Bswmd from '../../../tools/du-an/bswmd/Tool.astro';
 import QwenExplainer from '../../../tools/kien-thuc/qwen3-8-flash-next-explainer/Tool.astro';
 import GatedDeltaNetExplainer from '../../../tools/kien-thuc/gated-delta-net-explainer/Tool.astro';
 import SparseAttentionExplainer from '../../../tools/kien-thuc/sparse-attention-explainer/Tool.astro';
+import GradientDescentExplainer from '../../../tools/kien-thuc/gradient-descent-explainer/Tool.astro';
+import MiniBatchSgdExplainer from '../../../tools/kien-thuc/mini-batch-sgd-explainer/Tool.astro';
 
 const components = {
   'qwen3-8-flash-next-explainer': QwenExplainer,
   'gated-delta-net-explainer': GatedDeltaNetExplainer,
   'sparse-attention-explainer': SparseAttentionExplainer,
+  'gradient-descent-explainer': GradientDescentExplainer,
+  'mini-batch-sgd-explainer': MiniBatchSgdExplainer,
   'nerf-explainer': NerfExplainer,
   'gaussian-splatting-explainer': GaussianSplattingExplainer,
   synctalk: SyncTalk,

@@ -4,6 +4,8 @@ const tools = [
   ['kien-thuc', 'qwen3-8-flash-next', '.layer-map'],
   ['kien-thuc', 'gated-delta-net', '.heat'],
   ['kien-thuc', 'sparse-attention', '.attn'],
+  ['kien-thuc', 'gradient-descent', '.opt-plot'],
+  ['kien-thuc', 'batch-mini-batch-sgd', '.opt-plot'],
   ['du-an', 'sdvx-modeler', '.pipe'],
   ['du-an', 'dodrio', '.graph-container svg'],
   ['du-an', 'fairvis', '#root button'],
