@@ -1,0 +1,183 @@
+---
+title: 'SVM: Đường phân tách có lề rộng nhất, support vector và kernel'
+description: 'Support Vector Machine hoạt động thế nào: lề cực đại, support vector, lề mềm với tham số C, hinge loss và kernel trick cho ranh giới phi tuyến.'
+category: kien-thuc
+topic: nen-tang
+tags: ['SVM', 'Phân loại', 'Kernel', 'Học máy']
+viz: svm-explainer
+cover: ../../../../assets/covers/svm.svg
+order: 4
+date: 2026-10-26
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+## Có rất nhiều đường phân tách, chọn đường nào?
+
+Cho các điểm thuộc hai lớp trên mặt phẳng. Nếu hai lớp tách được bằng một đường thẳng thì thường có **vô số** đường như vậy. Mọi đường đều phân loại đúng 100% dữ liệu huấn luyện, nhưng chúng không tốt như nhau: một đường chạy sát các điểm của một lớp sẽ phân loại sai ngay khi có điểm mới hơi lệch về phía đó.
+
+**Support Vector Machine** (SVM) trả lời bằng một nguyên tắc hình học: chọn đường cách **xa nhất** các điểm gần nó của cả hai lớp, tức là đường nằm giữa hành lang trống rộng nhất. Độ rộng hành lang gọi là **lề** (margin).
+
+Trong lab phía trên, bước 1 cho bạn xoay đường phân tách. Với pháp tuyến 0° (đường thẳng đứng), hành lang rộng 1,60. Hành lang rộng nhất là 2,99, đạt ở góc khoảng −28°.
+
+<Callout type="try">
+
+Ở bước **Nhiều đường phân tách**, kéo góc pháp tuyến và xem độ rộng hành lang. Biểu đồ phía dưới vẽ độ rộng theo góc: các góc ngoài khoảng giữa không tách được hai lớp (độ rộng 0). Đỉnh của đường cong chính là lời giải SVM.
+
+</Callout>
+
+## Lề cực đại
+
+### Siêu phẳng và khoảng cách
+
+Một đường thẳng (trong nhiều chiều là **siêu phẳng**) được viết là $\mathbf{w}\cdot\mathbf{x} + b = 0$. Vector $\mathbf{w}$ vuông góc với siêu phẳng. Mô hình dự đoán lớp bằng dấu:
+
+$$
+\hat y = \operatorname{sign}(\mathbf{w}\cdot\mathbf{x} + b), \qquad y \in \{-1, +1\}.
+$$
+
+Khoảng cách từ điểm $\mathbf{x}_i$ tới siêu phẳng là $|\mathbf{w}\cdot\mathbf{x}_i + b| / \lVert\mathbf{w}\rVert$. Vì nhân $\mathbf{w}$ và $b$ với cùng một số không đổi siêu phẳng, ta được phép chọn tỉ lệ sao cho các điểm gần nhất thỏa $|\mathbf{w}\cdot\mathbf{x} + b| = 1$. Khi đó hai mép lề là $\mathbf{w}\cdot\mathbf{x} + b = \pm 1$ và độ rộng lề là $2/\lVert\mathbf{w}\rVert$.
+
+### Bài toán tối ưu
+
+Tối đa hóa $2/\lVert\mathbf{w}\rVert$ tương đương tối thiểu hóa $\tfrac12\lVert\mathbf{w}\rVert^2$, với điều kiện mọi điểm nằm đúng phía và ngoài lề:
+
+$$
+\min_{\mathbf{w}, b}\ \tfrac12\lVert\mathbf{w}\rVert^2 \quad \text{sao cho} \quad y_i(\mathbf{w}\cdot\mathbf{x}_i + b) \ge 1\ \ \forall i.
+$$
+
+Đây là bài toán quy hoạch toàn phương lồi: có đúng một nghiệm tối ưu, không có đáy cục bộ. Trong lab, nghiệm là $\mathbf{w} \approx (0{,}588;\ -0{,}319)$, $b \approx -1{,}147$, lề $2/\lVert\mathbf{w}\rVert \approx 2{,}99$. Con số này trùng với hành lang rộng nhất tìm được bằng cách xoay đường ở bước 1.
+
+## Support vector: chỉ vài điểm quyết định tất cả
+
+Giải bài toán trên bằng phương pháp nhân tử Lagrange cho ra dạng **đối ngẫu**: mỗi điểm $i$ có một hệ số $\alpha_i \ge 0$, và
+
+$$
+\mathbf{w} = \sum_i \alpha_i y_i \mathbf{x}_i .
+$$
+
+Điều kiện tối ưu (KKT) buộc $\alpha_i = 0$ với mọi điểm nằm xa hơn mép lề. Chỉ những điểm nằm **đúng trên mép lề** mới có $\alpha_i > 0$: đó là các **support vector**. Trong lab, chỉ 3 trên 16 điểm là support vector.
+
+Hệ quả rất trực quan: xóa một điểm không phải support vector, lời giải không đổi chút nào. Xóa một support vector, ràng buộc đang "chống" lề biến mất, lề mở rộng và đường biên dịch chuyển. SVM chỉ "nhớ" các điểm ở vùng biên, nơi khó phân loại nhất.
+
+<Callout type="try">
+
+Ở bước **Lề cực đại**, nhấp một điểm không có vòng tròn để bỏ nó: đường biên đứng yên. Đưa nó lại, rồi bỏ một điểm có vòng tròn: lề rộng ra và đường biên xoay. Biểu đồ phía dưới vẽ $y\cdot f(x)$ của từng điểm: support vector nằm đúng trên vạch 1.
+
+</Callout>
+
+## Lề mềm và tham số C
+
+Dữ liệu thật hiếm khi tách được hoàn toàn: có nhiễu, có điểm ngoại lai, hai lớp chồng lấn. Khi đó bài toán lề cứng vô nghiệm. **Lề mềm** (soft margin, Cortes và Vapnik 1995) cho phép vi phạm bằng biến bù $\xi_i \ge 0$:
+
+$$
+\min_{\mathbf{w}, b, \xi}\ \tfrac12\lVert\mathbf{w}\rVert^2 + C\sum_i \xi_i \quad \text{sao cho} \quad y_i(\mathbf{w}\cdot\mathbf{x}_i + b) \ge 1 - \xi_i,\ \ \xi_i \ge 0.
+$$
+
+- $0 < \xi_i < 1$: điểm nằm trong lề nhưng vẫn đúng phía.
+- $\xi_i > 1$: điểm bị phân loại sai.
+
+Thay $\xi_i$ bằng giá trị nhỏ nhất có thể, bài toán trở thành tối thiểu hóa **hinge loss** cộng phạt L2:
+
+$$
+\min_{\mathbf{w}, b}\ \tfrac12\lVert\mathbf{w}\rVert^2 + C\sum_i \max\bigl(0,\ 1 - y_i(\mathbf{w}\cdot\mathbf{x}_i + b)\bigr).
+$$
+
+Hinge loss bằng 0 với điểm đúng phía và ngoài lề, tăng tuyến tính khi điểm lấn vào lề. $C$ cân bằng hai mục tiêu:
+
+| | $C$ nhỏ | $C$ lớn |
+| --- | --- | --- |
+| Ưu tiên | Lề rộng | Ít vi phạm |
+| Số support vector | Nhiều | Ít |
+| Ranh giới | Mượt, ít nhạy với từng điểm | Bám sát các điểm khó, nhạy với nhiễu |
+| Rủi ro | Underfitting | Overfitting |
+
+Trong lab với 36 điểm chồng lấn: $C = 0{,}01$ cho lề 5,64 và 30 support vector; $C = 1$ cho lề 1,68 và 11 support vector; $C = 100$ cho lề 1,35 và 10 support vector. Ở dạng đối ngẫu, lề mềm chỉ thêm một giới hạn trên: $0 \le \alpha_i \le C$. Các điểm có $\alpha_i = C$ là những điểm nằm trong lề hoặc sai phía.
+
+<Callout type="try">
+
+Ở bước **Lề mềm & C**, kéo $C$ từ 0.01 lên 100. Vòng liền là support vector đúng trên mép lề, vòng đứt là điểm bị phạt. Biểu đồ phía dưới cho thấy số support vector giảm dần khi $C$ tăng.
+
+</Callout>
+
+## Kernel trick: ranh giới phi tuyến
+
+Bước 4 của lab có một lớp nằm ở lõi, lớp kia bao thành vòng xung quanh. Không đường thẳng nào tách được: SVM tuyến tính sai 16 trên 42 điểm huấn luyện.
+
+Ý tưởng: ánh xạ dữ liệu sang không gian nhiều chiều hơn, nơi hai lớp tách được bằng siêu phẳng. Ví dụ, thêm đặc trưng $x_1^2 + x_2^2$ (bình phương khoảng cách tới gốc) thì lõi và vòng ngoài tách được bằng một mặt phẳng ngang.
+
+Điểm mấu chốt nằm ở dạng đối ngẫu: dữ liệu chỉ xuất hiện qua **tích vô hướng** $\mathbf{x}_i \cdot \mathbf{x}_j$. Thay tích vô hướng bằng một **hàm kernel** $K(\mathbf{x}_i, \mathbf{x}_j) = \phi(\mathbf{x}_i)\cdot\phi(\mathbf{x}_j)$, ta làm việc trong không gian của $\phi$ mà không cần tính $\phi$. Hàm quyết định trở thành
+
+$$
+f(\mathbf{x}) = \sum_i \alpha_i y_i K(\mathbf{x}_i, \mathbf{x}) + b.
+$$
+
+Các kernel phổ biến:
+
+| Kernel | Công thức | Ghi chú |
+| --- | --- | --- |
+| Tuyến tính | $\mathbf{x}\cdot\mathbf{x}'$ | Dữ liệu nhiều chiều, văn bản |
+| Đa thức | $(\gamma\,\mathbf{x}\cdot\mathbf{x}' + r)^d$ | Tương tác bậc $d$ giữa các đặc trưng |
+| RBF (Gauss) | $\exp(-\gamma\lVert\mathbf{x} - \mathbf{x}'\rVert^2)$ | Mặc định phổ biến nhất; tương ứng không gian vô hạn chiều |
+
+Với kernel RBF, $\gamma$ quyết định bán kính ảnh hưởng của mỗi support vector:
+
+- $\gamma$ **nhỏ**: mỗi điểm ảnh hưởng rất xa, ranh giới gần tuyến tính. Trong lab, $\gamma = 0{,}01$ vẫn chưa bao được lõi: chỉ đúng 60% trên tập kiểm tra.
+- $\gamma$ **vừa**: ranh giới gần hình tròn. Với $\gamma = 0{,}1$, đúng 100% huấn luyện và 98% kiểm tra.
+- $\gamma$ **lớn**: mỗi điểm chỉ ảnh hưởng một vùng nhỏ quanh nó, ranh giới uốn quanh từng điểm. Với $\gamma = 10$, vẫn đúng 100% huấn luyện nhưng chỉ còn 71% kiểm tra: overfitting.
+
+<Callout type="try">
+
+Ở bước **Kernel RBF**, chọn **Tuyến tính** để thấy SVM thất bại, rồi chọn **RBF** và kéo $\gamma$ từ 0.01 lên 30. Biểu đồ phía dưới so sánh độ chính xác trên tập huấn luyện và tập kiểm tra: khoảng cách giữa hai đường là dấu hiệu overfitting.
+
+</Callout>
+
+## Huấn luyện SVM thế nào?
+
+Lab giải bài toán đối ngẫu bằng **SMO** (Sequential Minimal Optimization, Platt 1998): mỗi bước chọn hai hệ số $\alpha_i, \alpha_j$ và tối ưu chúng bằng công thức đóng, lặp lại cho tới khi mọi điểm thỏa điều kiện KKT. LIBSVM, thư viện bên dưới `sklearn.svm.SVC`, dùng một biến thể của SMO.
+
+Với kernel, chi phí huấn luyện tăng nhanh hơn tuyến tính theo số mẫu (thường từ $O(n^2)$ tới $O(n^3)$), nên SVM kernel phù hợp với vài chục nghìn mẫu trở xuống. Với dữ liệu lớn và tuyến tính, người ta tối ưu trực tiếp hinge loss bằng (sub)gradient hoặc coordinate descent (LIBLINEAR, `LinearSVC`, `SGDClassifier(loss="hinge")`).
+
+```python
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+from sklearn.model_selection import GridSearchCV
+
+model = make_pipeline(StandardScaler(), SVC(kernel="rbf"))
+search = GridSearchCV(model, {"svc__C": [0.1, 1, 10, 100], "svc__gamma": [0.01, 0.1, 1, 10]}, cv=5)
+search.fit(X_train, y_train)
+print(search.best_params_, search.score(X_test, y_test))
+print(search.best_estimator_[-1].n_support_)   # số support vector mỗi lớp
+```
+
+<Callout type="note">
+
+Luôn **chuẩn hóa đặc trưng** trước khi dùng SVM. Lề và kernel RBF đều dựa trên khoảng cách, nên một đặc trưng có thang đo lớn (ví dụ thu nhập tính bằng đồng) sẽ lấn át các đặc trưng còn lại. $C$ và $\gamma$ nên được chọn cùng nhau bằng cross-validation.
+
+</Callout>
+
+## SVM so với các bộ phân loại khác
+
+- **So với logistic regression:** cả hai đều tạo ranh giới tuyến tính. Logistic regression dùng log loss và cho xác suất; SVM dùng hinge loss, chỉ quan tâm các điểm gần biên và không cho xác suất trực tiếp (cần Platt scaling, `probability=True`).
+- **So với [Naive Bayes](/kien-thuc/naive-bayes/):** Naive Bayes mô hình hóa cách dữ liệu được sinh ra cho từng lớp (mô hình sinh); SVM học trực tiếp ranh giới (mô hình phân biệt). Với văn bản nhiều chiều, SVM tuyến tính thường chính xác hơn khi có đủ dữ liệu.
+- **So với mạng nơ-ron:** SVM kernel có bài toán lồi, nghiệm duy nhất và ít siêu tham số, nhưng khó mở rộng tới hàng triệu mẫu và không tự học đặc trưng từ dữ liệu thô như ảnh hay âm thanh.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- SVM chọn siêu phẳng có lề rộng nhất: tối thiểu $\tfrac12\lVert\mathbf{w}\rVert^2$ với điều kiện $y_i(\mathbf{w}\cdot\mathbf{x}_i + b) \ge 1$.
+- Chỉ support vector (điểm trên hoặc trong lề) có $\alpha_i > 0$ và quyết định lời giải.
+- Lề mềm thêm hinge loss nhân $C$: $C$ nhỏ cho lề rộng, $C$ lớn bám sát dữ liệu.
+- Kernel thay tích vô hướng để có ranh giới phi tuyến; với RBF, $\gamma$ lớn dễ overfitting.
+
+</Callout>
+
+## Đọc tiếp
+
+- [Bias–Variance Tradeoff](/kien-thuc/bias-variance/): $C$ và $\gamma$ chính là núm điều chỉnh giữa underfitting và overfitting.
+- [L1 và L2 Regularization](/kien-thuc/l1-l2-regularization/): số hạng $\tfrac12\lVert\mathbf{w}\rVert^2$ của SVM là một phạt L2.
+- Corinna Cortes, Vladimir Vapnik, [Support-Vector Networks](https://doi.org/10.1007/BF00994018), Machine Learning, 1995.
+- John Platt, *Sequential Minimal Optimization: A Fast Algorithm for Training Support Vector Machines*, Microsoft Research Technical Report, 1998.
+- Chih-Wei Hsu, Chih-Chung Chang, Chih-Jen Lin, [A Practical Guide to Support Vector Classification](https://www.csie.ntu.edu.tw/~cjlin/papers/guide/guide.pdf): hướng dẫn chuẩn hóa dữ liệu và chọn $C$, $\gamma$.

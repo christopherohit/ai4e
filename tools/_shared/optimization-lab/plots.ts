@@ -126,3 +126,35 @@ export function dataPlot(name: string, theta: Point, highlight: readonly number[
   polyline(f, [[DATA_VIEW.x[0], theta[0] * DATA_VIEW.x[0] + theta[1]], [DATA_VIEW.x[1], theta[0] * DATA_VIEW.x[1] + theta[1]]], 'fit');
   return f;
 }
+
+/** Class marker: circles for class 0, squares for class 1, so the classes never rely on colour alone. */
+export function marker(f: Frame, [a, b]: Point, cls: string, square = false, size = 4.5, layer: SVGGElement = f.plot) {
+  if (!finite([a, b])) return;
+  const shape = square
+    ? svg('rect', { x: f.x(a) - size * 0.85, y: f.y(b) - size * 0.85, width: size * 1.7, height: size * 1.7, rx: 1, class: cls })
+    : svg('circle', { cx: f.x(a), cy: f.y(b), r: size, class: cls });
+  layer.append(shape);
+  return shape;
+}
+
+/** Filled band between a lower and an upper curve sampled at the same x values. */
+export function band(f: Frame, xs: readonly number[], lower: readonly number[], upper: readonly number[], cls = 'band') {
+  const outline: Point[] = [...xs.map((x, index) => [x, upper[index]] as Point), ...xs.map((x, index) => [x, lower[index]] as Point).reverse()];
+  const shape = svg('polygon', { points: outline.filter(finite).map(([a, b]) => `${f.x(a).toFixed(1)},${f.y(b).toFixed(1)}`).join(' '), class: cls });
+  f.plot.append(shape);
+  return shape;
+}
+
+/** Coloured cells of a scalar field on the plot area: --a carries |value| / max, the class picks the hue. */
+export function field(f: Frame, x: Point, y: Point, cells: number, value: (a: number, b: number) => number, max: number) {
+  const dx = (x[1] - x[0]) / cells, dy = (y[1] - y[0]) / cells;
+  const group = svg('g', { class: 'field' });
+  for (let i = 0; i < cells; i++) for (let j = 0; j < cells; j++) {
+    const a = x[0] + (i + 0.5) * dx, b = y[0] + (j + 0.5) * dy, v = value(a, b);
+    const rect = svg('rect', { x: f.x(x[0] + i * dx), y: f.y(y[0] + (j + 1) * dy), width: f.x(x[0] + dx) - f.x(x[0]) + 0.6, height: f.y(y[0]) - f.y(y[0] + dy) + 0.6, class: v >= 0 ? 'cell-1' : 'cell-0' });
+    rect.setAttribute('style', `--a:${Math.round(Math.min(1, Math.abs(v) / max) * 100)}%`);
+    group.append(rect);
+  }
+  f.plot.append(group);
+  return group;
+}

@@ -10,6 +10,10 @@ import GatedDeltaNetExplainer from '../../../tools/kien-thuc/gated-delta-net-exp
 import SparseAttentionExplainer from '../../../tools/kien-thuc/sparse-attention-explainer/Tool.astro';
 import GradientDescentExplainer from '../../../tools/kien-thuc/gradient-descent-explainer/Tool.astro';
 import MiniBatchSgdExplainer from '../../../tools/kien-thuc/mini-batch-sgd-explainer/Tool.astro';
+import NaiveBayesExplainer from '../../../tools/kien-thuc/naive-bayes-explainer/Tool.astro';
+import SvmExplainer from '../../../tools/kien-thuc/svm-explainer/Tool.astro';
+import BiasVarianceExplainer from '../../../tools/kien-thuc/bias-variance-explainer/Tool.astro';
+import RegularizationExplainer from '../../../tools/kien-thuc/regularization-explainer/Tool.astro';
 
 const components = {
   'qwen3-8-flash-next-explainer': QwenExplainer,
@@ -17,6 +21,10 @@ const components = {
   'sparse-attention-explainer': SparseAttentionExplainer,
   'gradient-descent-explainer': GradientDescentExplainer,
   'mini-batch-sgd-explainer': MiniBatchSgdExplainer,
+  'naive-bayes-explainer': NaiveBayesExplainer,
+  'svm-explainer': SvmExplainer,
+  'bias-variance-explainer': BiasVarianceExplainer,
+  'regularization-explainer': RegularizationExplainer,
   'nerf-explainer': NerfExplainer,
   'gaussian-splatting-explainer': GaussianSplattingExplainer,
   synctalk: SyncTalk,

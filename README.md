@@ -10,6 +10,7 @@ Blog va cong cu tuong tac, tach thanh hai nhom: Kien thuc va Du an.
 - `tools/kien-thuc/{nerf-explainer,gaussian-splatting-explainer}/`: visualize kien thuc moi.
 - `tools/du-an/{synctalk,instag}/`: visualize du an talking-head.
 - `tools/kien-thuc/{gradient-descent-explainer,mini-batch-sgd-explainer}/`: visualize toi uu hoa (chuyen muc Nen tang).
+- `tools/kien-thuc/{naive-bayes-explainer,svm-explainer,bias-variance-explainer,regularization-explainer}/`: visualize hoc may co ban (chuyen muc Nen tang).
 - `tools/_shared/`: code va dataset dung chung cho visualize.
 - `docs/architecture/`: kien truc va ban do chuyen muc.
 - `docs/development/`: quy trinh build va kiem tra.

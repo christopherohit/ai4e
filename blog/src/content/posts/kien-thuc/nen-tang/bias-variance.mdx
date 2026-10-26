@@ -1,0 +1,167 @@
+---
+title: 'Bias–Variance Tradeoff: Hiểu Overfitting và Underfitting từ gốc'
+description: 'Bias và variance là gì, vì sao lỗi kỳ vọng bằng bias² + variance + nhiễu, liên hệ với underfitting và overfitting, cách chẩn đoán và cách sửa.'
+category: kien-thuc
+topic: nen-tang
+tags: ['Bias–Variance', 'Overfitting', 'Underfitting', 'Học máy']
+viz: bias-variance-explainer
+cover: ../../../../assets/covers/bias-variance.svg
+order: 5
+date: 2026-10-26
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+## Mô hình học từ một mẫu, nhưng phải dùng cho dữ liệu mới
+
+Mọi mô hình học máy được huấn luyện trên một tập dữ liệu **hữu hạn** nhưng được đánh giá trên dữ liệu **chưa từng thấy**. Lỗi trên dữ liệu mới (lỗi tổng quát hóa) mới là thứ ta quan tâm. Lỗi huấn luyện chỉ là ước lượng lạc quan của nó.
+
+Bias–variance tradeoff giải thích vì sao lỗi tổng quát hóa phụ thuộc vào độ phức tạp của mô hình theo hình chữ U, và đặt tên cho hai cách mô hình có thể sai: **quá cứng nhắc** (bias cao) và **quá nhạy với dữ liệu huấn luyện** (variance cao).
+
+Lab phía trên dùng một thí nghiệm kinh điển: dữ liệu sinh từ hàm thật $f(x) = \sin 2\pi x$ cộng nhiễu Gauss $\sigma = 0{,}3$, mỗi tập huấn luyện có 12 điểm, mô hình là đa thức bậc $d$ từ 0 tới 12 học bằng bình phương tối thiểu. Vì ta biết hàm thật, ta đo được bias và variance trực tiếp. Với dữ liệu thật thì không làm được điều này.
+
+## Underfitting và overfitting trên một tập dữ liệu
+
+Huấn luyện ba mô hình trên cùng một tập 12 điểm:
+
+| Bậc | Lỗi huấn luyện | Lỗi kiểm tra | Chẩn đoán |
+| --- | --- | --- | --- |
+| 1 (đường thẳng) | 0,198 | 0,293 | **Underfitting**: không đủ linh hoạt để theo hình sin |
+| 3 | 0,039 | 0,102 | Vừa |
+| 9 | 0,007 | 2,852 | **Overfitting**: uốn theo từng điểm nhiễu |
+
+Hai triệu chứng điển hình:
+
+- **Underfitting:** lỗi huấn luyện **cao**, lỗi kiểm tra cũng cao và gần bằng lỗi huấn luyện. Mô hình chưa học được cấu trúc của dữ liệu.
+- **Overfitting:** lỗi huấn luyện **rất thấp**, lỗi kiểm tra cao hơn nhiều. Mô hình học thuộc cả nhiễu, thứ không lặp lại ở dữ liệu mới.
+
+Lưu ý mức lỗi kiểm tra thấp nhất có thể là $\sigma^2 = 0{,}09$: kể cả biết chính xác $f(x)$, ta vẫn không đoán được phần nhiễu.
+
+<Callout type="try">
+
+Ở bước **Underfit & overfit**, bấm lần lượt **1 · underfit**, **3 · vừa**, **9 · overfit**. Với bậc 9, bấm **Lấy mẫu lại** vài lần: mỗi tập huấn luyện mới cho một đường cong khác hẳn. Biểu đồ phía dưới vẽ lỗi huấn luyện (giảm đều) và lỗi kiểm tra (hình chữ U) theo bậc.
+
+</Callout>
+
+## Bias và variance: nhìn qua nhiều tập huấn luyện
+
+Hãy tưởng tượng ta có thể lấy **nhiều** tập huấn luyện độc lập từ cùng phân phối và huấn luyện lại mô hình trên từng tập. Tại mỗi điểm $x$, ta có nhiều dự đoán $\hat f(x)$ khác nhau. Từ đó định nghĩa:
+
+$$
+\text{Bias}(x) = \mathbb{E}\bigl[\hat f(x)\bigr] - f(x),
+\qquad
+\text{Variance}(x) = \mathbb{E}\Bigl[\bigl(\hat f(x) - \mathbb{E}[\hat f(x)]\bigr)^2\Bigr].
+$$
+
+Kỳ vọng $\mathbb{E}$ lấy trên các tập huấn luyện có thể có.
+
+- **Bias** đo mô hình *trung bình* lệch khỏi sự thật bao nhiêu. Bias cao nghĩa là họ mô hình không thể biểu diễn được hàm thật, dù có bao nhiêu dữ liệu.
+- **Variance** đo dự đoán *dao động* bao nhiêu khi đổi tập huấn luyện. Variance cao nghĩa là mô hình phụ thuộc quá nhiều vào những điểm cụ thể nó được thấy.
+
+Hình ảnh quen thuộc là bắn bia: bias là khoảng cách từ tâm cụm đạn tới hồng tâm; variance là độ tản của cụm đạn. Đường thẳng (bậc 1) bắn tụm nhưng lệch tâm; đa thức bậc 9 bắn quanh tâm nhưng tản khắp nơi.
+
+<Callout type="try">
+
+Ở bước **Nhiều tập huấn luyện**, mỗi đường cam mờ là một mô hình học từ một tập dữ liệu khác, đường đen là trung bình của 150 mô hình. Với bậc 1, các đường cam gần trùng nhau nhưng đường đen lệch xa hình sin. Với bậc 9, đường đen gần như trùng hình sin nhưng các đường cam bung ra, nhất là ở hai đầu.
+
+</Callout>
+
+## Phân rã lỗi: bias² + variance + nhiễu
+
+Với hồi quy và sai số bình phương, giả sử $y = f(x) + \varepsilon$ với nhiễu $\varepsilon$ có trung bình 0, phương sai $\sigma^2$. Lỗi kỳ vọng trên một điểm mới tách đúng thành ba phần:
+
+$$
+\mathbb{E}\Bigl[\bigl(y - \hat f(x)\bigr)^2\Bigr] = \underbrace{\bigl(\mathbb{E}[\hat f(x)] - f(x)\bigr)^2}_{\text{bias}^2} + \underbrace{\mathbb{E}\Bigl[\bigl(\hat f(x) - \mathbb{E}[\hat f(x)]\bigr)^2\Bigr]}_{\text{variance}} + \underbrace{\sigma^2}_{\text{nhiễu}} .
+$$
+
+Chứng minh chỉ cần cộng trừ $\mathbb{E}[\hat f(x)]$ bên trong bình phương và dùng tính độc lập giữa nhiễu của điểm mới với tập huấn luyện: các số hạng chéo có kỳ vọng bằng 0.
+
+Lab đo trực tiếp ba thành phần (trung bình theo $x$, qua 150 tập huấn luyện 12 điểm):
+
+| Bậc | bias² | variance | σ² | Tổng | Lỗi kiểm tra đo độc lập |
+| --- | --- | --- | --- | --- | --- |
+| 0 | 0,521 | 0,008 | 0,09 | 0,619 | 0,617 |
+| 1 | 0,171 | 0,017 | 0,09 | 0,278 | 0,277 |
+| 3 | 0,004 | 0,029 | 0,09 | **0,123** | 0,124 |
+| 5 | 0,000 | 0,050 | 0,09 | 0,140 | 0,141 |
+| 7 | 0,001 | 0,125 | 0,09 | 0,216 | 0,216 |
+| 9 | 0,013 | 1,563 | 0,09 | 1,666 | 1,685 |
+
+Cột cuối được đo trên 3000 điểm mới, độc lập với phép phân rã, và khớp với tổng ba thành phần. Bảng cho thấy rõ sự đánh đổi:
+
+- Tăng bậc làm **bias² giảm** (từ 0,521 xuống gần 0 từ bậc 3).
+- Nhưng **variance tăng** (từ 0,008 lên 1,563 ở bậc 9).
+- Tổng nhỏ nhất ở **bậc 3**: không phải nơi bias bằng 0, cũng không phải nơi variance nhỏ nhất, mà nơi tổng của chúng nhỏ nhất.
+
+<Callout type="try">
+
+Ở bước **Phân rã lỗi**, kéo bậc đa thức và xem bốn thanh bias², variance, nhiễu và tổng. Biểu đồ phía dưới vẽ cả ba đường theo bậc: bias² đi xuống, variance đi lên, lỗi kỳ vọng tạo hình chữ U.
+
+</Callout>
+
+## Thêm dữ liệu thay đổi điều gì?
+
+Với 100 điểm thay vì 12, bias gần như không đổi (đa thức bậc 1 vẫn là đường thẳng) nhưng variance giảm mạnh: ở bậc 9 chỉ còn 0,008 thay vì 1,563. Lỗi kỳ vọng ở bậc 9 giảm từ 1,666 xuống 0,098, gần mức nhiễu.
+
+Với hồi quy tuyến tính có $p$ tham số và $n$ điểm, variance trung bình xấp xỉ $\sigma^2 p / n$: tỉ lệ thuận với số tham số, tỉ lệ nghịch với lượng dữ liệu. Vì vậy "mô hình phức tạp" là khái niệm **tương đối so với lượng dữ liệu**. Đa thức bậc 9 overfit nặng với 12 điểm nhưng hoàn toàn ổn với 100 điểm, và điểm tối ưu dịch về phía mô hình phức tạp hơn khi dữ liệu tăng.
+
+<Callout type="try">
+
+Ở bước **Thêm dữ liệu**, giữ bậc 9 và kéo số điểm huấn luyện từ 12 lên 100. Các đường cam co cụm lại quanh hình sin. Biểu đồ phía dưới cho thấy vùng đáy của chữ U mở rộng sang phải.
+
+</Callout>
+
+## Chẩn đoán trong thực tế
+
+Với dữ liệu thật, ta không biết $f(x)$ nên không tính được bias và variance riêng lẻ. Nhưng có thể suy ra từ lỗi huấn luyện và lỗi validation:
+
+| Triệu chứng | Chẩn đoán | Hướng xử lý |
+| --- | --- | --- |
+| Lỗi huấn luyện cao, lỗi validation cao và gần nhau | Bias cao (underfitting) | Mô hình phức tạp hơn, thêm đặc trưng, giảm regularization, huấn luyện lâu hơn |
+| Lỗi huấn luyện thấp, lỗi validation cao hơn nhiều | Variance cao (overfitting) | Thêm dữ liệu, data augmentation, regularization (L1/L2, dropout), mô hình đơn giản hơn, early stopping, ensemble |
+| Cả hai thấp và gần nhau | Vừa | Giữ nguyên, kiểm tra trên tập test |
+
+**Learning curve** (lỗi huấn luyện và validation theo số mẫu huấn luyện) giúp phân biệt rõ hơn: nếu hai đường đã hội tụ ở mức cao, thêm dữ liệu không giúp gì (bias cao). Nếu còn khoảng cách lớn và đường validation vẫn đang giảm, thêm dữ liệu sẽ có ích (variance cao).
+
+### Các núm điều chỉnh độ phức tạp
+
+Bias–variance không chỉ áp dụng cho bậc đa thức. Mỗi mô hình có những núm riêng:
+
+- **Hồi quy tuyến tính:** số đặc trưng, độ mạnh [regularization L1/L2](/kien-thuc/l1-l2-regularization/) $\lambda$ ($\lambda$ lớn: bias tăng, variance giảm).
+- **[SVM](/kien-thuc/svm/):** $C$ và $\gamma$ của kernel RBF ($C$, $\gamma$ lớn: variance tăng).
+- **k-NN:** số láng giềng $k$ ($k$ nhỏ: variance cao).
+- **Cây quyết định:** độ sâu, số mẫu tối thiểu ở lá. Random forest lấy trung bình nhiều cây để giảm variance; boosting cộng dồn mô hình yếu để giảm bias.
+- **Mạng nơ-ron:** số lớp và số nơ-ron, dropout, weight decay, số epoch (early stopping).
+- **[Naive Bayes](/kien-thuc/naive-bayes/):** giả định độc lập là một nguồn bias lớn, đổi lại variance thấp; vì vậy nó làm tốt khi dữ liệu ít.
+
+## Còn mạng nơ-ron rất lớn thì sao?
+
+Các mạng sâu hiện đại thường có nhiều tham số hơn số mẫu huấn luyện và có thể đạt lỗi huấn luyện bằng 0, nhưng vẫn tổng quát hóa tốt. Hiện tượng **double descent** (Belkin và cộng sự, 2019) mô tả việc lỗi kiểm tra tăng tới đỉnh gần ngưỡng mô hình vừa đủ để nội suy dữ liệu, rồi **giảm trở lại** khi mô hình tiếp tục lớn hơn.
+
+Điều này không phủ nhận phép phân rã bias–variance, vốn là một đẳng thức toán học. Nó cho thấy "độ phức tạp" không chỉ là số tham số: thuật toán huấn luyện (SGD, khởi tạo, regularization ngầm) cũng quyết định mô hình nào được chọn trong số rất nhiều mô hình khớp dữ liệu. Với mô hình cổ điển cỡ vừa, đường cong chữ U vẫn là hướng dẫn đáng tin cậy.
+
+## Những hiểu lầm thường gặp
+
+- **"Bias–variance là đánh đổi bắt buộc, không thể giảm cả hai."** Thêm dữ liệu giảm variance mà không tăng bias; một đặc trưng tốt hơn có thể giảm bias mà không tăng variance. Đánh đổi chỉ xảy ra khi giữ cố định lượng dữ liệu và chỉ chỉnh độ phức tạp.
+- **"Lỗi huấn luyện thấp là tốt."** Lỗi huấn luyện bằng 0 thường là dấu hiệu overfitting. Luôn so với lỗi validation.
+- **"Bias ở đây là thiên lệch dữ liệu hay hệ số chặn b."** Ba khái niệm khác nhau dùng chung một chữ. Bias trong bias–variance là sai lệch hệ thống của *ước lượng*.
+- **"Chọn mô hình theo lỗi test."** Dùng tập test để chọn siêu tham số khiến nó không còn là ước lượng khách quan. Chọn bằng validation hoặc cross-validation, chỉ dùng test một lần ở cuối.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- Lỗi kỳ vọng trên dữ liệu mới = bias² + variance + σ². Nhiễu σ² là giới hạn dưới không thể giảm.
+- Underfitting = bias cao: lỗi huấn luyện và lỗi validation đều cao. Overfitting = variance cao: lỗi huấn luyện thấp, lỗi validation cao hơn nhiều.
+- Tăng độ phức tạp giảm bias, tăng variance; điểm tốt nhất là nơi tổng nhỏ nhất.
+- Thêm dữ liệu giảm variance và cho phép dùng mô hình phức tạp hơn.
+
+</Callout>
+
+## Đọc tiếp
+
+- [L1 và L2 Regularization](/kien-thuc/l1-l2-regularization/): cách thêm bias có kiểm soát để giảm variance mà không cần đổi họ mô hình.
+- [SVM](/kien-thuc/svm/): $C$ và $\gamma$ trong vai trò núm điều chỉnh bias–variance.
+- Stuart Geman, Elie Bienenstock, René Doursat, [Neural Networks and the Bias/Variance Dilemma](https://doi.org/10.1162/neco.1992.4.1.1), Neural Computation, 1992.
+- Trevor Hastie, Robert Tibshirani, Jerome Friedman, [The Elements of Statistical Learning](https://hastie.su.domains/ElemStatLearn/), mục 2.9 và chương 7.
+- Mikhail Belkin, Daniel Hsu, Siyuan Ma, Soumik Mandal, [Reconciling modern machine learning practice and the bias-variance trade-off](https://arxiv.org/abs/1812.11118), PNAS 2019.

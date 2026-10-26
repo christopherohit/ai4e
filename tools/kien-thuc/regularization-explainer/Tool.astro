@@ -1,0 +1,25 @@
+---
+import Lab from '../../_shared/sequence-lab/Lab.astro';
+import '../../_shared/optimization-lab/plots.css';
+---
+<Lab id="regularization" title="L1 và L2 · Lasso thưa, Ridge co đều" label="Vùng giới hạn của phạt, hàm co hệ số và đường đi hệ số theo λ"
+  steps={['Kim cương & hình tròn', 'Co hệ số', 'Đường đi hệ số', 'Đặc trưng tương quan']}
+  scope="Mô phỏng giáo dục: bước 1 dùng một loss bậc hai hai chiều tự chọn; bước 3–4 dùng hồi quy tuyến tính 25 mẫu huấn luyện, 500 mẫu kiểm tra và 8 đặc trưng sinh ngẫu nhiên (x₂ gần trùng x₁, bốn đặc trưng vô ích). Ridge giải bằng công thức đóng, Lasso bằng coordinate descent, đều chạy trong trình duyệt. Dữ liệu thật cần chuẩn hóa đặc trưng trước khi phạt và chọn λ bằng cross-validation.">
+  <Fragment slot="controls">
+    <label class="field" data-lam2d-field><span class="field-row"><span>Độ mạnh phạt λ</span><output data-value="lam2d"></output></span><input type="range" name="lam2d" min="0" max="5" step="0.1" value="1.5" /></label>
+    <label class="field" data-lamshrink-field hidden><span class="field-row"><span>Độ mạnh phạt λ</span><output data-value="lamshrink"></output></span><input type="range" name="lamshrink" min="0" max="2" step="0.05" value="0.5" /></label>
+    <label class="field" data-lamindex-field hidden><span class="field-row"><span>Độ mạnh phạt</span><output data-value="lamindex"></output></span><input type="range" name="lamindex" min="0" max="24" step="1" value="14" /></label>
+    <div class="actions"><button type="button" data-reset>Đặt lại</button></div>
+    <p class="hint">Thử: ở bước 1, kéo λ từ 0 lên 1.5 và xem điểm Lasso “rơi” xuống trục w₁. Ở bước 3, kéo λ từ trái sang phải và đếm số hệ số Lasso bằng 0.</p>
+  </Fragment>
+  <section class="inspector" aria-labelledby="reg-chart-heading">
+    <div class="section-head"><h3 id="reg-chart-heading">Lỗi kiểm tra theo λ (hồi quy 8 đặc trưng)</h3><p data-chart-note></p></div>
+    <div class="chart"><svg data-chart role="img" aria-labelledby="reg-chart-heading" aria-describedby="reg-chart-caption"></svg></div>
+    <p id="reg-chart-caption" class="caption">λ nhỏ (trái): gần như không phạt, mô hình overfit 25 mẫu huấn luyện. λ lớn (phải): hệ số bị ép về 0, mô hình underfit. Ở giữa là vùng tốt nhất. Giá trị trên 6 bị cắt. Nhấp vào biểu đồ để chọn λ.</p>
+    <details class="table-view"><summary>Xem dạng bảng</summary><div class="table-scroll"><table class="data" data-table></table></div></details>
+  </section>
+</Lab>
+<script>
+  import { initRegularizationLab } from './render';
+  initRegularizationLab();
+</script>

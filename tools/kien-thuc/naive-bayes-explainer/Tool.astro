@@ -1,0 +1,28 @@
+---
+import Lab from '../../_shared/sequence-lab/Lab.astro';
+import '../../_shared/optimization-lab/plots.css';
+---
+<Lab id="naive-bayes" title="Naive Bayes · bộ lọc spam từ 16 email" label="Dữ liệu huấn luyện, bảng xác suất và điểm phân loại của email đang soạn"
+  steps={['Prior P(lớp)', 'Likelihood P(từ | lớp)', 'Phân loại email', 'Giả định “ngây thơ”']}
+  scope="Mô phỏng giáo dục: Multinomial Naive Bayes với 16 email tiếng Việt tự viết và bộ từ vựng 10 từ, đếm và tính xác suất chính xác trong trình duyệt. Bộ lọc spam thật học từ hàng trăm nghìn email, tách từ, chuẩn hóa văn bản và dùng từ vựng hàng chục nghìn mục.">
+  <div class="strip" slot="strip">
+    <div class="field">Soạn email (nhấp để thêm một lần, lần thứ tư đưa về 0)<div class="wordbox" data-words></div></div>
+    <div class="field">Ví dụ nhanh<div class="chips" data-examples></div></div>
+    <p class="note" data-message></p>
+  </div>
+  <Fragment slot="controls">
+    <label class="field"><span class="field-row"><span>Làm trơn Laplace α</span><output data-value="alpha"></output></span><input type="range" name="alpha" min="0" max="2" step="0.05" value="1" /></label>
+    <div class="actions"><button type="button" data-reset>Đặt lại</button></div>
+    <p class="hint">Thử: ở bước 3, chọn ví dụ “Trúng thưởng… mời họp” rồi kéo α về 0. Ở bước 4, so sánh xác suất khi tách và khi gộp “trúng thưởng”.</p>
+  </Fragment>
+  <section class="inspector" aria-labelledby="nb-chart-heading">
+    <div class="section-head"><h3 id="nb-chart-heading">Bằng chứng tích lũy qua từng từ</h3><p data-chart-note></p></div>
+    <div class="chart"><svg data-chart role="img" aria-labelledby="nb-chart-heading" aria-describedby="nb-chart-caption"></svg></div>
+    <p id="nb-chart-caption" class="caption">Bắt đầu từ prior, mỗi từ trong email cộng thêm log tỉ số của nó và đẩy P(spam) lên hoặc xuống. Thứ tự từ không ảnh hưởng tới kết quả cuối, vì phép cộng giao hoán.</p>
+    <details class="table-view"><summary>Xem dạng bảng</summary><div class="table-scroll"><table class="data" data-table></table></div></details>
+  </section>
+</Lab>
+<script>
+  import { initNaiveBayesLab } from './render';
+  initNaiveBayesLab();
+</script>

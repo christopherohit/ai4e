@@ -39,6 +39,14 @@ export const SYNONYM_GROUPS: string[][] = [
   ['learning rate', 'tốc độ học'],
   ['optimization', 'tối ưu hóa', 'tối ưu'],
   ['loss', 'hàm mất mát', 'hàm loss'],
+  ['naive bayes', 'bayes ngây thơ', 'phân loại bayes'],
+  ['svm', 'support vector machine', 'máy vector hỗ trợ'],
+  ['overfitting', 'quá khớp', 'học thuộc'],
+  ['underfitting', 'chưa khớp', 'dưới khớp'],
+  ['regularization', 'chính quy hóa', 'điều chuẩn'],
+  ['lasso', 'l1 regularization', 'phạt l1'],
+  ['ridge', 'l2 regularization', 'phạt l2', 'weight decay'],
+  ['bias variance', 'độ chệch phương sai', 'bias-variance tradeoff'],
 ];
 
 /** Canonical phrase key: normalized, punctuation/hyphens → single spaces. */

@@ -1,0 +1,205 @@
+---
+title: 'Naive Bayes: Phân loại bằng xác suất và một giả định “ngây thơ”'
+description: 'Naive Bayes hoạt động thế nào: định lý Bayes, prior, likelihood, làm trơn Laplace, cộng log để phân loại, các biến thể và cái giá của giả định độc lập.'
+category: kien-thuc
+topic: nen-tang
+tags: ['Naive Bayes', 'Phân loại', 'Xác suất', 'Học máy']
+viz: naive-bayes-explainer
+cover: ../../../../assets/covers/naive-bayes.svg
+order: 3
+date: 2026-10-26
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+## Bài toán: email này có phải spam không?
+
+Một bộ lọc spam nhận vào nội dung email và trả về một trong hai nhãn: **spam** hoặc **thường**. Thay vì viết luật bằng tay ("có chữ *trúng thưởng* thì chặn"), ta muốn mô hình tự học từ các email đã gán nhãn.
+
+Naive Bayes là một trong những cách đơn giản nhất để làm việc này, và vẫn được dùng rộng rãi: huấn luyện chỉ là **đếm**, dự đoán chỉ là **cộng**, chạy được trên dữ liệu lớn và cho kết quả tốt bất ngờ với văn bản. Lab phía trên dùng 16 email tiếng Việt tự viết (6 spam, 10 thường) và bộ từ vựng 10 từ để mọi con số đều kiểm tra được bằng tay.
+
+## Định lý Bayes: lật ngược câu hỏi
+
+Ta muốn biết $P(\text{spam} \mid \text{email})$: đã đọc email, xác suất nó là spam là bao nhiêu? Đại lượng này khó ước lượng trực tiếp vì mỗi email gần như là duy nhất. **Định lý Bayes** lật ngược câu hỏi:
+
+$$
+P(c \mid \mathbf{x}) = \frac{P(\mathbf{x} \mid c)\,P(c)}{P(\mathbf{x})}.
+$$
+
+Bốn thành phần có tên riêng:
+
+- $P(c)$: **prior**, xác suất của lớp $c$ trước khi nhìn dữ liệu.
+- $P(\mathbf{x} \mid c)$: **likelihood**, nếu email thuộc lớp $c$ thì khả năng thấy nội dung $\mathbf{x}$ là bao nhiêu.
+- $P(c \mid \mathbf{x})$: **posterior**, xác suất của lớp sau khi đã thấy dữ liệu.
+- $P(\mathbf{x})$: hằng số chuẩn hóa, giống nhau cho mọi lớp nên khi so sánh có thể bỏ qua.
+
+Để phân loại, ta chọn lớp có posterior lớn nhất:
+
+$$
+\hat c = \arg\max_c\; P(c)\,P(\mathbf{x} \mid c).
+$$
+
+## Giả định "ngây thơ"
+
+Vấn đề còn lại là $P(\mathbf{x} \mid c)$. Một email có thể chứa hàng trăm từ; số tổ hợp từ là khổng lồ, không thể đếm từng tổ hợp. Naive Bayes đưa ra giả định đơn giản hóa mạnh: **khi đã biết lớp, các từ xuất hiện độc lập với nhau**.
+
+$$
+P(x_1, x_2, \dots, x_n \mid c) = \prod_{i=1}^{n} P(x_i \mid c).
+$$
+
+Giả định này gần như luôn sai. "Trúng" và "thưởng" thường đi cùng nhau; "báo cáo" và "dự án" cũng vậy. Nhưng nhờ nó, thay vì ước lượng một phân phối trên mọi tổ hợp từ, ta chỉ cần ước lượng $P(\text{từ} \mid \text{lớp})$ cho từng từ riêng lẻ: một bảng đếm nhỏ.
+
+## Huấn luyện là đếm
+
+### Prior
+
+$P(c)$ là tỉ lệ email của lớp $c$ trong dữ liệu huấn luyện. Trong lab:
+
+$$
+P(\text{spam}) = \frac{6}{16} = 0{,}375, \qquad P(\text{thường}) = \frac{10}{16} = 0{,}625.
+$$
+
+### Likelihood và làm trơn Laplace
+
+Với **Multinomial Naive Bayes** (biến thể cho văn bản), $P(w \mid c)$ là tỉ lệ lần xuất hiện của từ $w$ trong tổng số từ của lớp $c$. Thêm **làm trơn Laplace** với tham số $\alpha$:
+
+$$
+P(w \mid c) = \frac{\text{đếm}(w, c) + \alpha}{\sum_{w'} \text{đếm}(w', c) + \alpha\,|V|}.
+$$
+
+$|V|$ là kích thước bộ từ vựng. Trong lab, các email spam có tổng cộng 17 từ thuộc bộ từ vựng, email thường có 23 từ, $|V| = 10$. Với $\alpha = 1$:
+
+| Từ | đếm trong spam | $P(w \mid \text{spam})$ | đếm trong thường | $P(w \mid \text{thường})$ |
+| --- | --- | --- | --- | --- |
+| trúng | 3 | 4/27 ≈ 0,148 | 0 | 1/33 ≈ 0,030 |
+| click | 3 | 4/27 ≈ 0,148 | 1 | 2/33 ≈ 0,061 |
+| họp | 0 | 1/27 ≈ 0,037 | 4 | 5/33 ≈ 0,152 |
+| dự án | 0 | 1/27 ≈ 0,037 | 6 | 7/33 ≈ 0,212 |
+
+### Vì sao cần làm trơn?
+
+Không làm trơn ($\alpha = 0$), "trúng" chưa từng xuất hiện trong email thường nên $P(\text{trúng} \mid \text{thường}) = 0$. Vì likelihood là một **tích**, chỉ một thừa số bằng 0 là cả tích bằng 0. Một email công việc lỡ có chữ "trúng" sẽ bị coi là spam chắc chắn 100%, bất kể các từ còn lại.
+
+Tệ hơn, email "trúng thưởng… mời họp" có "trúng" (chưa gặp trong thư thường) và "họp" (chưa gặp trong spam). Cả hai lớp đều có likelihood bằng 0, posterior thành $0/0$: mô hình không quyết định được. Cộng thêm $\alpha$ vào mọi ô đếm loại bỏ vấn đề này. $\alpha = 1$ là lựa chọn kinh điển; $\alpha$ lớn hơn kéo mọi xác suất về gần $1/|V|$, làm từ kém phân biệt hơn.
+
+<Callout type="try">
+
+Ở bước **Likelihood P(từ | lớp)**, kéo $\alpha$ về 0 và xem các ô xác suất bằng 0 cùng tỉ số "∞". Sang bước **Phân loại email**, chọn ví dụ **Trúng thưởng… mời họp**: với $\alpha = 0$, cả hai điểm log đều là $-\infty$.
+
+</Callout>
+
+## Dự đoán là cộng log
+
+Nhân nhiều xác suất nhỏ dễ gây tràn số dưới (underflow): với email dài, tích có thể nhỏ hơn số thực nhỏ nhất máy tính biểu diễn được. Vì vậy người ta lấy log, biến tích thành tổng:
+
+$$
+\text{điểm}(c) = \log P(c) + \sum_{w} n_w \log P(w \mid c),
+$$
+
+với $n_w$ là số lần từ $w$ xuất hiện trong email. Lớp có điểm cao hơn thắng. Posterior thu được bằng cách chuẩn hóa: $P(c \mid \mathbf{x}) = e^{\text{điểm}(c)} / \sum_{c'} e^{\text{điểm}(c')}$.
+
+### Ví dụ: "trúng · thưởng · click"
+
+$$
+P(\text{spam}) \cdot P(\text{trúng}\mid\text{spam})\,P(\text{thưởng}\mid\text{spam})\,P(\text{click}\mid\text{spam}) = 0{,}375 \times \left(\tfrac{4}{27}\right)^3 \approx 1{,}22 \times 10^{-3},
+$$
+
+$$
+P(\text{thường}) \cdot \tfrac{1}{33}\cdot\tfrac{1}{33}\cdot\tfrac{2}{33} = 0{,}625 \times 5{,}57 \times 10^{-5} \approx 3{,}48 \times 10^{-5}.
+$$
+
+Chuẩn hóa: $P(\text{spam} \mid \text{email}) = 1{,}22 / (1{,}22 + 0{,}0348) \approx 97{,}2\%$. Dạng log cho cùng kết quả: điểm spam $-6{,}71$, điểm thường $-10{,}27$.
+
+Có thể đọc mỗi từ như một **bằng chứng** cộng vào log-odds $\log \frac{P(\text{spam}\mid\mathbf{x})}{P(\text{thường}\mid\mathbf{x})}$: từ có $\log \frac{P(w\mid\text{spam})}{P(w\mid\text{thường})} > 0$ đẩy về spam, ngược lại đẩy về thường. Prior là điểm xuất phát. Biểu đồ dưới lab vẽ đúng quá trình tích lũy này.
+
+<Callout type="try">
+
+Ở bước **Phân loại email**, nhấp các từ phía trên lab để soạn email. Bảng bên trái cho thấy từng từ đóng góp bao nhiêu vào chênh lệch điểm. Thử thêm "dự án" vào email "trúng · thưởng · click" rồi thêm lần nữa: mỗi lần xuất hiện được cộng riêng.
+
+</Callout>
+
+## Cái giá của giả định độc lập
+
+Trong 16 email huấn luyện, "trúng" xuất hiện ở đâu thì "thưởng" cũng có mặt. Thực chất đây là **một** bằng chứng. Nhưng Naive Bayes nhân hai xác suất như thể chúng độc lập, nên bằng chứng bị cộng hai lần.
+
+Lab so sánh với việc gộp hai từ thành một đặc trưng "trúng thưởng":
+
+| Email | Tách hai từ | Gộp "trúng thưởng" |
+| --- | --- | --- |
+| trúng · thưởng · click | 97% spam | 90% spam |
+| trúng · thưởng · họp | 78% spam | 48% spam |
+
+Ở ví dụ thứ hai, kết luận **đổi chiều**. Đây là hai hệ quả quen thuộc của giả định "ngây thơ":
+
+- **Xác suất bị phóng đại.** Posterior của Naive Bayes thường sát 0 hoặc 1 hơn thực tế. Nếu cần xác suất đáng tin (ví dụ để đặt ngưỡng chi phí), nên hiệu chỉnh lại (calibration) bằng Platt scaling hoặc isotonic regression.
+- **Thứ tự lớp thường vẫn đúng.** Dù xác suất sai, lớp có điểm cao nhất thường vẫn là lớp đúng, nên độ chính xác phân loại khá tốt. Domingos và Pazzani (1997) đã phân tích vì sao Naive Bayes vẫn tối ưu cho phân loại trong nhiều trường hợp giả định độc lập bị vi phạm.
+
+<Callout type="try">
+
+Mở bước **Giả định "ngây thơ"** và chọn ví dụ **Trúng thưởng… mời họp**. So sánh P(spam) khi tách và khi gộp hai từ, cùng lượng bằng chứng log-odds của cặp từ trong hai cách.
+
+</Callout>
+
+## Các biến thể của Naive Bayes
+
+Công thức Bayes và giả định độc lập giữ nguyên; chỉ cách mô hình hóa $P(x_i \mid c)$ thay đổi theo kiểu dữ liệu:
+
+| Biến thể | Kiểu đặc trưng | $P(x_i \mid c)$ | Dùng cho |
+| --- | --- | --- | --- |
+| Multinomial NB | Số lần xuất hiện (đếm) | Tỉ lệ từ trong lớp, làm trơn Laplace | Phân loại văn bản, túi từ, TF-IDF |
+| Bernoulli NB | Nhị phân (có / không) | $p^{x}(1-p)^{1-x}$, phạt cả từ *vắng mặt* | Văn bản ngắn, đặc trưng bật/tắt |
+| Gaussian NB | Số thực | Phân phối chuẩn với trung bình và phương sai riêng mỗi lớp | Đo lường liên tục (chiều cao, cảm biến) |
+| Complement NB | Đếm | Ước lượng từ các lớp *còn lại* | Văn bản có lớp mất cân bằng |
+
+## Trong code
+
+```python
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.pipeline import make_pipeline
+
+emails = ["Miễn phí! Click nhận quà khuyến mãi", "Mời họp dự án lúc 9h", ...]
+labels = ["spam", "thường", ...]
+
+model = make_pipeline(CountVectorizer(), MultinomialNB(alpha=1.0))
+model.fit(emails, labels)
+model.predict(["Bạn đã trúng thưởng, click để nhận"])        # ['spam']
+model.predict_proba(["Báo cáo dự án tuần này"])             # xác suất từng lớp
+```
+
+`CountVectorizer` biến văn bản thành vector đếm từ; `MultinomialNB` học bảng $P(w \mid c)$ và prior. Với tiếng Việt, bước tách từ (ví dụ ghép "dự án" thành một token) ảnh hưởng nhiều tới chất lượng.
+
+## Ưu và nhược điểm
+
+**Ưu điểm**
+
+- Huấn luyện một lượt qua dữ liệu, độ phức tạp tuyến tính theo số mẫu và số đặc trưng.
+- Cần ít dữ liệu để có kết quả dùng được; ít bị overfitting vì số tham số nhỏ.
+- Học tăng dần dễ dàng: có email mới thì cộng thêm vào bảng đếm.
+- Dễ giải thích: có thể chỉ ra từ nào đẩy kết luận về lớp nào.
+
+**Nhược điểm**
+
+- Giả định độc lập làm xác suất kém hiệu chỉnh và bỏ qua tương tác giữa các đặc trưng.
+- Bỏ qua thứ tự từ ("không tốt" và "tốt không" giống nhau với túi từ).
+- Với đặc trưng liên tục, Gaussian NB giả định phân phối chuẩn có thể không đúng.
+- Khi dữ liệu nhiều, các mô hình phân biệt (logistic regression, SVM, mạng nơ-ron) thường chính xác hơn. Ng và Jordan (2001) cho thấy Naive Bayes tiến tới sai số tiệm cận nhanh hơn với ít dữ liệu, còn logistic regression đạt sai số tiệm cận thấp hơn khi dữ liệu đủ lớn.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- Naive Bayes chọn lớp có $P(c)\prod_i P(x_i \mid c)$ lớn nhất, dựa trên định lý Bayes và giả định các đặc trưng độc lập khi biết lớp.
+- Huấn luyện là đếm; dự đoán là cộng log prior và log likelihood.
+- Làm trơn Laplace ($\alpha > 0$) tránh xác suất bằng 0 cho từ chưa gặp.
+- Giả định độc lập làm xác suất bị phóng đại, nhưng thứ tự lớp thường vẫn đúng.
+
+</Callout>
+
+## Đọc tiếp
+
+- [SVM](/kien-thuc/svm/): một bộ phân loại phân biệt, tìm đường biên có lề rộng nhất thay vì mô hình hóa xác suất.
+- [Bias–Variance Tradeoff](/kien-thuc/bias-variance/): vì sao một mô hình đơn giản như Naive Bayes có thể thắng mô hình phức tạp khi dữ liệu ít.
+- Pedro Domingos, Michael Pazzani, [On the Optimality of the Simple Bayesian Classifier under Zero-One Loss](https://doi.org/10.1023/A:1007413511361), Machine Learning, 1997.
+- Andrew Ng, Michael Jordan, *On Discriminative vs. Generative Classifiers: A comparison of logistic regression and naive Bayes*, NeurIPS 2001.
+- Christopher Manning, Prabhakar Raghavan, Hinrich Schütze, [Introduction to Information Retrieval](https://nlp.stanford.edu/IR-book/), chương 13: phân loại văn bản bằng Naive Bayes.

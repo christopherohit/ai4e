@@ -1,0 +1,210 @@
+---
+title: 'L1 (Lasso) và L2 (Ridge) Regularization: Phạt hệ số để chống overfitting'
+description: 'Phân biệt L1 Regularization (Lasso) và L2 Regularization (Ridge): công thức, hình học kim cương và hình tròn, vì sao L1 tạo hệ số bằng 0, đặc trưng tương quan và cách chọn λ.'
+category: kien-thuc
+topic: nen-tang
+tags: ['Regularization', 'Lasso', 'Ridge', 'Overfitting', 'Học máy']
+viz: regularization-explainer
+cover: ../../../../assets/covers/l1-l2-regularization.svg
+order: 6
+date: 2026-10-26
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+## Vì sao phải phạt hệ số?
+
+Trong [bài Bias–Variance](/kien-thuc/bias-variance/), mô hình quá linh hoạt so với lượng dữ liệu sẽ overfit: lỗi huấn luyện thấp, lỗi trên dữ liệu mới cao. Một cách xử lý là đổi sang mô hình đơn giản hơn (bớt đặc trưng, giảm bậc đa thức). **Regularization** làm việc đó một cách mềm dẻo hơn: giữ nguyên họ mô hình, nhưng thêm vào hàm mất mát một **khoản phạt** cho các hệ số lớn.
+
+$$
+\min_{\beta}\ \underbrace{L(\beta)}_{\text{khớp dữ liệu}} + \lambda\,\underbrace{R(\beta)}_{\text{độ phức tạp}} .
+$$
+
+$\lambda \ge 0$ điều chỉnh độ mạnh của phạt. $\lambda = 0$ là mô hình gốc; $\lambda$ rất lớn ép mọi hệ số về 0. Hai lựa chọn phổ biến nhất cho $R$:
+
+| | L2 / Ridge | L1 / Lasso |
+| --- | --- | --- |
+| Phạt | $\lVert\beta\rVert_2^2 = \sum_j \beta_j^2$ | $\lVert\beta\rVert_1 = \sum_j \lvert\beta_j\rvert$ |
+| Tên khác | Tikhonov, weight decay | Least Absolute Shrinkage and Selection Operator |
+| Hệ số | Co nhỏ, gần như không bao giờ bằng 0 | Nhiều hệ số bằng **đúng 0** |
+| Nghiệm | Có công thức đóng | Không có công thức đóng (trừ trường hợp đặc biệt) |
+
+Bài này dùng hồi quy tuyến tính để minh họa, nhưng ý tưởng áp dụng cho mọi mô hình học bằng tối ưu: logistic regression, [SVM](/kien-thuc/svm/) (số hạng $\tfrac12\lVert\mathbf w\rVert^2$ chính là phạt L2), mạng nơ-ron (weight decay).
+
+## Công thức cho hồi quy tuyến tính
+
+Với $n$ mẫu, ma trận đặc trưng $X$ và mục tiêu $y$:
+
+$$
+\text{Ridge: } \min_\beta \frac{1}{2n}\lVert y - X\beta\rVert^2 + \frac{\lambda}{2}\lVert\beta\rVert_2^2,
+\qquad
+\text{Lasso: } \min_\beta \frac{1}{2n}\lVert y - X\beta\rVert^2 + \lambda\lVert\beta\rVert_1 .
+$$
+
+Ridge có nghiệm đóng: đạo hàm bằng 0 cho
+
+$$
+\beta_{\text{ridge}} = \left(\tfrac{1}{n}X^\top X + \lambda I\right)^{-1}\tfrac{1}{n}X^\top y .
+$$
+
+Cộng $\lambda I$ còn làm ma trận luôn khả nghịch, kể cả khi các đặc trưng tương quan mạnh hoặc số đặc trưng lớn hơn số mẫu. Đây là lý do ban đầu Hoerl và Kennard (1970) đề xuất Ridge.
+
+Lasso không khả vi tại $\beta_j = 0$ nên không có nghiệm đóng. Người ta giải bằng **coordinate descent** (cập nhật từng hệ số một, như scikit-learn và glmnet), proximal gradient (ISTA/FISTA) hoặc LARS.
+
+<Callout type="note">
+
+Hệ số chặn (intercept) thường **không bị phạt**, và các đặc trưng cần được **chuẩn hóa** về cùng thang đo trước khi phạt. Nếu không, đặc trưng đo bằng mét và đặc trưng đo bằng milimét bị phạt rất khác nhau dù mang cùng thông tin.
+
+</Callout>
+
+## Hình học: kim cương và hình tròn
+
+Bài toán có phạt tương đương với bài toán có ràng buộc: với mỗi $\lambda$ có một ngân sách $t$ sao cho
+
+$$
+\min_\beta L(\beta) \quad \text{sao cho} \quad R(\beta) \le t .
+$$
+
+Với hai hệ số, vùng $\lVert\beta\rVert_2^2 \le t$ là một **hình tròn**, còn $\lVert\beta\rVert_1 \le t$ là một **hình thoi** (kim cương) có bốn đỉnh nằm trên hai trục. Các đường đồng mức của loss là những elip quanh nghiệm không phạt $w^\star$. Lời giải là điểm elip **chạm** vùng ràng buộc lần đầu khi nở dần từ $w^\star$.
+
+- Hình tròn trơn đều mọi hướng, nên điểm chạm thường nằm ở vị trí "chung chung" với cả hai hệ số khác 0.
+- Hình thoi có đỉnh nhọn nằm trên trục. Với phần lớn hình dạng elip, điểm chạm đầu tiên rơi vào **đỉnh**, nơi một hệ số bằng đúng 0. Trong nhiều chiều, hình thoi có rất nhiều đỉnh và cạnh nằm trên các mặt phẳng tọa độ, nên lời giải Lasso thường **thưa** (nhiều hệ số bằng 0).
+
+Trong lab, nghiệm không phạt là $w^\star = (2{,}2;\ 0{,}7)$. Khi $\lambda$ tăng, nghiệm Ridge đi dần về gốc theo một đường cong, cả hai hệ số cùng nhỏ lại. Nghiệm Lasso kéo $w_2$ về trục trước và chạm trục ở $\lambda \approx 1{,}01$. Từ đó $w_2 = 0$ đúng tuyệt đối và nghiệm chỉ trượt dọc trục $w_1$. Với $\lambda = 1{,}5$: Ridge cho $(0{,}92;\ 0{,}47)$, Lasso cho $(1{,}77;\ 0)$.
+
+<Callout type="try">
+
+Ở bước **Kim cương & hình tròn**, kéo $\lambda$ từ 0 lên 5. Đường mảnh trên mỗi hình là quỹ đạo của nghiệm khi $\lambda$ tăng: đường của Lasso gấp khúc đúng lúc chạm trục $w_1$.
+
+</Callout>
+
+## Đại số: chia hay trừ
+
+Khi các đặc trưng trực giao và chuẩn hóa ($\tfrac1n X^\top X = I$), cả hai có công thức đóng theo nghiệm bình phương tối thiểu $\hat\beta$:
+
+$$
+\beta_{\text{ridge}} = \frac{\hat\beta}{1 + \lambda},
+\qquad
+\beta_{\text{lasso}} = \operatorname{sign}(\hat\beta)\,\max\bigl(\lvert\hat\beta\rvert - \lambda,\ 0\bigr).
+$$
+
+- **Ridge chia**: mọi hệ số co theo cùng một tỉ lệ. Một hệ số chỉ bằng 0 nếu nó vốn đã bằng 0.
+- **Lasso trừ rồi cắt ở 0** (soft-thresholding): mọi hệ số bị trừ cùng một lượng $\lambda$; hệ số nào có độ lớn nhỏ hơn $\lambda$ bị xóa hẳn.
+
+Ví dụ với $\lambda = 0{,}5$: hệ số $\hat\beta = 0{,}3$ thành 0,2 với Ridge nhưng thành **0** với Lasso; hệ số $\hat\beta = 2{,}5$ thành 1,67 với Ridge nhưng 2,0 với Lasso. Lasso xóa hệ số nhỏ và giữ hệ số lớn gần nguyên vẹn; Ridge co tất cả theo tỉ lệ.
+
+Lý do nằm ở **lực kéo về 0**, tức đạo hàm của khoản phạt. Phạt $\tfrac{\lambda}{2}\beta^2$ có đạo hàm $\lambda\beta$: càng gần 0, lực càng yếu, nên không bao giờ đẩy được hệ số tới đúng 0. Phạt $\lambda\lvert\beta\rvert$ có đạo hàm $\lambda\operatorname{sign}(\beta)$: lực luôn bằng $\lambda$ dù hệ số nhỏ tới đâu, đủ để ghim hệ số tại 0 khi gradient của loss không đủ mạnh để kéo nó ra.
+
+<Callout type="try">
+
+Ở bước **Co hệ số**, kéo $\lambda$ và so sánh hai đường: Ridge là đường thẳng thoải dần qua gốc, Lasso có một đoạn nằm ngang bằng 0 trong khoảng $[-\lambda, \lambda]$. Đồ thị bên phải vẽ lực kéo về 0 của từng loại phạt.
+
+</Callout>
+
+## Đường đi hệ số trên dữ liệu thật hơn
+
+Bước 3 của lab dùng hồi quy với 25 mẫu huấn luyện và 8 đặc trưng. Hệ số thật là $(1{,}5;\ 1{,}5;\ -2;\ 0;\ 0;\ 1;\ 0;\ 0)$: chỉ $x_1, x_2, x_3, x_6$ có ích, bốn đặc trưng còn lại là nhiễu, và $x_2$ gần như là bản sao của $x_1$ (tương quan 0,98). Với 25 mẫu cho 8 hệ số, mô hình không phạt đã overfit: lỗi huấn luyện 1,12, lỗi kiểm tra 3,37.
+
+Khi $\lambda$ tăng:
+
+- **Ridge** thu nhỏ cả 8 hệ số cùng lúc, mượt mà. Không hệ số nào về đúng 0. Lỗi kiểm tra tốt nhất 2,95 tại $\lambda = 0{,}1$.
+- **Lasso** đưa từng hệ số về đúng 0 theo thứ tự: các đặc trưng vô ích $x_5, x_7$ biến mất trước, rồi tới $x_8$. Lỗi kiểm tra tốt nhất 2,77 tại $\lambda \approx 0{,}22$, khi mô hình chỉ còn 5 hệ số khác 0.
+
+Ở ví dụ này Lasso thắng vì hệ số thật thưa (một nửa bằng 0). Nếu mọi đặc trưng đều có ích một chút, Ridge thường thắng. Lasso cũng không hoàn hảo: ở $\lambda$ tốt nhất, nó vẫn giữ $x_4$ (hệ số thật bằng 0) với giá trị −0,24.
+
+<Callout type="try">
+
+Ở bước **Đường đi hệ số**, kéo $\lambda$ từ trái sang phải và đọc bảng hệ số. Biểu đồ phía dưới vẽ lỗi kiểm tra theo $\lambda$ cho cả hai: $\lambda$ nhỏ là overfitting, $\lambda$ lớn là underfitting, ở giữa là vùng tốt nhất.
+
+</Callout>
+
+## Khi các đặc trưng tương quan mạnh
+
+$x_1$ và $x_2$ gần như trùng nhau, cùng có hệ số thật 1,5. Dữ liệu chỉ xác định được **tổng** ảnh hưởng $\beta_1 + \beta_2 \approx 3$, còn cách chia gần như tùy ý. Ba phương pháp chọn ba cách chia khác nhau:
+
+| | $\beta_1$ | $\beta_2$ |
+| --- | --- | --- |
+| Không phạt | −0,09 | 3,06 |
+| Ridge, $\lambda = 0{,}1$ | 1,21 | 1,56 |
+| Lasso, $\lambda = 0{,}1$ | 0 | 2,88 |
+
+- **Không phạt** chia rất lệch, và cách chia đổi hẳn nếu đổi vài mẫu: variance cao.
+- **Ridge** ưu tiên chia đều, vì với cùng tổng, $1{,}5^2 + 1{,}5^2 = 4{,}5$ nhỏ hơn $0^2 + 3^2 = 9$. Ridge "chia sẻ" trọng số giữa các đặc trưng tương quan, nên ổn định.
+- **Lasso** thấy $\lvert 1{,}5\rvert + \lvert 1{,}5\rvert = \lvert 0\rvert + \lvert 3\rvert$: phạt như nhau. Nó chọn lời giải thưa và giữ một đặc trưng, bỏ hẳn đặc trưng kia. Đặc trưng nào được giữ phụ thuộc vào chi tiết của dữ liệu và có thể đổi khi lấy mẫu lại.
+
+**Elastic Net** (Zou và Hastie, 2005) kết hợp hai loại phạt, $\lambda_1\lVert\beta\rVert_1 + \lambda_2\lVert\beta\rVert_2^2$. Nó vẫn tạo hệ số bằng 0 như Lasso nhưng giữ các đặc trưng tương quan cùng nhau như Ridge. Đây thường là lựa chọn an toàn khi có nhiều đặc trưng tương quan.
+
+<Callout type="try">
+
+Ở bước **Đặc trưng tương quan**, kéo $\lambda$ và xem hệ số của $x_1$ (xanh) và $x_2$ (cam) cho từng phương pháp. Với Lasso, $x_1$ luôn bằng 0 trên toàn bộ đường đi.
+
+</Callout>
+
+## Góc nhìn Bayes
+
+Regularization tương đương với việc đặt một **prior** lên hệ số rồi tìm nghiệm MAP (maximum a posteriori):
+
+- Phạt L2 tương ứng với prior **Gauss** $\beta_j \sim \mathcal{N}(0, \tau^2)$: đa số hệ số nhỏ, hiếm khi rất lớn.
+- Phạt L1 tương ứng với prior **Laplace** $p(\beta_j) \propto e^{-\lvert\beta_j\rvert/b}$: nhọn tại 0, nên niềm tin rằng nhiều hệ số bằng 0 được mã hóa sẵn.
+
+$\lambda$ lớn tương ứng với prior hẹp, tức niềm tin mạnh rằng hệ số nhỏ.
+
+## Chọn λ thế nào?
+
+$\lambda$ là siêu tham số, không học được bằng cách tối thiểu hóa lỗi huấn luyện (lỗi huấn luyện luôn nhỏ nhất khi $\lambda = 0$). Cách chuẩn là **cross-validation**: thử một dãy $\lambda$ cách đều theo thang log, chọn giá trị có lỗi validation trung bình nhỏ nhất. Một quy tắc thận trọng hơn là "1-SE": chọn $\lambda$ lớn nhất có lỗi nằm trong một độ lệch chuẩn so với mức tốt nhất, để được mô hình đơn giản hơn mà gần như không mất độ chính xác.
+
+```python
+from sklearn.linear_model import LassoCV, RidgeCV, ElasticNetCV
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+
+alphas = np.logspace(-3, 1, 25)          # scikit-learn gọi λ là alpha
+ridge = make_pipeline(StandardScaler(), RidgeCV(alphas=alphas)).fit(X_train, y_train)
+lasso = make_pipeline(StandardScaler(), LassoCV(alphas=alphas, cv=5)).fit(X_train, y_train)
+enet = make_pipeline(StandardScaler(), ElasticNetCV(l1_ratio=[0.2, 0.5, 0.8], cv=5)).fit(X_train, y_train)
+
+print(lasso[-1].alpha_, np.sum(lasso[-1].coef_ != 0))   # λ được chọn và số đặc trưng giữ lại
+```
+
+<Callout type="note">
+
+Mỗi thư viện chia tỉ lệ $\lambda$ khác nhau. `Lasso` của scikit-learn dùng $\frac{1}{2n}\lVert y - X\beta\rVert^2 + \alpha\lVert\beta\rVert_1$ như bài này, còn `Ridge` dùng $\lVert y - X\beta\rVert^2 + \alpha\lVert\beta\rVert^2$ (không chia $n$). Trong mạng nơ-ron, `weight_decay` của optimizer là phạt L2; với Adam nên dùng AdamW để weight decay hoạt động đúng nghĩa.
+
+</Callout>
+
+## Khi nào dùng loại nào?
+
+| Tình huống | Nên dùng |
+| --- | --- |
+| Nhiều đặc trưng, tin rằng chỉ một phần nhỏ có ích; cần mô hình dễ giải thích | Lasso |
+| Mọi đặc trưng đều có thể đóng góp một chút; cần dự đoán ổn định | Ridge |
+| Nhiều nhóm đặc trưng tương quan mạnh | Ridge hoặc Elastic Net |
+| Số đặc trưng lớn hơn số mẫu ($p > n$) | Lasso chọn tối đa $n$ đặc trưng; Elastic Net thường tốt hơn |
+| Mạng nơ-ron | L2 (weight decay) là mặc định; L1 dùng khi cần trọng số thưa |
+
+## Những hiểu lầm thường gặp
+
+- **"Lasso chọn đúng đặc trưng thật."** Lasso chọn một tập đặc trưng dự đoán tốt, không đảm bảo đó là tập nhân quả hay tập thật. Với đặc trưng tương quan, lựa chọn của nó có thể đổi khi lấy mẫu lại.
+- **"Ridge cũng loại bỏ đặc trưng."** Ridge chỉ làm hệ số nhỏ đi; để loại bỏ phải đặt ngưỡng thủ công.
+- **"Regularization luôn giảm lỗi."** Nó giảm variance bằng cách thêm bias. Nếu mô hình đang underfit, thêm phạt chỉ làm tệ hơn.
+- **"Không cần chuẩn hóa đặc trưng."** Khoản phạt so sánh trực tiếp độ lớn các hệ số, nên thang đo của đặc trưng quyết định nó bị phạt nặng hay nhẹ.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- Regularization thêm $\lambda R(\beta)$ vào loss: đổi một ít bias lấy ít variance hơn để chống overfitting.
+- L2 (Ridge) phạt $\sum\beta_j^2$: co mọi hệ số theo tỉ lệ, không về 0, có nghiệm đóng, chia đều trọng số giữa các đặc trưng tương quan.
+- L1 (Lasso) phạt $\sum\lvert\beta_j\rvert$: soft-thresholding đưa nhiều hệ số về đúng 0, tự chọn đặc trưng, nhưng chọn tùy ý trong nhóm tương quan.
+- Elastic Net kết hợp cả hai. Chọn $\lambda$ bằng cross-validation, trên đặc trưng đã chuẩn hóa.
+
+</Callout>
+
+## Đọc tiếp
+
+- [Bias–Variance Tradeoff](/kien-thuc/bias-variance/): vì sao giảm variance bằng một ít bias lại giảm lỗi tổng.
+- [Gradient Descent](/kien-thuc/gradient-descent/): với phạt L2, mỗi bước gradient nhân hệ số với $(1 - \eta\lambda)$, nên mới có tên weight decay.
+- Robert Tibshirani, [Regression Shrinkage and Selection via the Lasso](https://doi.org/10.1111/j.2517-6161.1996.tb02080.x), JRSS B, 1996.
+- Arthur Hoerl, Robert Kennard, [Ridge Regression: Biased Estimation for Nonorthogonal Problems](https://doi.org/10.1080/00401706.1970.10488634), Technometrics, 1970.
+- Hui Zou, Trevor Hastie, [Regularization and Variable Selection via the Elastic Net](https://doi.org/10.1111/j.1467-9868.2005.00503.x), JRSS B, 2005.

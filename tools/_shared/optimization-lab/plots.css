@@ -38,3 +38,45 @@
 .seq-lab .legend .key-line.tone-1 { border-color: var(--seq-1); } .seq-lab .legend .key-line.tone-3 { border-color: var(--seq-3); }
 .seq-lab .legend .key-line.dashed { border-top-style: dashed; }
 .seq-lab .calc { margin: 0; font: 500 var(--text-sm)/1.7 var(--font-mono); background: var(--color-surface-2); border-radius: var(--radius-md); padding: var(--space-3); white-space: pre-wrap; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+
+/* Classification, model-fit and regularization plots (Naive Bayes, SVM, bias–variance, L1/L2). Class 0 = --seq-1
+   circles, class 1 = --seq-2 squares. */
+.seq-lab .opt-plot .cls-0 { fill: var(--seq-1); stroke: var(--color-surface); stroke-width: 1.25; }
+.seq-lab .opt-plot .cls-1 { fill: var(--seq-2); stroke: var(--color-surface); stroke-width: 1.25; }
+.seq-lab .opt-plot .cls-0.dim, .seq-lab .opt-plot .cls-1.dim { opacity: .25; }
+.seq-lab .opt-plot .ring { fill: none; stroke: var(--color-text); stroke-width: 1.75; }
+.seq-lab .opt-plot .ring.violate { stroke-dasharray: 3 2; }
+.seq-lab .opt-plot .boundary { fill: none; stroke: var(--color-text); stroke-width: 2.25; }
+.seq-lab .opt-plot .margin { fill: none; stroke: var(--color-text-2); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.seq-lab .opt-plot .margin-band { fill: color-mix(in oklab, var(--color-text) 7%, transparent); stroke: none; }
+.seq-lab .opt-plot .cell-0 { fill: color-mix(in oklab, var(--seq-1) calc(var(--a, 0%) * .35 + 6%), var(--color-surface)); }
+.seq-lab .opt-plot .cell-1 { fill: color-mix(in oklab, var(--seq-2) calc(var(--a, 0%) * .35 + 6%), var(--color-surface)); }
+.seq-lab .opt-plot .truth { fill: none; stroke: var(--seq-3); stroke-width: 2.5; stroke-dasharray: 6 4; }
+.seq-lab .opt-plot .model { fill: none; stroke: var(--seq-2); stroke-width: 2.5; }
+.seq-lab .opt-plot .ensemble { fill: none; stroke: var(--seq-2); stroke-width: 1; opacity: .28; }
+.seq-lab .opt-plot .mean-fit { fill: none; stroke: var(--color-text); stroke-width: 2.25; }
+.seq-lab .opt-plot .band { fill: color-mix(in oklab, var(--seq-2) 18%, transparent); stroke: none; }
+.seq-lab .opt-plot .region { fill: color-mix(in oklab, var(--seq-3) 18%, transparent); stroke: var(--seq-3); stroke-width: 2; }
+.seq-lab .opt-plot .region.l1 { fill: color-mix(in oklab, var(--seq-2) 16%, transparent); stroke: var(--seq-2); }
+.seq-lab .opt-plot .region.l2 { fill: color-mix(in oklab, var(--seq-1) 14%, transparent); stroke: var(--seq-1); }
+.seq-lab .opt-plot .axis-zero { stroke: var(--color-text-2); stroke-width: 1.25; }
+.seq-lab .opt-plot .coef { fill: none; stroke: var(--color-muted); stroke-width: 1.5; }
+.seq-lab .opt-plot .coef.signal { stroke: var(--seq-2); stroke-width: 2; }
+.seq-lab .opt-plot .coef.pair { stroke: var(--seq-1); stroke-width: 2; }
+.seq-lab .opt-plot .vline { stroke: var(--color-text); stroke-width: 1; stroke-dasharray: 3 3; opacity: .7; }
+.seq-lab .opt-plot .end-label { fill: var(--color-text-2); font-size: 10.5px; }
+.seq-lab .opt-plot .pickable-point { cursor: pointer; }
+.seq-lab .swatch.c0 { background: var(--seq-1); border-radius: 50%; } .seq-lab .swatch.c1 { background: var(--seq-2); }
+.seq-lab .wordbox { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.seq-lab .word { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 var(--space-3); border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-2); font: 500 var(--text-sm)/1.2 var(--font-sans); cursor: pointer; }
+.seq-lab .word b { display: inline-grid; place-items: center; min-width: 20px; height: 20px; border-radius: 10px; background: var(--color-surface-2); font: 600 var(--text-xs)/1 var(--font-mono); }
+.seq-lab .word[aria-pressed='true'] { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-primary-soft-text); }
+.seq-lab .word[aria-pressed='true'] b { background: var(--color-primary); color: var(--color-primary-contrast); }
+.seq-lab .emails { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); }
+.seq-lab .emails li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: var(--space-2); padding: 4px var(--space-2); border-radius: var(--radius-sm); background: var(--color-surface-2); }
+.seq-lab .emails li span:first-child { font-weight: 600; }
+.seq-lab .emails .spam span:first-child { color: color-mix(in oklab, var(--seq-2) 80%, var(--color-text)); }
+.seq-lab .emails mark { background: color-mix(in oklab, var(--seq-2) 22%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; }
+.seq-lab table.data.compact td, .seq-lab table.data.compact th { padding: 3px var(--space-2); }
+.seq-lab table.data td.zero { color: var(--color-muted); }
+.seq-lab table.data td.hit { font-weight: 700; color: var(--color-text); }
