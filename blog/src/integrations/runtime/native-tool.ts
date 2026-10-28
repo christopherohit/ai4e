@@ -1,3 +1,4 @@
+import { withBase } from '../../lib/base';
 import { localizeTool } from './tool-locale';
 
 interface Adapter {
@@ -22,7 +23,7 @@ export async function mountNativeTool(root: HTMLElement, slug: string, status: H
     root.scrollLeft += event.key === 'ArrowRight' ? 80 : -80;
   });
   try {
-    const response = await fetch(`/native/${slug}/adapter.json`);
+    const response = await fetch(withBase(`/native/${slug}/adapter.json`));
     if (!response.ok) throw new Error(`Adapter ${response.status}`);
     const adapter: Adapter = await response.json();
     const style = document.createElement('style');

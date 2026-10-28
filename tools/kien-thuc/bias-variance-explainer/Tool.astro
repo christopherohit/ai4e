@@ -1,0 +1,22 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="bias-variance" title="Bias–Variance · dự đoán mức tiêu thụ xăng của 392 xe thật" label="Hoạt cảnh bias và variance trên dữ liệu Auto MPG"
+  chapters={['Underfit & overfit', 'Bắn bia', 'Phân rã lỗi', 'Thêm dữ liệu']}
+  data="Auto MPG (UCI Machine Learning Repository, Quinlan 1993): 392 xe đời 1970–1982, dùng mã lực để dự đoán số dặm mỗi gallon."
+  scope="Hồi quy đa thức bậc 1–10 trên các tập huấn luyện lấy ngẫu nhiên (150 lần, hạt giống cố định), lỗi kiểm tra đo trên các xe không được chọn. Vì không biết đường cong thật, bias² và variance được ước lượng so với đường làm mượt cục bộ (local linear, băng thông 14 mã lực) trên cả 392 xe; nhiễu σ² ≈ 18,2 là phần dư của đường đó.">
+  <Fragment slot="controls">
+    <label class="field" data-chapters="0 1 2 3"><span class="field-row"><span>Bậc đa thức</span><output data-value="degree"></output></span><input type="range" name="degree" min="1" max="10" step="1" value="2" /></label>
+    <label class="field" data-chapters="3"><span class="field-row"><span>Số xe huấn luyện</span><output data-value="n"></output></span><input type="range" name="n" min="0" max="6" step="1" value="2" /></label>
+    <div class="actions" data-chapters="0"><button type="button" data-resample>Lấy 30 xe khác</button></div>
+    <div class="actions"><button type="button" data-autoplay>Xem lại hoạt cảnh tự động</button></div>
+    <p class="hint" data-chapters="0">Hoạt cảnh lần lượt cho bậc 1, 2 và 8. Kéo thanh bậc đa thức để tự chọn; “Lấy 30 xe khác” cho thấy bậc cao đổi hình dạng mạnh thế nào.</p>
+    <p class="hint" data-chapters="1">So sánh bậc 1 và bậc 6 trên bảng bắn bia: cụm chấm lệch tâm (bias) hay tản rộng (variance)?</p>
+    <p class="hint" data-chapters="2">Biểu đồ dùng thang log vì variance của bậc cao lớn gấp hàng nghìn lần bậc thấp.</p>
+    <p class="hint" data-chapters="3">Giữ bậc 5 hoặc 8 và kéo số xe lên 300: dải mô hình co lại quanh đường thật.</p>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initBiasVarianceLab } from './render';
+  initBiasVarianceLab();
+</script>

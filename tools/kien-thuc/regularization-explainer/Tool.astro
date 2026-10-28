@@ -1,0 +1,22 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="regularization" title="L1 và L2 · Lasso và Ridge trên dữ liệu 442 bệnh nhân tiểu đường" label="Hoạt cảnh so sánh phạt L1 và L2 trên dữ liệu Diabetes"
+  chapters={['Kim cương & hình tròn', 'Chia hay trừ', 'Đường đi hệ số', 'Biến tương quan']}
+  data="Diabetes (Efron, Hastie, Johnstone & Tibshirani 2004, “Least Angle Regression”): 442 bệnh nhân, 10 chỉ số ban đầu (tuổi, giới tính, BMI, huyết áp, 6 chỉ số huyết thanh s1–s6) và mức tiến triển bệnh sau một năm; bản đi kèm scikit-learn."
+  scope="Đặc trưng được chuẩn hóa, mục tiêu được trừ trung bình; Lasso giải bằng coordinate descent (khớp sklearn.linear_model.lasso_path), Ridge bằng công thức đóng, cùng quy ước (1/2n)‖y − Xβ‖². Cross-validation 10 phần với chuẩn hóa bên trong từng phần; bootstrap 80 mẫu với hạt giống cố định. Chương 2 minh họa trường hợp đặc trưng trực giao.">
+  <Fragment slot="controls">
+    <label class="field" data-chapters="0"><span class="field-row"><span>Độ mạnh phạt λ</span><output data-value="lam2d"></output></span><input type="range" name="lam2d" min="0" max="50" step="0.5" value="30" /></label>
+    <label class="field" data-chapters="1"><span class="field-row"><span>Độ mạnh phạt λ</span><output data-value="shrink"></output></span><input type="range" name="shrink" min="0" max="2" step="0.05" value="0.6" /></label>
+    <label class="field" data-chapters="2"><span class="field-row"><span>Độ mạnh phạt</span><output data-value="lamindex"></output></span><input type="range" name="lamindex" min="0" max="40" step="1" value="20" /></label>
+    <div class="actions"><button type="button" data-autoplay>Xem lại hoạt cảnh tự động</button></div>
+    <p class="hint" data-chapters="0">Kéo λ qua mốc 26,5: điểm Lasso rơi vào đỉnh hình thoi trên trục BMI và hệ số huyết áp bằng 0 tuyệt đối.</p>
+    <p class="hint" data-chapters="1">Năm chấm trên mỗi đường là năm hệ số β̂ mẫu. Chấm cam ở giữa bị Lasso đưa về 0 khi λ vượt độ lớn của nó.</p>
+    <p class="hint" data-chapters="2">Kéo λ từ phải sang trái để xem các biến lần lượt được Lasso đưa vào mô hình. Bảng bên dưới ghi hệ số và lỗi cross-validation.</p>
+    <p class="hint" data-chapters="3">Hệ số OLS của s1 và s2 lớn, trái dấu và đổi mạnh giữa các mẫu bootstrap: dấu hiệu điển hình của đa cộng tuyến.</p>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initRegularizationLab } from './render';
+  initRegularizationLab();
+</script>

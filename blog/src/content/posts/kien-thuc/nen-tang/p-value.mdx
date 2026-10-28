@@ -1,0 +1,180 @@
+---
+title: 'Kiểm định giả thuyết và p-value: hiểu đúng từ dữ liệu thật'
+description: 'H₀ và H₁, phân phối dưới H₀, p-value, mức ý nghĩa α và vùng bác bỏ, t-test, kiểm định z và chi-square trên dữ liệu thật, sai lầm loại I/II, lực kiểm định và p-hacking.'
+category: kien-thuc
+topic: nen-tang
+tags: ['Thống kê', 'p-value', 'Kiểm định giả thuyết', 'Học máy']
+viz: hypothesis-testing-explainer
+cover: ../../../../assets/covers/hypothesis-testing-explainer.webp
+order: 9
+date: 2026-10-28
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+## Một kết quả có thể chỉ do may rủi không?
+
+Thuốc mới giúp ngủ thêm 1,6 giờ. Mô hình mới tăng độ chính xác 2%. Phiên bản giao diện B có tỷ lệ bấm cao hơn A. Câu hỏi luôn là: chênh lệch đó **có thật**, hay chỉ là dao động ngẫu nhiên của mẫu? **Kiểm định giả thuyết** là quy trình trả lời câu hỏi này, và **p-value** là con số trung tâm của nó, cũng là con số hay bị hiểu sai nhất.
+
+Lab dùng ba bộ dữ liệu thật: dữ liệu giấc ngủ mà “Student” (William Gosset) dùng năm 1908 để giới thiệu kiểm định t, mức tiêu hao nhiên liệu của xe Nhật và xe châu Âu (Auto MPG), và hành khách tàu Titanic.
+
+## 1. Giả thuyết không và giả thuyết đối
+
+- **Giả thuyết không $H_0$**: mệnh đề “không có gì xảy ra” về tham số của tổng thể, ví dụ hai thuốc như nhau, chênh lệch trung bình $\mu_d = 0$.
+- **Giả thuyết đối $H_1$**: mệnh đề đối lập, ví dụ $\mu_d \neq 0$ (hai phía), $\mu_d > 0$ hoặc $\mu_d < 0$ (một phía).
+- **Mức ý nghĩa $\alpha$**: xác suất ta chấp nhận bác bỏ $H_0$ khi nó thực ra đúng (sai lầm loại I). Thường chọn 0,05, phải chọn **trước** khi nhìn dữ liệu.
+
+Dữ liệu giấc ngủ: 10 bệnh nhân, mỗi người dùng cả hai thuốc (thiết kế cặp). Chênh lệch thuốc 2 − thuốc 1 có trung bình $\bar d = 1{,}58$ giờ, độ lệch chuẩn $s_d = 1{,}23$.
+
+<Callout type="try">
+
+Chương **H₀ và H₁** vẽ từng bệnh nhân với hai thuốc và phân bố của 10 chênh lệch, cùng vị trí $H_0: \mu_d = 0$.
+
+</Callout>
+
+## 2. p-value là gì?
+
+> **p-value** là xác suất thu được kết quả quan sát được, hoặc cực đoan hơn, **với giả định $H_0$ đúng**.
+
+Để tính nó, ta cần biết dữ liệu “trông thế nào” khi $H_0$ đúng. Với dữ liệu cặp có một cách rất trực quan: nếu hai thuốc như nhau, nhãn “thuốc 1/thuốc 2” của mỗi bệnh nhân hoán đổi được, nên dấu của mỗi chênh lệch là may rủi. Đổi dấu theo **mọi** cách có thể cho $2^{10} = 1\,024$ tổ hợp, mỗi tổ hợp một giá trị $\bar d$: đó là phân phối chính xác của $\bar d$ dưới $H_0$.
+
+Chỉ 4 trong 1 024 tổ hợp cho $|\bar d| \ge 1{,}58$, nên **p-value chính xác = 4/1 024 ≈ 0,0039**. Nếu hai thuốc thật sự như nhau, chênh lệch lớn như vậy chỉ xảy ra khoảng 4 lần trong 1 000.
+
+<Callout type="try">
+
+Chương **Phân phối dưới H₀** dựng histogram của 1 024 giá trị $\bar d$ từ phép đổi dấu, rồi tô đỏ phần cực đoan bằng hoặc hơn giá trị quan sát.
+
+</Callout>
+
+## 3. Kiểm định t, vùng bác bỏ và quy tắc quyết định
+
+Thay vì đếm, kiểm định t dùng công thức. Với dữ liệu cặp:
+
+$$
+t = \frac{\bar d}{s_d / \sqrt n} = \frac{1{,}58}{1{,}23 / \sqrt{10}} = 4{,}06
+$$
+
+Dưới $H_0$, $t$ theo **phân phối Student** với $n - 1 = 9$ bậc tự do (đuôi dày hơn phân phối chuẩn vì $s_d$ cũng được ước lượng từ mẫu). p-value hai phía là diện tích hai đuôi ngoài $\pm 4{,}06$: $p = 0{,}0028$, gần với kết quả đếm chính xác 0,0039.
+
+| Kết quả | Quy tắc | Kết luận |
+| --- | --- | --- |
+| $p \le \alpha$ | thống kê nằm trong vùng bác bỏ | bác bỏ $H_0$ |
+| $p > \alpha$ | thống kê nằm ngoài vùng bác bỏ | không bác bỏ $H_0$ |
+
+Với $\alpha = 0{,}05$, vùng bác bỏ hai phía là $|t| > 2{,}262$. Giá trị 4,06 nằm sâu trong đó: có bằng chứng thuốc 2 làm ngủ thêm khác thuốc 1.
+
+<Callout type="try">
+
+Chương **p-value & α** vẽ phân phối t (9 bậc tự do), vùng bác bỏ (đỏ) và diện tích p-value (cam). Đổi α giữa 0,01, 0,05, 0,10 và chọn $H_1$ hai phía, phía phải, phía trái để thấy vùng bác bỏ dịch chuyển và p-value thay đổi.
+
+</Callout>
+
+### Các bước kiểm định
+
+1. Xác định $H_0$ và $H_1$.
+2. Chọn mức ý nghĩa $\alpha$.
+3. Chọn phép kiểm định phù hợp với thiết kế và kiểu dữ liệu.
+4. Tính thống kê kiểm định và p-value.
+5. So sánh p-value với $\alpha$.
+6. Kết luận và diễn giải trong bối cảnh (kèm kích thước hiệu ứng).
+
+## 4. Các phép kiểm định thường dùng
+
+| Mục tiêu | Dữ liệu | Phép kiểm định | Thống kê |
+| --- | --- | --- | --- |
+| So sánh trước – sau, cùng đối tượng | định lượng (cặp) | t-test cặp | $t = \bar d / SE_d$ |
+| So sánh trung bình 2 nhóm độc lập | định lượng | t-test độc lập (Welch) | $t = (\bar x_1 - \bar x_2) / SE$ |
+| So sánh tỷ lệ 2 nhóm | định tính | kiểm định z cho 2 tỷ lệ | $z = (\hat p_1 - \hat p_2) / SE$ |
+| Liên hệ trong bảng chéo | định tính (≥ 2 nhóm) | chi-square | $\chi^2 = \sum (O - E)^2 / E$ |
+
+Kết quả trên dữ liệu thật (tính bằng scipy, lab tính lại và khớp):
+
+- **t-test cặp**, giấc ngủ: $t = 4{,}06$, $p = 0{,}0028$.
+- **t-test Welch**, Auto MPG: xe Nhật trung bình 30,5 dặm/gallon ($n = 79$), xe châu Âu 27,9 ($n = 70$): $t = 2{,}42$, $p = 0{,}017$.
+- **z cho 2 tỷ lệ**, Titanic: 74,2% phụ nữ sống sót so với 18,9% đàn ông: $z = 16{,}2$, $p \approx 4 \times 10^{-59}$.
+- **Chi-square**, Titanic hạng vé × sống sót: $\chi^2 = 102{,}9$ với 2 bậc tự do, $p \approx 5 \times 10^{-23}$.
+
+<Callout type="try">
+
+Chương **Các phép kiểm định** đi qua bốn ví dụ. Với chi-square, bảng hiện số đếm quan sát O và số kỳ vọng E nếu hạng vé và sống sót độc lập: hạng 1 có nhiều người sống hơn kỳ vọng, hạng 3 ít hơn hẳn.
+
+</Callout>
+
+## 5. Diễn giải p-value
+
+Quy ước diễn giải phổ biến (chỉ là hướng dẫn, không phải ranh giới tuyệt đối):
+
+| Giá trị p | Diễn giải |
+| --- | --- |
+| $p \le 0{,}01$ | bằng chứng chống lại $H_0$ rất mạnh |
+| $0{,}01 < p \le 0{,}05$ | bằng chứng chống lại $H_0$ vừa phải |
+| $0{,}05 < p \le 0{,}10$ | bằng chứng chống lại $H_0$ yếu |
+| $p > 0{,}10$ | chưa có bằng chứng chống lại $H_0$ |
+
+### Sai lầm loại I, loại II và lực kiểm định
+
+| | $H_0$ đúng | $H_1$ đúng |
+| --- | --- | --- |
+| Bác bỏ $H_0$ | **sai lầm loại I** (xác suất $\alpha$) | đúng (xác suất = **lực** $1 - \beta$) |
+| Không bác bỏ $H_0$ | đúng | **sai lầm loại II** (xác suất $\beta$) |
+
+Khi $H_0$ đúng, p-value phân bố **đều** từ 0 tới 1, nên đúng khoảng $\alpha$ phần trăm thí nghiệm vẫn cho “có ý nghĩa”. Khi có hiệu ứng thật, p dồn về gần 0, nhanh hay chậm tùy **kích thước hiệu ứng** $d$ và **cỡ mẫu** $n$. Ví dụ quen thuộc: để đạt lực 80% với $d = 0{,}5$ ở $\alpha = 0{,}05$, cần khoảng 64 người mỗi nhóm.
+
+<Callout type="try">
+
+Chương **Sai lầm & lực** mô phỏng 2 000 thí nghiệm khi $H_0$ đúng và khi $H_1$ đúng. Kéo **n mỗi nhóm** và **kích thước hiệu ứng d** để xem lực kiểm định thay đổi, và đường cong lực theo cỡ mẫu cho $d = 0{,}2;\ 0{,}5;\ 0{,}8$.
+
+</Callout>
+
+## 6. Những cách hiểu sai phổ biến
+
+| Hiểu sai | Hiểu đúng |
+| --- | --- |
+| p-value là xác suất $H_0$ đúng | p-value là xác suất của dữ liệu (hoặc cực đoan hơn) **khi** $H_0$ đúng |
+| $p < 0{,}05$ ⇒ kết quả quan trọng về mặt thực tế | ý nghĩa thống kê ≠ ý nghĩa thực tiễn |
+| p lớn ⇒ $H_0$ hoàn toàn đúng | chỉ là chưa đủ bằng chứng để bác bỏ $H_0$ |
+| chỉ cần dựa vào p-value | xem thêm kích thước hiệu ứng, khoảng tin cậy, cỡ mẫu, thiết kế và ý nghĩa thực tế |
+
+**p-hacking.** Chạy 20 kiểm định trên dữ liệu hoàn toàn ngẫu nhiên, xác suất có ít nhất một $p < 0{,}05$ là $1 - 0{,}95^{20} \approx 64\%$. Thử nhiều cách phân tích rồi chỉ báo cáo cái “có ý nghĩa” sẽ tạo ra phát hiện giả. Cách phòng: đăng ký trước giả thuyết và phân tích, hiệu chỉnh cho nhiều kiểm định (Bonferroni dùng $\alpha / m$, hoặc kiểm soát FDR của Benjamini–Hochberg), và báo cáo mọi phân tích đã làm.
+
+**Mẫu rất lớn.** Với hàng triệu quan sát, chênh lệch 0,01% cũng cho p cực nhỏ. Luôn đi kèm p-value với **kích thước hiệu ứng** (chênh lệch trung bình, Cohen's $d$, tỷ lệ chênh) và **khoảng tin cậy**.
+
+<Callout type="try">
+
+Chương **Hiểu sai** chạy 20 kiểm định trên nhiễu thuần túy: cột cam là những kết quả “có ý nghĩa” giả. Sau hiệu chỉnh Bonferroni (α/20 = 0,0025), chúng biến mất.
+
+</Callout>
+
+## Ví dụ minh họa
+
+| Tình huống | p | α | Quyết định | Kết luận |
+| --- | --- | --- | --- | --- |
+| Hiệu quả thuốc hạ huyết áp | 0,03 | 0,05 | $p < \alpha$ ⇒ bác bỏ $H_0$ | có bằng chứng về sự khác biệt mức giảm huyết áp giữa 2 nhóm |
+| So sánh thuốc kháng sinh | 0,42 | 0,05 | $p > \alpha$ ⇒ không bác bỏ $H_0$ | chưa đủ bằng chứng về sự khác biệt tỷ lệ khỏi bệnh |
+| Tác dụng không mong muốn | 0,008 | 0,05 | $p < \alpha$ ⇒ bác bỏ $H_0$ | có bằng chứng về sự khác biệt tỷ lệ tác dụng không mong muốn |
+
+## Liên hệ với Machine Learning
+
+- So sánh hai mô hình trên cùng tập kiểm tra là một thiết kế **cặp**: dùng kiểm định McNemar cho độ chính xác, hoặc t-test cặp trên điểm của từng fold cross-validation (cẩn thận vì các fold không độc lập).
+- A/B test sản phẩm (tỷ lệ chuyển đổi của hai phiên bản) chính là kiểm định z cho hai tỷ lệ.
+- Chạy hàng trăm thí nghiệm siêu tham số rồi chọn cái tốt nhất trên tập kiểm tra là một dạng p-hacking: tập kiểm tra cần được giữ riêng.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- p-value = P(kết quả quan sát hoặc cực đoan hơn | $H_0$ đúng), không phải P($H_0$ đúng).
+- Chọn α trước; bác bỏ $H_0$ khi $p \le \alpha$. Dữ liệu giấc ngủ: $t = 4{,}06$, $p = 0{,}0028$ (đếm chính xác 0,0039).
+- Chọn phép kiểm định theo thiết kế: cặp, hai nhóm độc lập, tỷ lệ, bảng chéo.
+- Khi $H_0$ đúng p phân bố đều: α phần trăm kết quả là dương tính giả. Lực phụ thuộc kích thước hiệu ứng và cỡ mẫu.
+- Báo cáo kèm kích thước hiệu ứng và khoảng tin cậy; hiệu chỉnh khi làm nhiều kiểm định.
+
+</Callout>
+
+## Nguồn
+
+- Student (1908). *The probable error of a mean*. Biometrika. Dữ liệu: Cushny, A. R. & Peebles, A. R. (1905), Journal of Physiology.
+- Wasserstein, R. L. & Lazar, N. A. (2016). *The ASA Statement on p-Values: Context, Process, and Purpose*. The American Statistician.
+- Cohen, J. (1988). *Statistical Power Analysis for the Behavioral Sciences*.
+- Benjamini, Y. & Hochberg, Y. (1995). *Controlling the False Discovery Rate*. JRSS B.
+- Dữ liệu: Auto MPG (UCI, Quinlan 1993); Titanic (bản seaborn-data). Script: `scripts/ml-datasets/prepare_stats.py`.

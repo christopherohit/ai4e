@@ -1,0 +1,147 @@
+---
+// MedLab · Bản đồ cơ thể người: a dark 3D anatomy atlas (BodyParts3D male reference, HRA female organs).
+// Markup only; behaviour lives in render.ts, drawing in gl.ts, data model in atlas.ts, Vietnamese texts in organs.ts.
+import './atlas.css';
+---
+<section class="tool-workspace medlab-workspace" aria-labelledby="cong-cu">
+  <section id="native-tool-root" class="medlab" data-medlab data-sex="male" aria-busy="true">
+    <header class="ml-top">
+      <div class="ml-brand">
+        <span class="ml-logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="4.6" r="2.6"/><path d="M7.5 9.2c0-1 .8-1.7 1.7-1.7h5.6c1 0 1.7.8 1.7 1.7v5.4h-2v7.2h-1.8v-6h-1.4v6H9.5v-7.2h-2z"/></svg>
+        </span>
+        <div><h2 id="cong-cu">Bản đồ cơ thể người</h2><p>MedLab · Sinh học · Mô phỏng</p></div>
+      </div>
+      <p class="ml-status" data-status hidden></p>
+      <div class="ml-top-actions">
+        <button type="button" class="ml-pill" data-quiz>Đánh giá</button>
+        <div class="ml-menu-wrap">
+          <button type="button" class="ml-round" data-menu aria-label="Tùy chọn khác" aria-expanded="false" aria-haspopup="true">···</button>
+          <div class="ml-menu" data-menu-list hidden>
+            <button type="button" data-action="reset">Đặt lại toàn bộ</button>
+            <button type="button" data-action="credits">Nguồn và ghi công</button>
+            <a href="#huong-dan">Đọc bài giải thích ↓</a>
+          </div>
+        </div>
+        <button type="button" class="ml-round" data-fullscreen aria-label="Toàn màn hình" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="ml-body">
+      <aside class="ml-side" aria-label="Điều hướng giải phẫu">
+        <div class="ml-search-wrap">
+          <label class="ml-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+            <input type="search" data-search placeholder="Tìm một cấu trúc…" aria-label="Tìm một cấu trúc" autocomplete="off" />
+            <kbd>/</kbd>
+          </label>
+          <div class="ml-results" data-results role="listbox" aria-label="Kết quả tìm kiếm" hidden></div>
+        </div>
+        <div class="ml-side-scroll">
+          <section class="ml-cards">
+            <h3>Các cơ quan 3D <span data-card-count></span></h3>
+            <div class="ml-card-row" data-cards></div>
+          </section>
+          <div class="ml-tabs" role="tablist" aria-label="Cách duyệt">
+            <button type="button" role="tab" data-tab="regions" aria-selected="true">Các vùng</button>
+            <button type="button" role="tab" data-tab="systems" aria-selected="false">Các hệ cơ quan</button>
+            <button type="button" role="tab" data-tab="organs" aria-selected="false">Cơ quan</button>
+          </div>
+          <div data-panel="regions" role="tabpanel"><ul class="ml-regions" data-region-list></ul></div>
+          <div data-panel="systems" role="tabpanel" hidden>
+            <div class="ml-system-actions"><button type="button" data-systems-default>Mặc định</button><button type="button" data-systems-all>Hiện tất cả</button></div>
+            <ul class="ml-systems" data-system-list></ul>
+          </div>
+          <div data-panel="organs" role="tabpanel" hidden><ul class="ml-organs" data-organ-list></ul></div>
+        </div>
+        <footer class="ml-side-foot">
+          <button type="button" data-learn><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5 12 3l8 3.5-8 3.5zM7 8.5v5c0 1.4 2.2 3 5 3s5-1.6 5-3v-5"/></svg>Tìm hiểu</button>
+          <button type="button" data-labels aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h6M14 6h6M14 18h6M10 12l4-6M10 12l4 6"/></svg>Nhãn thông minh</button>
+          <button type="button" data-credits><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v6M12 7.5v.5"/></svg>Nguồn và ghi công</button>
+        </footer>
+      </aside>
+
+      <div class="ml-stage" data-stage>
+        <canvas data-canvas role="img" aria-label="Mô hình 3D giải phẫu người. Kéo để xoay, cuộn hoặc chụm hai ngón để thu phóng, chạm vào một cấu trúc để xem chi tiết."></canvas>
+        <svg class="ml-leaders" data-leaders aria-hidden="true"></svg>
+        <div class="ml-labels" data-labels-layer aria-hidden="true"></div>
+        <div class="ml-tooltip" data-tooltip hidden></div>
+        <p class="ml-count"><span aria-hidden="true"></span>Cấu trúc đang hiện: <b data-visible-count>0</b></p>
+        <div class="ml-zoom" role="group" aria-label="Thu phóng">
+          <button type="button" data-zoom="-1" aria-label="Thu nhỏ">−</button>
+          <button type="button" data-zoom="1" aria-label="Phóng to">+</button>
+          <button type="button" data-zoom="0" aria-label="Vừa khung nhìn">⟲</button>
+        </div>
+        <canvas class="ml-gizmo" data-gizmo aria-hidden="true"></canvas>
+        <div class="ml-loading" data-loading>
+          <div class="ml-bar"><i data-progress></i></div>
+          <p data-loading-text>Đang tải giải phẫu…</p>
+        </div>
+        <div class="ml-float ml-quiz" data-quiz-panel hidden>
+          <p class="ml-float-step" data-quiz-step></p>
+          <p data-quiz-text></p>
+          <p class="ml-feedback" data-quiz-feedback aria-live="polite"></p>
+          <div><button type="button" class="ml-primary" data-quiz-next hidden>Câu tiếp →</button><button type="button" data-quiz-close>Thoát</button></div>
+        </div>
+        <div class="ml-float ml-tour" data-tour-panel hidden>
+          <p class="ml-float-step" data-tour-step></p>
+          <p data-tour-text aria-live="polite"></p>
+          <div><button type="button" data-tour-prev>← Trước</button><button type="button" class="ml-primary" data-tour-next>Tiếp →</button><button type="button" data-tour-close aria-label="Đóng hướng dẫn">✕</button></div>
+        </div>
+        <div class="ml-bottom">
+          <div class="ml-seg" role="group" aria-label="Góc nhìn">
+            <button type="button" data-view="front" aria-pressed="false">Mặt trước</button>
+            <button type="button" data-view="back" aria-pressed="false">Mặt sau</button>
+            <button type="button" data-view="side" aria-pressed="false">Mặt bên</button>
+            <button type="button" data-view="perspective" aria-pressed="true">Phối cảnh</button>
+          </div>
+          <div class="ml-seg" role="group" aria-label="Phiên bản cơ thể">
+            <button type="button" data-sex="male" aria-pressed="true">Nam</button>
+            <button type="button" data-sex="female" aria-pressed="false">Nữ</button>
+          </div>
+          <label class="ml-explode">
+            <span>Tách các cấu trúc ra xa nhau</span>
+            <input type="range" data-explode min="0" max="100" step="1" value="0" />
+            <output data-explode-value>0%</output>
+            <button type="button" data-explode-reset aria-label="Gộp lại">⟲</button>
+          </label>
+        </div>
+      </div>
+
+      <aside class="ml-info" data-info aria-live="polite">
+        <div class="ml-home" data-home>
+          <p class="ml-eyebrow">Khám phá giải phẫu</p>
+          <h3>Hiểu rõ hơn về cơ thể bạn.</h3>
+          <p class="ml-desc">Chọn một cơ quan, một vùng hoặc chạm thẳng vào mô hình. Kéo để xoay, cuộn để phóng to, dùng thanh trượt bên dưới để tách các cấu trúc.</p>
+          <div class="ml-featured" data-featured></div>
+          <button type="button" class="ml-primary ml-wide" data-learn>Khám phá có hướng dẫn</button>
+          <p class="ml-note">Mô hình tham chiếu người trưởng thành, không phải cơ thể của một người cụ thể, không dùng cho chẩn đoán.</p>
+        </div>
+        <div class="ml-detail" data-detail hidden></div>
+      </aside>
+    </div>
+
+    <div class="ml-credits" data-credits-panel role="dialog" aria-modal="true" aria-labelledby="ml-credits-title" hidden>
+      <article>
+        <header><h3 id="ml-credits-title">Nguồn và ghi công</h3><button type="button" class="ml-round" data-credits-close aria-label="Đóng">✕</button></header>
+        <p>Atlas này mô tả giải phẫu tham chiếu ở người trưởng thành với phiên bản nam và nữ. Phiên bản nam là mô hình cơ thể tham chiếu BodyParts3D. Phiên bản nữ dùng chính bộ xương, cơ, mạch máu và cơ quan đó, biến dạng mượt theo tỷ lệ gần đúng của cơ thể nữ (thấp hơn khoảng 7%, vai và ngực hẹp hơn, chậu rộng hơn), rồi thay cơ quan sinh dục nam bằng tử cung, buồng trứng, vòi tử cung, âm đạo, tuyến vú và bàng quang nữ từ Human Reference Atlas. Cả hai phiên bản đều không hiển thị bề mặt da.</p>
+        <p>Atlas không bao gồm mọi cấu trúc hay biến thể giải phẫu. Tên cơ quan trong thanh bên được viết bằng tiếng Việt kèm thuật ngữ Latin; tên từng cấu trúc giữ nguyên tiếng Anh theo dữ liệu gốc, kèm mã FMA (Foundational Model of Anatomy) khi có. L và R chỉ bên trái và bên phải của chính cơ thể.</p>
+        <ul>
+          <li><b>BodyParts3D 4.0</b> © The Database Center for Life Science · <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener" target="_blank">CC BY 4.0</a>. Mitsuhashi et al. (2009), <a href="https://doi.org/10.1093/nar/gkn613" rel="noopener" target="_blank">doi:10.1093/nar/gkn613</a>.</li>
+          <li>Chuyển thể từ <a href="https://github.com/ashemag/human-atlas" rel="noopener" target="_blank"><b>Human Atlas</b> của ashemag</a> · MIT (bản đóng gói nam ở commit 1c38bf3, bản nữ ở commit d72b4f6).</li>
+          <li><b>Cơ thể nữ:</b> tử cung, buồng trứng, vòi tử cung, âm đạo, tuyến vú, bàng quang từ Human Reference Atlas – <i>3D Reference Organ Set for Female v1.5</i> (Kristen Browne, Heidi Schlehlein; Visible Human · HuBMAP) · CC BY 4.0, <a href="https://doi.org/10.48539/HBM352.BTSQ.586" rel="noopener" target="_blank">doi:10.48539/HBM352.BTSQ.586</a>.</li>
+          <li><b>Bề mặt phổi</b> (các phân thùy phế quản – phổi) cũng lấy từ bộ HRA trên và được co giãn khớp vào cây phế quản BodyParts3D cho cả hai phiên bản.</li>
+          <li>Thuật ngữ đối chiếu: FIPAT <a href="https://ta2viewer.openanatomy.org/" rel="noopener" target="_blank">Terminologia Anatomica 2 (TA2 Viewer)</a>.</li>
+          <li>Bố cục giao diện lấy cảm hứng từ atlas cơ thể người 3D của Astra.</li>
+        </ul>
+        <p class="ml-note">Hình học được đơn giản hóa (giữ khoảng một phần tư số tam giác) và phân nhóm để dễ khám phá trên trình duyệt. Tỷ lệ cơ thể nữ là xấp xỉ để minh họa, không phải số đo chuẩn. Đây là công cụ giáo dục, không phải công cụ chẩn đoán hay phẫu thuật.</p>
+      </article>
+    </div>
+  </section>
+</section>
+<script>
+  import { initBodyAtlas } from './render';
+  initBodyAtlas();
+</script>

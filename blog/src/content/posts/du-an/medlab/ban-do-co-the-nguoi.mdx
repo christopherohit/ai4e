@@ -1,0 +1,160 @@
+---
+title: 'MedLab: Bản đồ cơ thể người – đi một vòng giải phẫu học bằng mô hình 3D'
+description: 'Tìm hiểu cơ thể người từ tế bào, mô tới các hệ cơ quan, qua atlas 3D 2 312 cấu trúc dựng từ BodyParts3D và Human Reference Atlas, có phiên bản nam và nữ.'
+category: du-an
+topic: medlab
+tags: ['MedLab', 'Sinh học', 'Giải phẫu học', 'Hệ cơ quan', 'Mô phỏng 3D']
+viz: medlab-body-atlas
+cover: ../../../../assets/covers/medlab-body-atlas.webp
+order: 1
+date: 2026-10-28
+---
+
+## Một cơ thể, hàng nghìn bộ phận có tên
+
+Mở một cuốn atlas giải phẫu, ta thấy từng trang vẽ một vùng: ngực, bụng, bàn tay. Cái khó là ghép các trang ấy lại trong đầu: tim nằm sau xương ức nhưng lệch trái bao nhiêu, thận ở trước hay sau ruột, tử cung kẹp giữa những gì. **Bản đồ cơ thể người** của MedLab đặt tất cả vào một mô hình 3D có thể xoay, tách rời và tra cứu.
+
+Mô hình có **2 312 cấu trúc**, mỗi cấu trúc là một lưới 3D riêng có tên: 2 256 cấu trúc ở phiên bản nam và 2 298 cấu trúc ở phiên bản nữ. Khi mới mở, công cụ hiện **825 cấu trúc** gồm xương, tim, não, các tạng và mô liên kết. Cơ và mạch máu (hơn 1 400 cấu trúc) được tải sau và bật trong thẻ **Các hệ cơ quan**.
+
+> **Cách dùng nhanh.** Kéo để xoay, cuộn hoặc chụm hai ngón để phóng to, chuột phải hoặc giữ Shift để dời khung nhìn. Chạm vào một cơ quan để mở bảng chi tiết, chạm tiếp để xem từng cấu trúc con. Phím `/` mở ô tìm kiếm. Thanh **Tách các cấu trúc ra xa nhau** kéo các bộ phận rời nhau để nhìn vào bên trong.
+
+Đây là **mô hình tham chiếu dùng để học**, không phải ảnh chụp cơ thể của một bệnh nhân, cũng không phải kết quả của một mô hình AI. Mọi hình khối đều lấy từ bộ dữ liệu giải phẫu mở, được giản lược để chạy trên trình duyệt.
+
+## Từ tế bào đến cơ thể: các cấp tổ chức
+
+Sinh học mô tả cơ thể theo các cấp, mỗi cấp được xây từ cấp dưới:
+
+1. **Tế bào** là đơn vị sống nhỏ nhất: tế bào cơ tim, nơron, tế bào gan.
+2. **Mô** là tập hợp tế bào cùng cấu tạo và chức năng. Cơ thể người có bốn loại mô cơ bản: *biểu mô* (lót bề mặt, tạo tuyến), *mô liên kết* (xương, sụn, máu, mỡ, dây chằng), *mô cơ* (cơ vân, cơ tim, cơ trơn) và *mô thần kinh*.
+3. **Cơ quan** gồm nhiều loại mô cùng làm một việc. Tim có cơ tim, mô liên kết ở van, biểu mô lót lòng mạch và các sợi thần kinh.
+4. **Hệ cơ quan** là nhóm cơ quan phối hợp: tim cùng động mạch và tĩnh mạch tạo thành hệ tuần hoàn.
+5. **Cơ thể** là toàn bộ các hệ hoạt động cùng nhau và giữ cân bằng nội môi.
+
+Mô hình bắt đầu ở cấp cơ quan. Chọn **Tim** trong thẻ cơ quan, bạn thấy ghi chú *Các cấu trúc được bao gồm · 83*: thành tâm thất, buồng tim, từng lá van, động mạch và tĩnh mạch vành. Đó là cấp “cơ quan” được chia nhỏ thành các phần có tên.
+
+## Tư thế giải phẫu và các hướng
+
+Mọi mô tả giải phẫu dùng chung một **tư thế giải phẫu**: người đứng thẳng, mặt nhìn trước, hai tay buông xuôi, lòng bàn tay hướng ra trước. Trên mô hình, quả cầu định hướng ở góc dưới bên phải dùng các chữ viết tắt quốc tế:
+
+| Ký hiệu | Hướng | Ví dụ |
+| --- | --- | --- |
+| **S** – superior | trên, về phía đầu | Phổi nằm trên cơ hoành. |
+| **I** – inferior | dưới, về phía chân | Bàng quang nằm dưới thận. |
+| **A** – anterior | trước, về phía bụng | Xương ức ở trước tim. |
+| **P** – posterior | sau, về phía lưng | Thận ở sau phúc mạc, sát thành lưng. |
+| **L** / **R** | bên trái / bên phải **của chính cơ thể** | Gan chủ yếu ở bên R, lách ở bên L. |
+
+Chữ L và R luôn tính theo cơ thể được quan sát, không theo người nhìn. Bấm **Mặt trước**: bên phải màn hình là bên trái (L) của cơ thể. Đây là lý do tên cấu trúc trong dữ liệu có “Left …” và “Right …”.
+
+Ba mặt phẳng cắt chuẩn là **mặt phẳng đứng dọc** (chia trái – phải), **mặt phẳng đứng ngang** (chia trước – sau) và **mặt phẳng ngang** (chia trên – dưới). Ba nút Mặt trước, Mặt bên, Mặt sau nhìn vuông góc với hai mặt phẳng đầu.
+
+## Các vùng và các khoang cơ thể
+
+Thẻ **Các vùng** chia cơ thể như cách giải phẫu học theo vùng: đầu và cổ, ngực, bụng và vùng chậu, chi trên, chi dưới. Chọn một vùng, các cấu trúc trong vùng hiện rõ, phần còn lại mờ đi như phim X-quang.
+
+Các tạng nằm trong những **khoang**:
+
+- **Khoang sọ** chứa não; **ống sống** chứa tủy sống.
+- **Khoang ngực** chứa hai phổi và **trung thất** ở giữa (tim, khí quản, thực quản, tuyến ức, các mạch lớn).
+- **Khoang bụng – chậu** chứa gan, dạ dày, ruột, tụy, lách, thận, bàng quang và cơ quan sinh sản.
+
+Ngăn cách ngực và bụng là **cơ hoành**, tấm cơ hình vòm. Tìm “cơ hoành” và bấm **Chỉ hiện cấu trúc này** để thấy vòm cơ cùng các lỗ cho thực quản, động mạch chủ và tĩnh mạch chủ đi qua.
+
+## Các hệ cơ quan
+
+Thẻ **Các hệ cơ quan** bật và tắt từng hệ. Màu trên mô hình theo hệ, riêng các cơ quan chính có màu riêng để dễ phân biệt.
+
+| Hệ | Cơ quan chính trong mô hình | Vai trò |
+| --- | --- | --- |
+| Xương | sọ, cột sống, lồng ngực, khung chậu, xương chi | nâng đỡ, bảo vệ, tạo máu |
+| Cơ | hơn 400 lưới cơ vân, cơ hoành | vận động, tư thế, hô hấp |
+| Tuần hoàn | tim, động mạch, tĩnh mạch | vận chuyển O₂, chất dinh dưỡng, nhiệt |
+| Hô hấp | khí quản, phế quản, phổi | trao đổi khí |
+| Tiêu hóa | thực quản, dạ dày, ruột, gan, tụy, túi mật | tiêu hóa và hấp thu |
+| Tiết niệu | thận, niệu quản, bàng quang, niệu đạo | lọc máu, cân bằng nước – điện giải |
+| Thần kinh | não, các dây thần kinh sọ quanh ổ mắt | cảm nhận, xử lý, điều khiển |
+| Giác quan | mắt, tai | tiếp nhận kích thích đặc biệt |
+| Nội tiết | tuyến thượng thận, tuyến yên, tuyến tùng | điều hòa bằng hormone |
+| Bạch huyết | lách, tuyến ức | miễn dịch, dẫn lưu dịch mô |
+| Sinh sản | tinh hoàn, tuyến tiền liệt / tử cung, buồng trứng, tuyến vú | sinh sản, hormone sinh dục |
+
+## Tim và hai vòng tuần hoàn
+
+Tim có bốn buồng. Máu nghèo oxy từ tĩnh mạch chủ vào **tâm nhĩ phải**, xuống **tâm thất phải**, rồi được đẩy qua van động mạch phổi lên phổi. Đó là **vòng tuần hoàn nhỏ**. Máu giàu oxy theo tĩnh mạch phổi về **tâm nhĩ trái**, xuống **tâm thất trái** và được đẩy qua động mạch chủ đi khắp cơ thể. Đó là **vòng tuần hoàn lớn**.
+
+Lượng máu tim bơm mỗi phút gọi là **cung lượng tim**, bằng nhịp tim nhân với thể tích mỗi lần co bóp:
+
+$$
+\text{CO} = \text{HR} \times \text{SV} \approx 70\ \tfrac{\text{nhịp}}{\text{phút}} \times 70\ \text{ml} \approx 4{,}9\ \tfrac{\text{lít}}{\text{phút}}
+$$
+
+Như vậy lúc nghỉ, gần như toàn bộ thể tích máu của người trưởng thành (khoảng 5 lít) đi hết một vòng cơ thể trong khoảng một phút.
+
+Trong mô hình, thử chọn Tim rồi kéo thanh tách cấu trúc: thành tâm thất, các buồng và van rời nhau. Trong danh sách 83 cấu trúc có từng lá của van hai lá (*Anterior/Posterior leaflet of mitral valve*) và van ba lá. Bật thêm **Động mạch** để thấy động mạch chủ và các nhánh vành ôm lấy tim.
+
+## Phổi: diện tích lớn trong một thể tích nhỏ
+
+Khí đi qua khí quản, chia đôi thành hai phế quản chính rồi phân nhánh khoảng hơn hai mươi lần trước khi tới các **phế nang**. Hai phổi có khoảng 300–500 triệu phế nang, tạo diện tích trao đổi cỡ 50–100 m², đủ phủ một sân cầu lông, gói gọn trong lồng ngực.
+
+Trong mô hình, phổi phải có ba thùy và phổi trái có hai thùy, được chia tiếp thành các **phân thùy phế quản – phổi**. Mỗi phân thùy nhận một phế quản phân thùy riêng nên bác sĩ có thể cắt bỏ một phân thùy mà không ảnh hưởng phân thùy bên cạnh. Bên trong là cây phế quản và các động mạch, tĩnh mạch phổi đi kèm.
+
+## Đường đi của thức ăn
+
+Thức ăn đi qua **thực quản** (khoảng 25 cm) vào **dạ dày**, nơi acid và pepsin bắt đầu phân giải protein. Phần lớn quá trình tiêu hóa và hấp thu xảy ra ở **ruột non** dài 6–7 m, gồm tá tràng, hỗng tràng và hồi tràng. **Ruột già** (khoảng 1,5 m) hấp thu nước và tạo phân.
+
+Hai tuyến lớn đổ dịch vào tá tràng. **Gan** tiết mật, được dự trữ ở **túi mật**. **Tụy** tiết enzyme tiêu hóa, đồng thời các đảo tụy tiết insulin và glucagon vào máu. Trong mô hình, ruột non được chia thành hàng chục đoạn hỗng tràng, hồi tràng, còn gan hiện qua các phân thùy cùng tĩnh mạch gan, tĩnh mạch cửa và cây đường mật.
+
+## Thận lọc bao nhiêu máu?
+
+Mỗi thận có khoảng một triệu **nephron**. Tốc độ lọc cầu thận (GFR) ở người trưởng thành khỏe mạnh vào khoảng 125 ml mỗi phút, nên mỗi ngày:
+
+$$
+125\ \tfrac{\text{ml}}{\text{phút}} \times 1\,440\ \tfrac{\text{phút}}{\text{ngày}} = 180\,000\ \text{ml} = 180\ \text{lít}
+$$
+
+Hơn 99% lượng dịch này được tái hấp thu, chỉ còn 1–2 lít thành nước tiểu, chảy qua **niệu quản** xuống **bàng quang**. Bật vùng **Bụng & vùng chậu** rồi xoay sang **Mặt sau**: hai thận nằm sát thành lưng, thận phải thấp hơn thận trái một chút vì gan ở ngay phía trên.
+
+## Bộ xương
+
+Người trưởng thành thường có khoảng **206 xương**. **Cột sống** gồm 7 đốt cổ, 12 đốt ngực, 5 đốt thắt lưng, xương cùng (5 đốt dính lại) và xương cụt. **Lồng ngực** gồm 12 đôi xương sườn và xương ức. **Khung chậu** gồm hai xương chậu và xương cùng, truyền trọng lượng thân xuống hai chân.
+
+Xương không chỉ là khung đỡ. Tủy đỏ trong xương dẹt và đầu xương dài tạo hồng cầu, bạch cầu và tiểu cầu. Xương còn là kho dự trữ canxi và phosphat của cơ thể.
+
+## Nam và nữ khác nhau ở đâu?
+
+Phần lớn giải phẫu nam và nữ giống nhau: cùng số xương, cùng các tạng, cùng hệ thần kinh. Khác biệt rõ nhất nằm ở **cơ quan sinh sản**, **tuyến vú** và **khung chậu**. Khung chậu nữ thường rộng và nông hơn, góc dưới xương mu tù hơn, phù hợp cho việc sinh nở. Trung bình, người nữ trưởng thành cũng thấp hơn và có vai hẹp hơn so với hông.
+
+Bấm **Nữ** ở thanh dưới và quan sát cơ thể biến đổi dần. Cách dựng phiên bản nữ cần được nói rõ:
+
+- Xương, cơ, mạch và các tạng chung **vẫn là mô hình tham chiếu nam**, được biến dạng mượt theo tỷ lệ gần đúng: thấp hơn khoảng 7%, vai và ngực hẹp hơn, chậu rộng hơn. Các hệ số này là xấp xỉ để minh họa, không phải số đo chuẩn của một quần thể.
+- Cơ quan sinh dục nam và bàng quang nam được thay bằng **tử cung, buồng trứng, vòi tử cung, âm đạo, bàng quang và tuyến vú** từ bộ cơ quan tham chiếu nữ của Human Reference Atlas, được căn vào khung chậu và lồng ngực của mô hình.
+- Niệu đạo nữ chưa được dựng, và bộ HRA nữ chỉ có xương, cơ một phần nên không thay thế bộ xương chung.
+
+Chọn **Tử cung** trong thẻ Cơ quan: bàng quang ở phía trước, trực tràng ở phía sau, hai vòi tử cung vươn sang hai bên tới buồng trứng. Đoạn bóng của vòi tử cung là nơi sự thụ tinh thường diễn ra.
+
+## Dữ liệu đến từ đâu và đã được xử lý thế nào
+
+- **BodyParts3D 4.0** của Database Center for Life Science (Nhật Bản) là mô hình người nam trưởng thành dựng từ ảnh MRI kết hợp tinh chỉnh theo hình minh họa giải phẫu. Mỗi lưới gắn với một khái niệm trong **Foundational Model of Anatomy (FMA)**, nên bảng chi tiết hiện các mã như FMA7088 cho tim. Bản đóng gói cho trình duyệt lấy từ dự án mã nguồn mở **Human Atlas** của ashemag.
+- **Human Reference Atlas** (HuBMAP, dựng từ dữ liệu Visible Human) cung cấp cơ quan sinh sản nữ, bàng quang nữ, tuyến vú và bề mặt các phân thùy phổi. BodyParts3D chỉ có cây phế quản và mạch phổi, không có bề mặt phổi, nên các phân thùy phổi HRA được co giãn khớp vào cây phế quản cho cả hai phiên bản.
+- Một script trong kho mã (`scripts/medlab-atlas`) giản lược bằng meshoptimizer từ khoảng 2,23 triệu tam giác của bản đóng gói xuống **565 nghìn tam giác**, nén tọa độ thành số nguyên 16 bit và pháp tuyến thành 2 byte. Dữ liệu tải về khoảng 5,7 MB (4,4 MB khi máy chủ nén gzip); phần cơ và mạch máu tải sau khi mô hình đã hiện.
+- Thẻ **Đánh giá** là một bài kiểm tra nhỏ: tìm đúng cơ quan trên mô hình. **Tìm hiểu** là chuyến tham quan có hướng dẫn qua mười điểm dừng.
+
+Tên cơ quan trong thanh bên được viết bằng tiếng Việt kèm thuật ngữ Latin. Tên của từng cấu trúc con giữ nguyên tiếng Anh như dữ liệu gốc, vì dịch máy hàng nghìn tên giải phẫu dễ sai. Bộ thuật ngữ quốc tế để đối chiếu là FIPAT *Terminologia Anatomica 2*.
+
+## Gợi ý khám phá
+
+1. Ở chế độ **Phối cảnh**, kéo thanh tách cấu trúc lên 60% và tìm xem tụy nằm sau cơ quan nào.
+2. Mở **Não**, bấm **Chỉ hiện cấu trúc này**, rồi tìm hồi trước trung tâm (*precentral gyrus*, vùng vận động) và hồi sau trung tâm (*postcentral gyrus*, vùng cảm giác).
+3. Bật **Nhãn thông minh**, xoay sang **Mặt bên**, và giải thích vì sao tim nằm trước thực quản.
+4. Chuyển qua lại **Nam / Nữ** và so sánh độ rộng khung chậu.
+5. Làm bài **Đánh giá** mà không mở nhãn: bạn tìm đúng bao nhiêu trong mười cơ quan?
+
+## Nguồn và ghi công
+
+Atlas mô tả giải phẫu tham chiếu ở người trưởng thành với phiên bản nam và nữ. Atlas không bao gồm mọi cấu trúc hay biến thể giải phẫu và không hiển thị bề mặt da. Hình học được đơn giản hóa và phân nhóm để dễ khám phá. Đây là công cụ giáo dục, không phải công cụ chẩn đoán hay phẫu thuật.
+
+- BodyParts3D © The Database Center for Life Science · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Mitsuhashi N. và cộng sự (2009), *BodyParts3D: 3D structure database for anatomical concepts*, Nucleic Acids Research, [doi:10.1093/nar/gkn613](https://doi.org/10.1093/nar/gkn613).
+- Chuyển thể từ [Human Atlas của ashemag](https://github.com/ashemag/human-atlas) · MIT.
+- Cơ quan tham chiếu nữ: Kristen Browne, Heidi Schlehlein, Human Reference Atlas / HuBMAP, *3D Reference Organ Set for Female v1.5* (2023) · CC BY 4.0, [doi:10.48539/HBM352.BTSQ.586](https://doi.org/10.48539/HBM352.BTSQ.586).
+- Thuật ngữ: FIPAT, [Terminologia Anatomica 2 – TA2 Viewer](https://ta2viewer.openanatomy.org/).
+- Bố cục giao diện lấy cảm hứng từ atlas cơ thể người 3D của Astra. Ghi công gốc của Astra cho bản nam và bản nữ: [attribution (nam)](https://cdn.astra-ai.co/web/labs/human-body-3d/atlas/1c38bf35c254/attribution-2.txt), [attribution (nữ)](https://cdn.astra-ai.co/web/labs/human-body-3d/atlas-female/88fd3d966486/attribution-2.txt).

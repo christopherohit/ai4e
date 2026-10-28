@@ -20,3 +20,4 @@ tools/kien-thuc/diffusion-explainer/assets/img/
 tools/du-an/FairVis/models/data/
 tools/du-an/FairVis/models/processed/
 tools/du-an/FairVis/src/data/
+.cache/

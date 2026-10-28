@@ -1,0 +1,246 @@
+---
+title: 'SyncTalk từng bước: từ một đoạn âm thanh tới khung hình biết nói'
+description: 'Pipeline SyncTalk theo thứ tự dữ liệu: đồng bộ âm–môi đo trên tín hiệu thật, tách vùng điều khiển, ổn định tư thế đầu, tri-plane hash, volume rendering và ghép portrait.'
+category: du-an
+topic: nhan-vat-so
+tags: ['SyncTalk', 'NeRF', 'Talking head', 'Tri-plane', 'Audio-visual']
+viz: synctalk-pipeline
+cover: ../../../../assets/covers/synctalk-pipeline.webp
+order: 7
+date: 2026-10-28
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+[Bài SyncTalk phần 1](/du-an/synctalk/) cho xem mô hình đã huấn luyện thật: render chạy cạnh video gốc, tia sáng và mật độ thật. Bài này đi chậm hơn, theo **đúng thứ tự dữ liệu chảy qua hệ thống**, và mỗi bước có một chương hoạt cảnh để thấy vì sao bước đó tồn tại. Hai chương đầu dùng tín hiệu đo thật trên 10 giây video thử nghiệm; ba chương sau là mô phỏng nhỏ của cơ chế.
+
+## Bài toán: ta thật sự muốn gì?
+
+**Đầu vào khi huấn luyện:** một video vài phút của **một người** nói chuyện trước camera (ở đây là Obama, 25 frame/giây).
+**Đầu vào khi dùng:** một đoạn âm thanh mới (có thể của người khác).
+**Đầu ra:** video người đó nói đúng đoạn âm thanh mới, nhìn như quay thật.
+
+Một video nói chuyện trông thật khi ba thứ cùng đúng nhịp:
+
+| Thành phần | Nếu sai thì | SyncTalk xử lý bằng |
+| --- | --- | --- |
+| **Môi** theo âm thanh | môi đi trước hoặc sau tiếng, há sai âm | Facial-Sync Controller (bộ mã hóa audio–visual) |
+| **Biểu cảm** (mắt, mày) | mắt vô hồn, chớp “theo âm tiết” | Facial-Sync Controller (blendshape + attention theo vùng) |
+| **Tư thế đầu** | đầu rung, tách khỏi thân | Head-Sync Stabilizer |
+| **Chi tiết chân dung** (tóc, cổ, nền) | viền ghép lộ, tóc nhòe | Portrait-Sync Generator |
+
+Vì sao dùng NeRF thay cho chỉnh ảnh 2D kiểu Wav2Lip? NeRF học **một khuôn mặt 3D** của người đó: mọi frame render từ cùng một mô hình 3D nên danh tính, răng, nếp da nhất quán qua thời gian và góc nhìn. Cái giá là phải học riêng cho từng người, từ video của chính người đó.
+
+## Toàn cảnh pipeline
+
+```
+video huấn luyện ──► tiền xử lý ──► huấn luyện NeRF đầu (thô → tinh → môi) ──► huấn luyện thân
+                         │
+     âm thanh mới ──► đặc trưng audio ──► render đầu từng frame ──► ghép vào khung hình ──► video
+```
+
+**Tiền xử lý** biến video thành các thứ mô hình cần, mỗi thứ một vai trò, không thay thế cho nhau:
+
+| Sản phẩm | Dùng để |
+| --- | --- |
+| Frame ảnh 25 fps và âm thanh 16 kHz | ảnh mục tiêu và tín hiệu điều khiển, phải cùng chỉ số thời gian |
+| Face parsing (mặt, tóc, cổ, thân, nền) | tách vùng đầu để NeRF chỉ học đầu; ảnh nền và thân xử lý riêng |
+| Landmark 2D và tham số 3DMM | khởi tạo tư thế đầu và tiêu cự camera |
+| Pose camera mỗi frame (sau Head-Sync) | tia sáng của từng pixel đi qua đầu theo hướng nào |
+| Đặc trưng audio theo frame | điều khiển môi |
+| Hệ số biểu cảm (blendshape) hoặc OpenFace AU | điều khiển mắt, mày |
+
+Một lỗi lệch chỉ số giữa ảnh và audio ở bước này (ví dụ lệch 2 frame = 80 ms) sẽ được mô hình học như một quy luật. Không có bước huấn luyện nào sửa được dữ liệu sai nhịp từ đầu.
+
+## Bước 1: Âm thanh và môi không khớp từng frame
+
+Ý tưởng ngây thơ: mỗi frame âm thanh quyết định hình môi của frame đó. Đo thử trên 250 frame thật: độ mở môi AU25 (OpenFace) và độ to âm thanh RMS **ở cùng frame có tương quan 0,004**, gần như không liên quan.
+
+Dịch âm thanh sớm lên **6 frame (240 ms)** thì tương quan lên **0,73**. Hai lý do cộng lại:
+
+- **Đồng phát âm (coarticulation):** môi chuẩn bị hình dạng cho âm sắp tới trước khi âm phát ra; hình môi ở một thời điểm phụ thuộc cả âm trước và sau.
+- RMS chỉ đo độ to. Phụ âm như “p”, “b”, “m” làm môi khép rồi mới bật ra tiếng to; nguyên âm to nhất khi miệng đã mở.
+
+Con số 240 ms là đặc điểm của đoạn video và cách đo này, không phải độ trễ của mô hình. Bài học tổng quát: **hình môi cần một cửa sổ âm thanh**, không phải một mẫu âm.
+
+<Callout type="try">
+
+Chương **Âm thanh ↔ môi** vẽ hai tín hiệu thật. Kéo **Dịch âm thanh** từ 0 tới 6 frame để thấy hai đường gần trùng nhau; biểu đồ bên phải là tương quan theo từng độ lệch.
+
+</Callout>
+
+### Bộ mã hóa audio–visual (AVE)
+
+SyncTalk không dùng thẳng đặc trưng nhận dạng giọng nói (DeepSpeech, HuBERT) mà **huấn luyện trước** một bộ mã hóa trên dữ liệu nói chuyện (LRS2) với hai mục tiêu:
+
+**Đồng bộ:** lấy một cửa sổ ảnh mặt $F$ và một cửa sổ âm thanh $A$, mã hóa thành hai vector rồi so độ giống:
+
+$$
+s = \frac{F \cdot A}{\|F\|_2\,\|A\|_2},
+\qquad
+\mathcal{L}_{sync} = -\big[y \log s + (1-y)\log(1-s)\big]
+$$
+
+$y = 1$ nếu hai cửa sổ cùng thời điểm, $y = 0$ nếu lệch. Muốn loss nhỏ, bộ mã hóa phải đặt cặp đúng nhịp gần nhau và cặp lệch nhịp xa nhau. (Để $\log s$ có nghĩa, $s$ phải nằm trong $(0,1)$; cài đặt dùng đặc trưng sau ReLU nên cosine không âm.)
+
+**Tái tạo:** từ đặc trưng audio và ảnh, dựng lại vùng miệng:
+
+$$
+\mathcal{L}_{recon} = \big\| F - \text{Dec}\big(\text{Conv}(A) \oplus \text{Conv}(F)\big) \big\|_1
+$$
+
+($\oplus$ là nối vector.) Mục tiêu này buộc đặc trưng audio chứa đủ thông tin về hình môi. Sau khi huấn luyện xong, chỉ giữ nhánh audio $\text{Conv}(A)$ làm đặc trưng môi $f_{lip}$ cho NeRF.
+
+## Bước 2: Môi theo âm thanh, mắt theo biểu cảm
+
+Đo tiếp trên cùng đoạn video: trong 10 giây có **6 lần chớp mắt**; tương quan giữa chớp mắt (AU45) và âm thanh là **−0,23**, giữa chớp mắt và độ mở môi là **0,003**. Âm thanh không cho biết khi nào ta chớp mắt hay nhíu mày.
+
+Hệ quả: nếu một đặc trưng audio điều khiển cả khuôn mặt, mô hình sẽ cố “giải thích” chớp mắt bằng âm thanh, và lúc dùng với âm thanh mới, mắt chớp lung tung theo âm tiết. SyncTalk tách **hai nguồn điều khiển**:
+
+- **Đặc trưng môi** $f_{lip}$ từ AVE (bước 1).
+- **Đặc trưng biểu cảm** $f_{exp}$ từ ảnh: một mô hình bắt biểu cảm cho 52 hệ số blendshape (như ARKit); SyncTalk chỉ giữ **7 hệ số** vùng mắt và mày, những hệ số ít liên quan tới miệng. Blendshape là các “hướng biến dạng” của mặt (nhắm mắt trái, nhướn mày…), hệ số cho biết dùng mỗi hướng bao nhiêu.
+
+Rồi dùng **attention theo vùng** có mặt nạ để mỗi đặc trưng chỉ tác động lên vùng của nó:
+
+$$
+f_l = f_{lip} \odot (V \odot M_{lip}),
+\qquad
+f_e = f_{exp} \odot (V \odot M_{exp})
+$$
+
+$V$ là bản đồ attention học được theo vị trí 3D, $M_{lip}$ và $M_{exp}$ là mặt nạ vùng miệng và vùng mắt–mày, $\odot$ là nhân từng phần tử. Đây là thiết kế giảm “rò rỉ” giữa hai nguồn, không phải chứng minh hai đặc trưng độc lập hoàn toàn.
+
+Bản huấn luyện thật trong phần 1 dùng **AU45 của OpenFace** thay cho blendshape (video Obama không có dữ liệu bắt biểu cảm), tức chỉ điều khiển chớp mắt.
+
+<Callout type="try">
+
+Chương **Tách vùng** cho một khuôn mặt chuyển động theo đúng AU25, AU45, AU01 đo từ video. Đường tím là chớp mắt, đường xanh là âm thanh: các đỉnh không đi cùng nhau.
+
+</Callout>
+
+## Bước 3: Ổn định tư thế đầu
+
+NeRF render đầu từ một **pose camera** (xoay $R$, tịnh tiến $T$) cho mỗi frame. Pose này không có sẵn, phải ước lượng từ video. Ước lượng từng frame một từ landmark thì nhiễu: landmark nhảy vài pixel giữa hai frame là đủ để đầu render ra rung.
+
+Chương 3 mô phỏng điều đó: góc quay thật gồm chuyển động chậm và một cú quay nhanh; landmark cho pose nhiễu σ = 1,6°.
+
+| Cách | Sai số so với pose thật | Vấn đề |
+| --- | --- | --- |
+| Landmark từng frame | 1,56° | rung liên tục |
+| Trung bình trượt 9 frame | 0,56° | làm tròn cú quay; cửa sổ 25 frame còn tệ hơn (0,63°) |
+| Landmark + optical flow (tối ưu chung) | **0,40°** | giữ được cú quay |
+
+Ý tưởng của dòng cuối: **optical flow** theo dõi điểm đặc trưng giữa hai frame liên tiếp, cho chuyển động **tương đối** rất chính xác; landmark cho vị trí **tuyệt đối** nhưng nhiễu. Kết hợp hai nguồn bằng bình phương tối thiểu:
+
+$$
+p^* = \arg\min_p \sum_t (p_t - \text{landmark}_t)^2 + \lambda \sum_t (p_{t+1} - p_t - \text{flow}_t)^2,
+\qquad \lambda = \left(\frac{\sigma_{landmark}}{\sigma_{flow}}\right)^2
+$$
+
+Head-Sync Stabilizer của SyncTalk làm theo tinh thần đó, trong 3D:
+
+1. **Tìm tiêu cự** $f$: thử nhiều giá trị, với mỗi giá trị khớp mô hình mặt 3DMM vào landmark 2D, chọn $f$ cho lỗi chiếu lại nhỏ nhất. Tiêu cự sai sẽ bị “bù” bằng pose sai (đầu tiến lùi thay vì to nhỏ).
+2. **Khởi tạo pose** từ 3DMM với tiêu cự đã chọn.
+3. **Theo dõi điểm** trên đầu bằng optical flow qua các frame.
+4. **Bundle adjustment hai giai đoạn:** trước tiên tối ưu vị trí 3D của các điểm sao cho hình chiếu khớp điểm đã theo dõi, $\sum_j \|P_j - K_j\|_2$; sau đó tối ưu cả điểm và pose $(R, T)$, $\sum_j \|P_j(R, T) - K_j\|_2$.
+
+<Callout type="try">
+
+Chương **Tư thế đầu**: kéo **Cửa sổ trung bình trượt** từ 1 tới 31 frame. Cửa sổ nhỏ còn rung, cửa sổ lớn xóa chuyển động thật. Đường xanh lá (landmark + flow) không phải đánh đổi như vậy.
+
+</Callout>
+
+## Bước 4: Biểu diễn khuôn mặt 3D bằng tri-plane hash
+
+NeRF là một hàm: cho điểm 3D $\mathbf{x}$, hướng nhìn $\mathbf{d}$ và các đặc trưng điều khiển, trả về **mật độ** $\sigma$ (có vật chất ở đây không) và **màu** $\mathbf{c}$:
+
+$$
+\mathcal{F}: (\mathbf{x}, \mathbf{d}, f_l, f_e) \longrightarrow (\mathbf{c}, \sigma)
+$$
+
+Mạng MLP thuần (NeRF gốc) học chậm. Các phương pháp nhanh lưu **đặc trưng trên lưới** rồi dùng MLP rất nhỏ. Lưới 3D đặc thì tốn bộ nhớ theo lập phương; SyncTalk dùng **ba mặt phẳng** XY, YZ, XZ, mỗi mặt là một lưới băm 2D nhiều độ phân giải (multi-resolution hash, kiểu Instant-NGP):
+
+$$
+f(\mathbf{x}) = \mathcal{H}^{XY}(x, y) \oplus \mathcal{H}^{YZ}(y, z) \oplus \mathcal{H}^{XZ}(x, z)
+$$
+
+Điểm $\mathbf{x}$ được chiếu lên ba mặt phẳng, đọc đặc trưng tại ba hình chiếu (nội suy song tuyến tính), nối lại, rồi cùng $f_l$, $f_e$ đi vào MLP.
+
+Bộ nhớ đặc trưng ở độ phân giải 512 (16 mức, 2 đặc trưng float16 mỗi ô):
+
+| Biểu diễn | Bộ nhớ |
+| --- | --- |
+| Lưới 3D đặc nhiều mức | ≈ 1 GB |
+| Lưới băm 3D (giới hạn 2¹⁹ ô mỗi mức) | 20 MB |
+| Ba mặt phẳng đặc | 8,1 MB |
+| Ba mặt phẳng băm | 8,1 MB (21 MB ở độ phân giải 1024) |
+
+Vì sao ba hình chiếu 2D đủ? Khuôn mặt gần như là **một bề mặt** trong không gian 3D, không phải khối đặc như mây khói; ít khi có hai cấu trúc khác nhau chồng đúng lên cùng một hình chiếu trên cả ba mặt. Lưới băm 3D thì phải chia bảng băm cho cả khối, nên dễ va chạm hơn ở độ phân giải cao.
+
+<Callout type="try">
+
+Chương **Tri-plane hash** cho một điểm 3D chạy trong khối, chiếu lên ba mặt phẳng. Kéo **Độ phân giải lưới** từ 64 tới 2048 để xem bộ nhớ của lưới 3D bùng nổ trong khi tri-plane băm gần như đứng yên.
+
+</Callout>
+
+## Bước 5: Render một tia, rồi ghép đầu vào khung hình
+
+Mỗi pixel ứng với một tia đi từ camera qua đầu. Lấy mẫu dọc tia, hỏi field ở từng điểm, rồi cộng màu theo **volume rendering**:
+
+$$
+\hat{\mathbf{C}}(\mathbf{r}) = \sum_i T_i\,\alpha_i\,\mathbf{c}_i,
+\qquad \alpha_i = 1 - e^{-\sigma_i \delta_i},
+\qquad T_i = \prod_{j<i} (1 - \alpha_j)
+$$
+
+$\alpha_i$ là xác suất tia dừng ở đoạn $i$, $T_i$ là xác suất tia đi tới đoạn $i$ mà chưa dừng. Với khuôn mặt, $\sigma$ vọt lên ở bề mặt da, $T$ tụt về 0 ngay sau đó, nên trọng số $w_i = T_i \alpha_i$ dồn vào vài mẫu quanh da (xem [bài NeRF](/kien-thuc/nerf/) để hiểu kỹ).
+
+Huấn luyện renderer theo hai giai đoạn: đầu tiên chỉ sai số màu từng pixel; sau đó thêm **LPIPS** trên các mảng ảnh (patch) để giữ chi tiết mà sai số pixel bỏ qua (nếp da, răng). Cuối cùng tinh chỉnh riêng vùng môi.
+
+**Portrait-Sync Generator.** NeRF tái tạo tóc và nền động kém sắc nét. Thay vì render cả khung hình, SyncTalk render vùng đầu rồi **ghép vào khung hình gốc**: dùng mặt render $F_r$, bản làm mờ Gaussian $G(F_r)$ và ảnh gốc $F_o$ để giữ chi tiết tóc, viền. Ghép bằng mặt nạ cứng tạo đường nối vì màu render và màu gốc không khớp tuyệt đối; trong mô phỏng, bước nhảy ở đường nối là 0,070 với mặt nạ cứng và dưới 0,01 khi làm mờ mặt nạ. Khi đầu và thân lệch nhau để lộ khe tối ở cổ, khe được tô bằng **màu cổ trung bình** $C_n$.
+
+<Callout type="try">
+
+Chương **Render & ghép**: bên trái là σ, T và trọng số dọc một tia; bên phải là lát cắt qua đường ghép cằm–cổ. Kéo **Độ mờ mặt nạ** về 0 để thấy đường nối hiện ra.
+
+</Callout>
+
+## Huấn luyện thật và đọc kết quả
+
+Mô hình ở phần 1 được huấn luyện bằng code gốc của SyncTalk trên GPU của dự án: **60 000 vòng** cho đầu, thêm **100 000 vòng** tinh chỉnh môi, với AVE và AU45. Trên **728 frame thử nghiệm** chưa thấy khi huấn luyện:
+
+| Chỉ số | Giá trị | Đo gì |
+| --- | --- | --- |
+| PSNR | 35,49 dB | sai số từng pixel (cao hơn là tốt) |
+| LPIPS | 0,018 | khác biệt cảm nhận qua đặc trưng mạng sâu (thấp hơn là tốt) |
+| LMD | 2,73 | khoảng cách landmark môi giữa render và video thật (thấp hơn là khớp nhịp hơn) |
+
+PSNR cao không bảo đảm môi đúng nhịp: một khuôn mặt nét căng có thể há miệng sai âm. Cần đọc cả chỉ số đồng bộ (LMD, hoặc LSE-C/LSE-D dùng SyncNet) và xem chuỗi frame, không chỉ chọn một frame đẹp.
+
+## Hạn chế cần biết
+
+- **Một mô hình cho một người**, huấn luyện từ vài phút video của chính người đó. Muốn ít dữ liệu hơn, xem [InsTaG](/du-an/instag-tung-buoc/).
+- **Tư thế đầu khi dùng** thường lấy lại từ video huấn luyện; âm thanh không quyết định đầu quay thế nào.
+- Góc nhìn xa phạm vi video huấn luyện, che khuất, ánh sáng thay đổi đều làm chất lượng giảm.
+- Âm thanh khác ngôn ngữ hoặc giọng khác xa dữ liệu huấn luyện AVE có thể làm môi kém chính xác.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- SyncTalk = Facial-Sync (môi từ audio, mắt–mày từ blendshape, tách bằng attention theo vùng) + Head-Sync (tiêu cự, 3DMM, optical flow, bundle adjustment) + NeRF tri-plane hash + ghép portrait.
+- Đo thật: AU25 và RMS cùng frame tương quan 0,004, lệch 6 frame thì 0,73 ⇒ môi cần cửa sổ âm thanh.
+- Chớp mắt gần như không tương quan với âm thanh ⇒ cần nguồn điều khiển riêng cho vùng mắt.
+- Landmark cho vị trí tuyệt đối nhưng nhiễu, optical flow cho chuyển động tương đối chính xác; kết hợp cả hai thì vừa hết rung vừa giữ chuyển động thật.
+- Tri-plane: khuôn mặt gần như một bề mặt nên ba lưới 2D thay được lưới 3D, bộ nhớ từ hàng GB xuống vài MB.
+
+</Callout>
+
+## Nguồn
+
+- Peng, Z. và cộng sự (2024). *SyncTalk: The Devil is in the Synchronization for Talking Head Synthesis*. CVPR. [Code](https://github.com/ziqiaopeng/SyncTalk).
+- Mildenhall, B. và cộng sự (2020). *NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis*. ECCV.
+- Müller, T. và cộng sự (2022). *Instant Neural Graphics Primitives with a Multiresolution Hash Encoding*. SIGGRAPH.
+- Chung, J. S. và Zisserman, A. (2016). *Out of Time: Automated Lip Sync in the Wild* (SyncNet).
+- Baltrušaitis, T. và cộng sự (2018). *OpenFace 2.0: Facial Behavior Analysis Toolkit*. FG.
+- Dữ liệu chương 1–2: tín hiệu OpenFace và RMS của đoạn thử nghiệm 10 giây (Instag-data/Obama), dùng chung với lab phần 1.

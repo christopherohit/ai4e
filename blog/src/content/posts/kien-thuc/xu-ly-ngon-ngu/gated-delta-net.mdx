@@ -1,6 +1,6 @@
 ---
 title: 'Gated DeltaNet: Bộ nhớ tuần tự cập nhật bằng sai số'
-description: 'Giải thích Gated DeltaNet từ recurrence, decay gate và write gate đến cách nó thay thế một phần attention trong các mô hình ngữ cảnh dài.'
+description: 'Gated DeltaNet từ đầu: vì sao thay KV cache bằng trạng thái cố định, delta rule sửa liên kết cũ, một ma trận nhớ được bao nhiêu, cổng quên và lý do mô hình hybrid vẫn giữ attention.'
 category: kien-thuc
 topic: xu-ly-ngon-ngu
 tags: ['Gated DeltaNet', 'Linear attention', 'Bộ nhớ tuần tự', 'Xử lý ngôn ngữ']
@@ -16,53 +16,100 @@ import Callout from '../../../../components/Callout.astro';
 
 ## Khi attention phải nhớ quá nhiều
 
-Trong [bài Transformer Explainer](/kien-thuc/transformer-explainer/), attention cho phép mỗi token đọc các token trước đó qua Query, Key và Value. Cách này linh hoạt: token mới có thể truy xuất trực tiếp bất kỳ phần nào của prefix. Đổi lại, số cặp Query–Key tăng theo bình phương độ dài chuỗi và KV cache dài dần khi sinh tự hồi quy.
+Trong [bài Transformer Explainer](/kien-thuc/transformer-explainer/), attention cho mỗi token đọc lại mọi token trước nó qua Query, Key và Value. Cách này rất linh hoạt: token mới có thể lấy chính xác bất kỳ chi tiết nào của phần trước. Cái giá là phải **giữ Key và Value của mọi token** (KV cache), và bộ nhớ này lớn dần theo độ dài ngữ cảnh.
 
-[Gated DeltaNet](https://arxiv.org/abs/2412.06464) đi theo hướng khác. Thay vì giữ mọi Key–Value để đọc lại, nó nén lịch sử vào một **trạng thái cố định theo độ dài chuỗi**. Trạng thái được cập nhật tuần tự khi token mới xuất hiện. Đây là một dạng linear attention có cơ chế xóa và ghi có điều khiển.
+Tính thử với cấu hình [Qwen3.8-Flash-Next](/kien-thuc/qwen3-8-flash-next/) (2 KV head, head 256 chiều, bf16): nếu cả 48 layer đều là attention, một chuỗi 262 144 token cần **24 GB** KV cache, một triệu token cần 92 GB. Đó là cho **một** người dùng, chưa tính trọng số.
 
-Bài này giải thích cơ chế cốt lõi. Trong [bài Qwen3.8-Flash-Next](/kien-thuc/qwen3-8-flash-next/), GDN xuất hiện trong ba trên bốn layer của lịch hybrid.
-
-## Từ linear attention đến delta rule
-
-Với một head, gọi $q_t,k_t\in\mathbb{R}^{d_k}$ là query và key của token $t$, còn $v_t\in\mathbb{R}^{d_v}$ là value. Linear attention có thể giữ một ma trận liên kết:
-
-$$S_t\in\mathbb{R}^{d_k\times d_v}.$$
-
-Nếu chỉ cộng $k_tv_t^\top$ vào trạng thái, các key lặp lại sẽ tích lũy vô hạn. Delta rule sửa vấn đề ấy bằng cách hỏi: “với key hiện tại, trạng thái đang dự đoán value nào?” rồi chỉ ghi phần sai số:
-
-$$
-\widetilde S_{t-1}=\alpha_tS_{t-1},\qquad
- e_t=v_t-\widetilde S_{t-1}^{\top}k_t,
-$$
-
-$$
-S_t=\widetilde S_{t-1}+\beta_tk_te_t^\top,
-\qquad y_t=S_t^\top q_t.
-$$
-
-Có ba bước cần phân biệt:
-
-1. **Decay:** giảm trạng thái cũ bằng $\alpha_t$.
-2. **Read:** dùng trạng thái sau decay để dự đoán value cho $k_t$.
-3. **Delta write:** ghi sai số $e_t$ theo hướng của key $k_t$ với cường độ $\beta_t$.
-
-$\alpha_t$ và $\beta_t$ thường phụ thuộc dữ liệu, nằm trong khoảng 0–1 nhờ sigmoid hoặc một tham số hóa tương đương. Chúng không phải một temperature dùng cho sampling.
-
-### Ví dụ một chiều
-
-Giả sử $S_{t-1}=0{,}8$, $k_t=1$, $v_t=0{,}2$, $\alpha_t=0{,}9$ và $\beta_t=0{,}5$. Sau decay, trạng thái còn $0{,}72$. Trạng thái dự đoán value $0{,}72$, nên sai số là $-0{,}52$. Delta write đưa trạng thái về $0{,}46$:
-
-$$0{,}72+0{,}5\times(-0{,}52)=0{,}46.$$
-
-Điểm quan trọng là trạng thái có thể **giảm** khi dữ liệu mới sửa một liên kết cũ. GDN không chỉ “thêm ký ức”; nó có thể quên có mục đích.
+[Gated DeltaNet](https://arxiv.org/abs/2412.06464) (GDN) đi hướng khác: thay vì giữ mọi Key–Value, nó nén lịch sử vào một **ma trận trạng thái kích thước cố định**, cập nhật mỗi khi có token mới. Mỗi layer GDN của Qwen3.8 có trạng thái **1,5 MB**, dù đã đọc một nghìn hay một triệu token. Lịch hybrid 36 GDN + 12 attention đưa con số 24 GB xuống **6,05 GB**.
 
 <Callout type="try">
 
-Trong lab phía trên, chọn token **t5 “thủ đô (nay) → Hà Nội”** ở bước **Đọc & sai số**: sai số ở cột Huế âm, ở cột Hà Nội dương. Chuyển sang bước **Truy vấn** với câu hỏi “thủ đô?”: GDN trả lời Hà Nội, còn linear attention cộng dồn cả hai đáp án. Tiếp tục tới t7: thông tin lặp lại nên phần ghi gần bằng 0.
+Chương **Bộ nhớ** vẽ ba đường theo độ dài ngữ cảnh: toàn attention (đỏ), hybrid (xanh lá) và riêng phần trạng thái GDN (xanh, nằm ngang).
 
 </Callout>
 
-## Một GDN layer thực sự gồm những gì?
+## Bộ nhớ liên kết: trạng thái là một bảng tra mềm
+
+Với một head, mỗi token $t$ có key $k_t \in \mathbb{R}^{d_k}$ (“câu hỏi”) và value $v_t \in \mathbb{R}^{d_v}$ (“đáp án”). Trạng thái là một ma trận
+
+$$
+S_t \in \mathbb{R}^{d_k \times d_v}
+$$
+
+hoạt động như một **bảng tra mềm**: đưa vào một key $k$, đọc ra $S^\top k$, đáp án mà bộ nhớ liên kết với key đó. Query $q_t$ đọc theo cùng cách: $y_t = S_t^\top q_t$.
+
+**Linear attention** ghi bằng cách cộng: $S_t = S_{t-1} + k_t v_t^\top$. Nếu các key vuông góc nhau, đọc lại chính xác. Nhưng key thật không vuông góc, và số cặp vượt xa số chiều $d_k$ thì các liên kết chồng lên nhau: hỏi một key, đọc ra trung bình lẫn lộn của nhiều đáp án. Tệ hơn, một key lặp lại cứ bị cộng thêm mãi.
+
+## Delta rule: chỉ ghi phần bộ nhớ đoán sai
+
+Delta rule (Widrow–Hoff, cũng là một bước gradient descent cho bài toán hồi quy $\min_S \|S^\top k_t - v_t\|^2$) hỏi trước khi ghi: **với key này, bộ nhớ đang đoán gì?** rồi chỉ ghi phần sai:
+
+$$
+e_t = v_t - S_{t-1}^\top k_t,
+\qquad
+S_t = S_{t-1} + \beta_t\,k_t\,e_t^\top
+$$
+
+$\beta_t \in (0, 1)$ là cường độ ghi. Thông tin đã biết cho $e_t \approx 0$: gần như không ghi gì. Thông tin mâu thuẫn cho $e_t$ âm ở đáp án cũ và dương ở đáp án mới: **liên kết cũ bị sửa**, không chỉ cộng thêm.
+
+**Gated** DeltaNet thêm một cổng quên $\alpha_t \in (0, 1)$ làm mờ trạng thái trước khi đọc:
+
+$$
+\tilde S_{t-1} = \alpha_t S_{t-1},
+\qquad
+e_t = v_t - \tilde S_{t-1}^\top k_t,
+\qquad
+S_t = \tilde S_{t-1} + \beta_t\,k_t\,e_t^\top
+$$
+
+### Ví dụ một chiều
+
+$S_{t-1} = 0{,}8$, $k_t = 1$, $v_t = 0{,}2$, $\alpha_t = 0{,}9$, $\beta_t = 0{,}5$. Sau decay còn $0{,}72$; bộ nhớ đoán $0{,}72$ nên sai số $-0{,}52$; ghi: $0{,}72 + 0{,}5 \times (-0{,}52) = 0{,}46$. Trạng thái **giảm** vì dữ liệu mới sửa liên kết cũ.
+
+<Callout type="try">
+
+Chương **Delta rule** cho tám token đi qua một bộ nhớ 4×4 (4 kênh key × 4 đáp án): “thủ đô (1802) → Huế”, “tiền tệ → Đồng”, …, rồi “thủ đô (nay) → Hà Nội”. Ma trận trái là GDN, phải là linear attention. Ở token 5, sai số âm ở cột Huế và dương ở cột Hà Nội; cuối cùng hỏi “thủ đô?”, GDN trả lời Hà Nội còn linear attention lẫn cả hai. Kéo **Decay α** và **Cường độ ghi β** để xem ảnh hưởng.
+
+</Callout>
+
+## Một ma trận nhớ được bao nhiêu?
+
+Thí nghiệm số trong chương 3: ghi lần lượt $N$ cặp (key, value) ngẫu nhiên 32 chiều vào ma trận 32×32, rồi đọc lại từng cặp (sai số tính theo độ dài vector; value có độ dài 1).
+
+| Số cặp $N$ | Linear attention (mọi cặp) | Delta rule (mọi cặp) | Delta rule (8 cặp mới nhất) |
+| --- | --- | --- | --- |
+| 8 | 0,55 | 0,35 | 0,35 |
+| 32 | 1,02 | 0,74 | 0,36 |
+| 128 | 2,04 | 1,18 | 0,31 |
+
+- **Linear attention** hỏng dần mọi thứ: ở $N = 128$, sai số lớn gấp đôi chính độ dài value.
+- **Delta rule** luôn đọc tốt các cặp mới nhất (~0,31) và **ghi đè dần cặp cũ**. Một bộ nhớ cố định không thể nhớ mọi thứ khi $N$ vượt xa số chiều; delta rule chọn quên cái cũ thay vì làm nhiễu tất cả.
+
+Trong mô hình thật, $d_k = d_v = 128$ và có 48 head value mỗi layer, nên dung lượng lớn hơn nhiều; nhưng nguyên lý giống hệt.
+
+## Cổng quên: quên đúng lúc
+
+Chương 4 mô phỏng một lần đổi chủ đề: 40 bước chủ đề A, rồi 40 bước chủ đề B.
+
+- **α = 1** (không quên): A còn lại sau khi đổi chủ đề, chồng lên B trong cùng ma trận.
+- **α cố định nhỏ hơn 1**: cái gì cũng phai, kể cả B đang học; sai số B dừng ở mức cao (0,63 với α = 0,9 so với 0,16 khi không quên).
+- **α theo dữ liệu** (gần 1 khi tiếp tục cùng ngữ cảnh, gần 0 lúc đổi chủ đề): A được xóa gọn, B học như bình thường.
+
+Vì vậy trong GDN, $\alpha_t$ và $\beta_t$ không phải hằng số mà được **tính từ chính token đầu vào** (qua phép chiếu học được, sigmoid hoặc $\exp(-\text{softplus})$). Mô hình tự học khi nào giữ, khi nào xóa, khi nào ghi mạnh.
+
+| Cổng | Điều khiển | Câu hỏi trực giác |
+| --- | --- | --- |
+| Decay $\alpha_t$ | tuổi thọ trạng thái cũ | giữ lại bao nhiêu? |
+| Write $\beta_t$ | mức ghi sai số mới | sửa mạnh tới đâu? |
+| Output gate | lượng output đi sang layer sau | cho thông tin này đi bao nhiêu? |
+
+<Callout type="try">
+
+Chương **Cổng quên**: bấm ba nút **α = 1**, **α = 0,9**, **theo dữ liệu** để so sánh đường hồng (hỏi lại A) và xanh (hỏi B).
+
+</Callout>
+
+## Một layer GDN thật gồm những gì?
 
 <figure class="article-diagram">
   <a href={Diagram.src} target="_blank" rel="noopener" aria-label="Mở sơ đồ ở kích thước đầy đủ">
@@ -71,48 +118,52 @@ Trong lab phía trên, chọn token **t5 “thủ đô (nay) → Hà Nội”** 
   <figcaption>Hình 2 từ <a href="https://github.com/QwenLM/Qwen3.8-Flash-Next/blob/main/tech_report.pdf">báo cáo kỹ thuật của Qwen Team</a>. Nhấp hình để xem đầy đủ.</figcaption>
 </figure>
 
+1. **Phép chiếu** $x_t \to q_t, k_t, v_t$ và các cổng $\alpha_t, \beta_t$.
+2. **Convolution nhân quả ngắn** (độ rộng 4) trên Q, K, V: trộn vài token liền kề trước khi nén vào trạng thái, giúp bắt mẫu cục bộ.
+3. **SiLU và chuẩn hóa L2** cho Q, K: key độ dài 1 giữ cho phép ghi $k e^\top$ ổn định.
+4. **Gated delta rule** cho từng head (Qwen3.8: 16 head Q/K, 48 head V, mỗi head 128 chiều).
+5. **RMSNorm** và **output gate**: $\text{out}_t = W_o\big[\sigma(W_z x_t) \odot \text{RMSNorm}(y_t)\big]$.
 
-Đầu vào $x_t$ đi qua các phép chiếu học được để tạo Q, K, V. Q và K thường qua SiLU, convolution nhân quả ngắn và L2 normalization; V qua convolution và SiLU. Convolution cung cấp một inductive bias cục bộ trước khi thông tin được nén vào recurrence.
+Đừng nhầm output gate với router của MoE: cổng GDN điều chỉnh bộ nhớ và output, router MoE chọn mạng expert.
 
-Sau recurrence, các head được ghép lại, chuẩn hóa bằng RMSNorm và đi qua output gate:
+### Huấn luyện song song theo khối
 
-$$
-\operatorname{out}_t=W_o\left[\sigma(W_zx_t)\odot\operatorname{RMSNorm}(y_t)\right].
-$$
+Công thức trên trông tuần tự: token sau phải chờ trạng thái của token trước. Khi huấn luyện hoặc prefill, GDN dùng thuật toán **theo khối** (chunkwise): chia chuỗi thành các khối (ví dụ 64 token), trong mỗi khối tính bằng phép nhân ma trận như attention, giữa các khối mới truyền trạng thái. Nhờ vậy vẫn tận dụng được tensor core. Khi decode, mỗi token chỉ cập nhật trạng thái một lần: chi phí mỗi token **không đổi**, không tăng theo độ dài ngữ cảnh như attention.
 
-Output gate là một cổng thứ ba, khác với decay và write:
+## Vì sao vẫn cần attention: mô hình hybrid
 
-| Cổng | Điều khiển | Câu hỏi trực giác |
-| --- | --- | --- |
-| Decay $\alpha_t$ | Tuổi thọ trạng thái cũ | Giữ lại bao nhiêu? |
-| Write $\beta_t$ | Mức ghi delta mới | Sửa mạnh đến đâu? |
-| Output gate | Lượng output gửi sang layer sau | Cho thông tin này đi bao nhiêu? |
+Chương 5 lấy lại thí nghiệm 128 cặp: sai số theo **tuổi** của cặp. Cặp mới nhất đọc lại tốt; cặp ghi từ rất lâu gần như mất. Một chi tiết chính xác ở xa phía trước (một số điện thoại, tên biến định nghĩa từ đầu file) có thể đã bị nén mất. Attention thì đọc lại chính xác bất kỳ token nào, với giá là KV cache.
 
-Đừng nhầm output gate với router của [Mixture of Experts](/kien-thuc/qwen3-8-flash-next/). GDN gate điều chỉnh bộ nhớ và output; MoE router chọn các mạng expert.
+Vì vậy các mô hình ngữ cảnh dài gần đây trộn hai loại: **ba layer GDN giữ bản tóm tắt rẻ, một layer attention truy xuất chính xác**. Qwen3-Next và Qwen3.8-Flash-Next dùng tỷ lệ 3 : 1; layer attention của Qwen3.8 còn là [sparse attention](/kien-thuc/sparse-attention/) để rẻ hơn nữa.
 
-## Vì sao GDN có chi phí tuyến tính?
-
-Trong dense attention, query ở vị trí $t$ so với nhiều key trong prefix. GDN đọc một trạng thái kích thước cố định và cập nhật nó một lần. Nếu kích thước head cố định, chi phí theo chiều dài chuỗi là tuyến tính và decode không cần một KV cache token-by-token khổng lồ cho nhánh GDN.
-
-Đổi lại, trạng thái cố định là một nút thắt thông tin. Hai prefix khác nhau có thể bị nén thành những trạng thái gần nhau; một chi tiết cụ thể có thể bị ghi đè. GDN vì thế không phải “attention nhanh hơn trong mọi trường hợp”. Nó là một loại bộ nhớ khác, có lợi khi lịch sử dài và mẫu thông tin có thể nén được.
-
-Đó là lý do kiến trúc hybrid thường giữ một số layer attention. Trong Qwen3.8-Flash-Next, ba layer GDN được xen với một layer QSA để vừa có bộ nhớ recurrent vừa có đường truy xuất token trực tiếp.
-
-## GDN khác Mamba và attention thế nào?
-
-- **Attention:** giữ các Key–Value và chọn trực tiếp token liên quan; linh hoạt nhưng tốn chi phí theo context.
-- **Mamba/SSM:** dùng trạng thái tuyến tính với động lực học học được; mạnh ở xử lý tuần tự và streaming.
-- **GDN:** cũng có trạng thái tuần tự, nhưng delta rule so sánh value mới với dự đoán cũ rồi ghi phần sai số vào liên kết key–value.
-
-Tên gọi không thay thế công thức. Khi đọc một model, hãy xem state shape, cách tạo gate, convolution, normalization và kernel triển khai thay vì chỉ dựa vào nhãn “linear attention”.
+| | Attention | Mamba / SSM | Gated DeltaNet |
+| --- | --- | --- | --- |
+| Bộ nhớ theo độ dài | tăng tuyến tính (KV cache) | cố định | cố định |
+| Đọc lại chi tiết xa | chính xác | xấp xỉ | xấp xỉ |
+| Cách ghi | lưu nguyên | cập nhật tuyến tính có cổng | ghi phần sai số có cổng |
+| Chi phí decode mỗi token | tăng theo độ dài | không đổi | không đổi |
 
 ## Giới hạn khi diễn giải
 
-Một state value lớn không tự nói rằng model “nhớ” một sự kiện cụ thể. Trạng thái là ma trận phân tán qua nhiều head và channel; output còn đi qua gate, residual, MoE và các layer sau. Lab phía trên dùng ma trận 4×4 với key và value dựng sẵn để thấy decay, sai số và delta write; nó không phải một probe của checkpoint.
+Một ô lớn trong ma trận trạng thái không tự nói rằng mô hình “nhớ” một sự kiện cụ thể: trạng thái phân tán qua nhiều head và kênh, output còn qua gate, residual, MoE và các layer sau. Các thí nghiệm trong lab dùng vector nhỏ dựng sẵn hoặc ngẫu nhiên để thấy đúng công thức cập nhật; chúng không phải phép đo trên trọng số Qwen.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- GDN nén lịch sử vào ma trận $S \in \mathbb{R}^{d_k \times d_v}$ cố định; đọc bằng $S^\top q$.
+- Delta rule: $e = v - S^\top k$, $S \leftarrow S + \beta k e^\top$: chỉ ghi phần đoán sai, sửa được liên kết cũ.
+- Cổng quên $\alpha_t$ tính từ dữ liệu: giữ khi cùng ngữ cảnh, xóa khi đổi chủ đề; $\alpha$ cố định thì hại cả cũ lẫn mới.
+- Bộ nhớ cố định phải quên: delta rule quên cái cũ, linear attention làm nhiễu tất cả.
+- Qwen3.8: 1,5 MB trạng thái mỗi layer GDN; hybrid 36 GDN + 12 attention giảm KV cache ở 262K token từ 24 GB xuống 6 GB.
+
+</Callout>
 
 ## Đọc tiếp
 
 - [Transformer Explainer](/kien-thuc/transformer-explainer/): Q/K/V, causal attention, MLP và residual.
-- [Sparse Attention](/kien-thuc/sparse-attention/): cách chọn một phần context thay vì đọc toàn bộ.
+- [Sparse Attention](/kien-thuc/sparse-attention/): chỉ đọc một phần ngữ cảnh, đo trên attention thật.
 - [Qwen3.8-Flash-Next](/kien-thuc/qwen3-8-flash-next/): GDN trong lịch hybrid 3 GDN + 1 QSA.
-- [Gated Delta Networks](https://arxiv.org/abs/2412.06464): bài báo mô tả delta rule và gated linear attention.
+- Yang, S., Kautz, J. và Hatamizadeh, A. (2025). *Gated Delta Networks: Improving Mamba2 with Delta Rule*. ICLR. [arXiv:2412.06464](https://arxiv.org/abs/2412.06464).
+- Yang, S. và cộng sự (2024). *Parallelizing Linear Transformers with the Delta Rule over Sequence Length*. NeurIPS.
+- Schlag, I., Irie, K. và Schmidhuber, J. (2021). *Linear Transformers Are Secretly Fast Weight Programmers*. ICML.

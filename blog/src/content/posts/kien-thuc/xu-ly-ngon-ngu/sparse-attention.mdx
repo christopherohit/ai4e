@@ -1,6 +1,6 @@
 ---
 title: 'Sparse Attention: Khi mỗi token chỉ đọc phần context cần thiết'
-description: 'Tìm hiểu vì sao attention thưa giúp mở rộng ngữ cảnh, các chiến lược local, global và learned sparsity, cùng cách Qwen Sparse Attention chọn micro-block.'
+description: 'Attention thật đọc những đâu (đo trên Qwen2.5-0.5B): attention sink, cửa sổ gần, chọn block theo nội dung; Qwen Sparse Attention từng bước và mỗi cách giữ được bao nhiêu khối lượng attention.'
 category: kien-thuc
 topic: xu-ly-ngon-ngu
 tags: ['Sparse Attention', 'Attention', 'Context dài', 'QSA']
@@ -16,40 +16,57 @@ import Callout from '../../../../components/Callout.astro';
 
 ## Dense attention đọc quá nhiều
 
-Trong [Transformer Explainer](/kien-thuc/transformer-explainer/), một query có thể so khớp với mọi key ở phía trước. Đây là sức mạnh lớn của self-attention, nhưng với $L$ token, ma trận điểm có thể có khoảng $L^2$ cặp. Context càng dài, prefill càng nặng và KV cache khi decode càng lớn.
-
-**Sparse Attention** giới hạn tập key mà mỗi query được phép đọc. Mask không còn là một tam giác dày; nó chỉ giữ một số ô. Nếu chọn đúng, model vẫn truy xuất được thông tin quan trọng với ít phép tính hơn.
-
-Bài này giải thích các kiểu sparsity và QSA trong [Qwen3.8-Flash-Next](/kien-thuc/qwen3-8-flash-next/).
-
-## Một ô sparse attention có ý nghĩa gì?
-
-Với query $q_i$, tập vị trí được phép đọc là $\mathcal{S}_i$. Softmax chỉ chuẩn hóa trên tập này:
+Trong attention thông thường, token ở vị trí $i$ so query của nó với key của **mọi** token trước nó, rồi lấy softmax:
 
 $$
-a_{ij}=\frac{\exp(q_i^\top k_j/\sqrt{d})}{\sum_{u\in\mathcal{S}_i}\exp(q_i^\top k_u/\sqrt{d})},\qquad
- y_i=\sum_{j\in\mathcal{S}_i}a_{ij}v_j.
+A_{ij} = \frac{\exp(q_i \cdot k_j / \sqrt{d})}{\sum_{j' \le i} \exp(q_i \cdot k_{j'} / \sqrt{d})},
+\qquad
+y_i = \sum_{j \le i} A_{ij}\, v_j
 $$
 
-Một ô bị mask nghĩa là value ở vị trí đó không tham gia tổng của query $i$. Vì vậy “sparse” không chỉ là tô ít ô trên hình; nó thay đổi mẫu thông tin mà token được phép nhận.
+Một chuỗi $T$ token cần $T(T+1)/2$ tích vô hướng mỗi head, mỗi layer: 1 024 token là ~525 nghìn, 128K token là **8,6 tỷ**. Khi decode, mỗi token mới phải đọc lại toàn bộ KV cache. Ở ngữ cảnh dài, attention là phần đắt nhất.
 
-Sparse attention không phải [Gated DeltaNet](/kien-thuc/gated-delta-net/). GDN nén lịch sử vào state; sparse attention vẫn đọc các token gốc, nhưng đọc một tập con.
+**Sparse attention** chỉ cho mỗi query đọc một tập con $\mathcal{S}_i$ các token, kích thước cố định $B$ (ngân sách):
 
-## Ba cách tạo mask
+$$
+y_i = \sum_{j \in \mathcal{S}_i} \tilde A_{ij}\, v_j,
+\qquad |\mathcal{S}_i| \le B
+$$
 
-### Local hoặc sliding window
+với $\tilde A$ là softmax chỉ trên $\mathcal{S}_i$. Chi phí còn $O(T \cdot B)$. Câu hỏi duy nhất: **chọn $\mathcal{S}_i$ thế nào để không mất thông tin?** Bài này trả lời bằng số đo thật.
 
-Query chỉ đọc một cửa sổ gần nó, ví dụ 128 token trước. Cách này giảm chi phí và giữ quan hệ cục bộ tốt. Nhược điểm là thông tin xa phải truyền qua nhiều layer; một token ở đầu chuỗi không thể nhảy trực tiếp đến token cuối trong một layer.
+## Attention thật đọc những đâu?
 
-### Global hoặc landmark
+Chạy **Qwen2.5-0.5B-Instruct** (mô hình dense, 24 layer × 14 head) trên 1 024 token văn bản Wikipedia và ghi lại toàn bộ ma trận attention. Ba hiện tượng lặp lại khắp các head:
 
-Một số token đặc biệt, token đầu câu hoặc các vị trí landmark được nhiều query đọc. Global token giúp truyền thông tin xa nhưng có thể thành bottleneck nếu mọi query cùng phụ thuộc vào chúng.
+1. **Attention sink:** token đầu tiên của chuỗi nhận khối lượng lớn bất thường dù không liên quan nội dung (ở head 6, layer 14 là 24% của token cuối). Softmax buộc tổng bằng 1; khi query không cần đọc gì nhiều, khối lượng thừa “đổ” vào token đầu.
+2. **Token gần:** một dải sáng sát đường chéo, nhất là ở layer đầu (layer 1, head 1: bốn token nhận nhiều nhất đều nằm trong 6 token gần nhất).
+3. **Vài điểm xa theo nội dung:** một tên riêng nhắc lại, dấu câu cùng loại, từ “and” rải khắp đoạn (layer 24, head 11).
 
-### Learned hoặc content-based sparsity
+Phần lớn các ô còn lại **gần như bằng 0**. Đó là cơ sở của mọi phương pháp sparse attention.
 
-Model dùng một indexer nhẹ để ước lượng vùng context quan trọng cho từng query, sau đó giữ top-k. Đây là hướng Qwen Sparse Attention sử dụng. Mask thay đổi theo nội dung thay vì cố định theo vị trí.
+<Callout type="try">
 
-## Qwen Sparse Attention chọn block, không chọn từng token ngay từ đầu
+Chương **Bản đồ thật** vẽ ma trận attention (gộp 16×16 token mỗi ô); chương **Một hàng** vẽ trọng số của token cuối theo vị trí. Bấm các nút **L1 H1**, **L7 H4**, **L14 H6**, **L24 H11** để so sánh bốn head: không có một mẫu nào đúng cho mọi head.
+
+</Callout>
+
+## Mẫu cố định: cửa sổ gần và sink
+
+Đo **độ phủ**: tổng khối lượng attention dense rơi vào các token mà mẫu thưa giữ lại, trung bình trên mọi layer, mọi head, 512 query ở nửa sau chuỗi.
+
+| Ngân sách (token) | Cửa sổ gần | 4 sink + cửa sổ |
+| --- | --- | --- |
+| 64 | 43% | **76%** |
+| 128 | 48% | 82% |
+| 256 | 54% | 87% |
+
+- **Sliding window** (Longformer, Mistral): chỉ đọc $B$ token gần nhất. Mất hơn nửa khối lượng ở ngân sách 64.
+- **Sink + window** (StreamingLLM): giữ thêm 4 token đầu. Bốn token rẻ nhất mang **33 điểm phần trăm** khối lượng; không có chúng, mô hình dense chạy với cửa sổ trượt sẽ hỏng nhanh.
+
+Phần còn thiếu là các token ở xa nhưng liên quan nội dung. Mẫu cố định không biết chúng ở đâu: cần **chọn theo nội dung**.
+
+## Qwen Sparse Attention: chọn block theo nội dung
 
 <figure class="article-diagram">
   <a href={Diagram.src} target="_blank" rel="noopener" aria-label="Mở sơ đồ ở kích thước đầy đủ">
@@ -58,72 +75,81 @@ Model dùng một indexer nhẹ để ước lượng vùng context quan trọng
   <figcaption>Hình 3 từ <a href="https://github.com/QwenLM/Qwen3.8-Flash-Next/blob/main/tech_report.pdf">báo cáo kỹ thuật của Qwen Team</a>. Nhấp hình để xem đầy đủ.</figcaption>
 </figure>
 
+Chọn theo nội dung một cách ngây thơ (tính $q_i \cdot k_j$ cho mọi $j$ rồi lấy top-$B$) thì đã tốn đúng chi phí dense. QSA làm rẻ bước chọn bằng hai mẹo: **gộp block** và **indexer nhỏ**.
 
-QSA có hai phần: **lightweight indexer** và **core attention**. Indexer không tính attention đầy đủ trên mọi token. Nó nén Key thành các micro-block rồi chấm điểm block.
+**Bước 1: gộp key thành micro-block.** Bốn token liên tiếp ($r = 4$) thành một block; key trong block được lấy trung bình (trước khi gắn RoPE, để không trộn các pha vị trí khác nhau), chuẩn hóa RMS, rồi gắn vị trí đầu block. Indexer chỉ so với $T/4$ đại diện.
 
-### Bước 1: Nén Key theo micro-block
-
-Với compression ratio $r=4$, bốn token liên tiếp tạo một block. Key trong block được average-pool, RMS-normalize và gắn vị trí bắt đầu block trước khi áp dụng partial RoPE. Query vẫn giữ vị trí token riêng.
-
-Nén theo block giúp indexer so sánh khoảng $L/4$ đại diện thay vì $L$ token. Average-pool key trước RoPE cũng tránh trung bình những vector đã có pha vị trí khác nhau.
-
-### Bước 2: Chấm điểm causal
-
-Query ở vị trí $i$ chỉ được chấm các block đã hoàn chỉnh trước nó. Với 4 query head của indexer và một key head dùng chung:
+**Bước 2: indexer chấm điểm block.** Indexer có vài head nhỏ riêng (Qwen3.8: 4 head, 128 chiều, một key head dùng chung):
 
 $$
-I_{ib}=\sum_{h=1}^{4}\operatorname{ReLU}\left(\langle q_{ih},\bar{k}_b\rangle\right).
+I_{ib} = \sum_{h=1}^{4} \text{ReLU}\big(\langle q^{I}_{ih}, \bar k_b \rangle\big)
 $$
 
-Block chưa quan sát đủ token tương lai nhận điểm vô cực âm hoặc bị loại. Đây là điều kiện causal; indexer không được nhìn trước đáp án.
+Chỉ block **hoàn chỉnh trước** query mới được chấm (điều kiện nhân quả).
 
-### Bước 3: Top-k block rồi mở về token
+**Bước 3: top-k rồi mở về token.** Giữ các block điểm cao nhất sao cho tổng $K = 2048$ token (512 block), cộng phần đuôi chưa đủ block của chính query; mở ra token gốc và chạy attention đầy đủ (core attention, 24 head, 256 chiều) chỉ trên các token đó.
 
-Checkpoint Qwen3.8-Flash-Next công bố token budget $K=2048$ và compression ratio $r=4$, tương ứng tối đa 512 complete block. Các block được chọn mở lại thành token gốc để core attention tính softmax trên chúng. Phần đuôi chưa đủ block luôn được giữ.
-
-Điều đó tạo ra hai đại lượng khác nhau:
-
-- **Indexer score:** block nào có vẻ đáng đọc.
-- **Core attention weight:** sau khi chọn, token nào đóng góp bao nhiêu Value.
-
-Indexer score không phải attention weight và không thể dùng thay nhau khi diễn giải.
+Hai đại lượng cần phân biệt: **điểm indexer** (block nào đáng đọc) và **trọng số core attention** (sau khi chọn, token nào đóng góp bao nhiêu). Điểm indexer không phải trọng số attention.
 
 <Callout type="try">
 
-Trong lab phía trên, bấm ví dụ **“2” tìm tham số r** rồi chuyển giữa các bước. Ở **Local / global**, cửa sổ 8 token không chạm tới các token `r` ở đầu chuỗi. Ở **QSA: chọn block**, indexer cho block `* r * r` điểm cao nhất và giữ nó. Kéo budget lên 3–4 block, rồi xem biểu đồ phía dưới để so sánh phần khối lượng attention mà mỗi mẫu giữ lại.
+Chương **QSA từng bước** chạy ba bước trên 32 token code `def area(r): return PI*r*r …`: cột tím là điểm indexer của từng block, khung xanh là block được chọn, cột vàng là attention sau khi mở block. Kéo **Số block giữ** từ 1 tới 6.
+
+</Callout>
+
+## Chọn block theo nội dung giữ được bao nhiêu?
+
+Áp cách chọn của QSA lên chính các head của Qwen2.5-0.5B (chấm block bằng $q \cdot \bar k$ của head đó, chưa có indexer huấn luyện riêng), và so với **giới hạn trên**: chọn đúng các block có khối lượng thật lớn nhất.
+
+| Ngân sách (token) | Sink + cửa sổ | Top-k block ($q \cdot \bar k$) | Giới hạn trên |
+| --- | --- | --- | --- |
+| 64 | 76% | 74% | 85% |
+| 128 | 82% | 85% | 91% |
+| 256 | 87% | **94%** | 96% |
+
+Đọc bảng:
+
+- Chọn theo nội dung vượt sink + cửa sổ khi ngân sách đủ để chứa các token xa, và tiến sát giới hạn trên (94% so với 96% ở 256 token).
+- Khoảng cách tới giới hạn trên là phần indexer “đoán sai”. QSA thu hẹp nó bằng cách **huấn luyện riêng indexer** để bắt chước phân phối attention dense.
+- Ở ngữ cảnh dài, 2 048 token là một phần rất nhỏ của 262K; chất lượng bước chọn quyết định tất cả.
+
+**Theo layer**, độ khó rất khác nhau: các layer giữa phần lớn là sink + vài block (layer 8: sink + cửa sổ 64 đã đạt 93%), trong khi hai layer cuối trải rộng nhất (top-k 64 chỉ 46–56%). Đây cũng là lý do các mô hình hybrid như Qwen3.8 chỉ giữ attention ở **1/4 số layer** và dùng [Gated DeltaNet](/kien-thuc/gated-delta-net/) cho phần còn lại.
+
+<Callout type="try">
+
+Chương **Đo độ phủ**: kéo **Ngân sách token** 64 / 128 / 256 để xem ba đường; biểu đồ phải là độ phủ theo từng layer, bảng bên dưới có số chi tiết.
 
 </Callout>
 
 ## Chi phí giảm ở đâu?
 
-Nếu budget $K$ cố định, core attention đọc khoảng $K$ token cho mỗi query, thay vì toàn prefix. Chi phí phần core gần $O(LK)$. Indexer vẫn phải chấm query với các block nén; compression làm phần này nhỏ hơn dense nhưng không biến QSA thành recurrence cố định như GDN.
-
-Vì QSA có learned selection, nó có thể bỏ sót một block quan trọng. Model cần được train để indexer học tín hiệu phù hợp. Báo cáo Qwen mô tả hai giai đoạn: distill phân phối attention dense xuống block-level indexer, sau đó sparse-train backbone cùng indexer.
-
-## Sparse attention có làm model “mất trí nhớ” không?
-
-Không thể trả lời chỉ bằng số token budget. Một token bị bỏ khỏi một query vẫn có thể được chọn bởi query khác hoặc layer khác. Nhiều layer tạo cơ hội truyền thông tin gián tiếp. GDN xen kẽ còn duy trì một state recurrent riêng.
-
-Ngược lại, sparse mask cũng không đảm bảo model luôn tìm đúng bằng chứng. Nếu indexer đánh giá sai, core attention không có cơ hội đọc token bị loại. Vì vậy benchmark long-context, ablation compression ratio và chất lượng indexer quan trọng hơn một hình mask đẹp.
+Với ngân sách $K$ cố định, core attention đọc khoảng $K$ token mỗi query thay vì toàn bộ prefix: chi phí $O(T \cdot K)$ thay vì $O(T^2)$. Indexer vẫn phải chấm mọi block, $O(T \cdot T/4)$ nhưng với head nhỏ và ít head hơn nhiều, nên rẻ hơn dense đáng kể. Lưu ý: KV cache **không** nhỏ đi (vẫn phải giữ mọi token để có thể chọn); sparse attention giảm phép tính và lượng dữ liệu đọc mỗi bước, còn [Gated DeltaNet](/kien-thuc/gated-delta-net/) và [PagedAttention](/kien-thuc/paged-attention/) giải quyết bộ nhớ.
 
 ## So sánh nhanh
 
-| Cơ chế | Query đọc gì? | Bộ nhớ/cache | Điểm mạnh | Rủi ro |
-| --- | --- | --- | --- | --- |
-| Dense attention | Toàn bộ prefix | KV cache dài | Truy xuất trực tiếp | Chi phí lớn |
-| Local window | Vùng gần | Nhỏ hơn | Quan hệ cục bộ | Khó nối thông tin xa |
-| Sparse learned | Block/token được chọn | Phụ thuộc mask | Linh hoạt theo nội dung | Chọn sai context |
-| GDN | State cố định | State cố định | Streaming, decode hiệu quả | Mất chi tiết khi nén |
+| Cách | Chọn token thế nào | Ưu | Nhược |
+| --- | --- | --- | --- |
+| Dense | tất cả | chính xác | $O(T^2)$ |
+| Sliding window | $B$ token gần nhất | đơn giản, KV cache có thể cắt | mất token xa |
+| Sink + window | 4 token đầu + gần nhất | ổn định khi stream dài | vẫn mất token xa theo nội dung |
+| Block top-k (QSA, NSA, DSA) | theo điểm indexer trên block | giữ được token xa liên quan | cần indexer tốt, KV cache vẫn đầy đủ |
 
-## Cách đọc một visualization sparse attention
+## Ghi nhớ
 
-Khi xem ma trận, trước hết kiểm tra trục query và key, sau đó kiểm tra causal mask. Một ô sáng thường chỉ cho biết trọng số hoặc điểm minh họa lớn hơn; nó không chứng minh quan hệ ngữ nghĩa. Với QSA, hãy tách ba lớp: block được indexer chấm, block lọt top-k và token nhận attention trong core.
+<Callout type="key">
 
-Lab phía trên dùng key/query dựng cho giáo dục, không chạy weights. Nó giúp thấy budget, block expansion và quy tắc giữ phần đuôi, không dùng để kết luận Qwen đang tìm một từ cụ thể trong prompt.
+- Attention thật tập trung ở token đầu (sink), token gần và vài token xa theo nội dung; phần lớn trọng số gần 0.
+- Đo trên Qwen2.5-0.5B: cửa sổ 64 giữ 43%, thêm 4 token sink lên 76%; chọn top-k block theo nội dung ở ngân sách 256 giữ 94% (giới hạn trên 96%).
+- QSA: gộp key 4 token một block, indexer nhỏ chấm điểm block hoàn chỉnh, giữ top-k (2 048 token) rồi chạy attention đầy đủ trên đó.
+- Sparse attention giảm phép tính, không giảm KV cache.
+
+</Callout>
 
 ## Đọc tiếp
 
-- [Transformer Explainer](/kien-thuc/transformer-explainer/): dense causal attention và softmax.
-- [Gated DeltaNet](/kien-thuc/gated-delta-net/): bộ nhớ recurrent bổ sung cho hybrid attention.
-- [Qwen3.8-Flash-Next](/kien-thuc/qwen3-8-flash-next/): QSA với 4 indexer query head, 1 shared key head và budget 2048.
-- [Longformer](https://arxiv.org/abs/2004.05150) và [BigBird](https://arxiv.org/abs/2007.14062): các thiết kế sparse attention theo local/global/random pattern.
+- [Gated DeltaNet](/kien-thuc/gated-delta-net/): bộ nhớ trạng thái cố định cho 3/4 số layer.
+- [Qwen3.8-Flash-Next](/kien-thuc/qwen3-8-flash-next/): QSA trong lịch hybrid.
+- Xiao, G. và cộng sự (2024). *Efficient Streaming Language Models with Attention Sinks*. ICLR.
+- Beltagy, I. và cộng sự (2020). *Longformer: The Long-Document Transformer*.
+- Yuan, J. và cộng sự (2025). *Native Sparse Attention*. ACL.
+- Số đo: `scripts/llm-bake/sparse_attention.py` (Qwen2.5-0.5B-Instruct, WikiText-2).

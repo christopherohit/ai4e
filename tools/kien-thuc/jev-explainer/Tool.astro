@@ -1,0 +1,16 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="jev" title="Jev · trả về JSON bằng một lần prefill thay vì sinh từng token" label="Hoạt cảnh giải mã ràng buộc song song: prefill KV cache, hidden state, LM head và softmax trên các giá trị hợp lệ"
+  chapters={['Từng token', 'Prefill', 'Chấm một trường', 'Song song']}
+  data="Ba báo cáo sự cố ngắn viết riêng cho lab (hư cấu, không có người hay công ty thật) và schema 3 trường giống hình minh họa của Jev."
+  scope="Mọi con số là đo thật bằng Qwen2.5-1.5B-Instruct (float32, CPU 4 luồng) trong scripts/llm-bake/jev.py: chuỗi token sinh ra, thời gian, hidden state, logit và xác suất. Thời gian chỉ dùng để so sánh hai cách trên cùng máy; trên GPU cả hai nhanh hơn nhiều và lượt chấm theo batch gần như miễn phí.">
+  <Fragment slot="controls">
+    <div class="field">Tài liệu<div class="chips"><button type="button" data-doc="0" aria-pressed="true">Rò rỉ dữ liệu</button><button type="button" data-doc="1" aria-pressed="false">Máy in hỏng</button><button type="button" data-doc="2" aria-pressed="false">Đăng nhập lạ</button></div></div>
+    <div class="field" data-chapters="2">Trường<div class="chips"><button type="button" data-field="0" aria-pressed="true">risk_level</button><button type="button" data-field="1" aria-pressed="false">requires_review</button><button type="button" data-field="2" aria-pressed="false">action_tier</button></div></div>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initJevLab } from './render';
+  initJevLab();
+</script>

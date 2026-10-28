@@ -5,20 +5,56 @@ import SyncTalk from '../../../tools/du-an/synctalk/Tool.astro';
 import InsTaG from '../../../tools/du-an/instag/Tool.astro';
 import SdvxModeler from '../../../tools/du-an/sdvx-modeler/Tool.astro';
 import Bswmd from '../../../tools/du-an/bswmd/Tool.astro';
+import MedlabBodyAtlas from '../../../tools/du-an/medlab-body-atlas/Tool.astro';
 import QwenExplainer from '../../../tools/kien-thuc/qwen3-8-flash-next-explainer/Tool.astro';
 import GatedDeltaNetExplainer from '../../../tools/kien-thuc/gated-delta-net-explainer/Tool.astro';
 import SparseAttentionExplainer from '../../../tools/kien-thuc/sparse-attention-explainer/Tool.astro';
+import GradientDescentExplainer from '../../../tools/kien-thuc/gradient-descent-explainer/Tool.astro';
+import MiniBatchSgdExplainer from '../../../tools/kien-thuc/mini-batch-sgd-explainer/Tool.astro';
+import NaiveBayesExplainer from '../../../tools/kien-thuc/naive-bayes-explainer/Tool.astro';
+import SvmExplainer from '../../../tools/kien-thuc/svm-explainer/Tool.astro';
+import BiasVarianceExplainer from '../../../tools/kien-thuc/bias-variance-explainer/Tool.astro';
+import RegularizationExplainer from '../../../tools/kien-thuc/regularization-explainer/Tool.astro';
 
+import ActivationExplainer from '../../../tools/kien-thuc/activation-explainer/Tool.astro';
+import PcaExplainer from '../../../tools/kien-thuc/pca-explainer/Tool.astro';
+import JevExplainer from '../../../tools/kien-thuc/jev-explainer/Tool.astro';
+import PagedAttentionExplainer from '../../../tools/kien-thuc/paged-attention-explainer/Tool.astro';
+import InferenceEngineeringExplainer from '../../../tools/kien-thuc/inference-engineering-explainer/Tool.astro';
+import MoeExplainer from '../../../tools/kien-thuc/moe-explainer/Tool.astro';
+import HypothesisTestingExplainer from '../../../tools/kien-thuc/hypothesis-testing-explainer/Tool.astro';
+import QuantizationExplainer from '../../../tools/kien-thuc/quantization-explainer/Tool.astro';
+import ClassifierMetricsExplainer from '../../../tools/kien-thuc/classifier-metrics-explainer/Tool.astro';
+import SyncTalkPipeline from '../../../tools/du-an/synctalk-pipeline/Tool.astro';
+import InstagPipeline from '../../../tools/du-an/instag-pipeline/Tool.astro';
 const components = {
   'qwen3-8-flash-next-explainer': QwenExplainer,
   'gated-delta-net-explainer': GatedDeltaNetExplainer,
   'sparse-attention-explainer': SparseAttentionExplainer,
+  'gradient-descent-explainer': GradientDescentExplainer,
+  'mini-batch-sgd-explainer': MiniBatchSgdExplainer,
+  'naive-bayes-explainer': NaiveBayesExplainer,
+  'svm-explainer': SvmExplainer,
+  'bias-variance-explainer': BiasVarianceExplainer,
+  'regularization-explainer': RegularizationExplainer,
   'nerf-explainer': NerfExplainer,
   'gaussian-splatting-explainer': GaussianSplattingExplainer,
   synctalk: SyncTalk,
   instag: InsTaG,
   'sdvx-modeler': SdvxModeler,
   bswmd: Bswmd,
+  'medlab-body-atlas': MedlabBodyAtlas,
+  'activation-explainer': ActivationExplainer,
+  'pca-explainer': PcaExplainer,
+  'jev-explainer': JevExplainer,
+  'paged-attention-explainer': PagedAttentionExplainer,
+  'inference-engineering-explainer': InferenceEngineeringExplainer,
+  'moe-explainer': MoeExplainer,
+  'hypothesis-testing-explainer': HypothesisTestingExplainer,
+  'quantization-explainer': QuantizationExplainer,
+  'classifier-metrics-explainer': ClassifierMetricsExplainer,
+  'synctalk-pipeline': SyncTalkPipeline,
+  'instag-pipeline': InstagPipeline,
 };
 interface Props { slug: string }
 const { slug } = Astro.props;

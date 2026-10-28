@@ -1,0 +1,17 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="classifier-metrics" title="Đánh giá bộ phân loại: ma trận nhầm lẫn, precision, recall, ROC" label="Hoạt cảnh ngưỡng quyết định, ma trận nhầm lẫn, precision, recall, F1, đường ROC, AUC và precision theo tỷ lệ bệnh"
+  chapters={['Ngưỡng', 'Accuracy', 'Precision & recall', 'ROC & AUC', 'Tỷ lệ bệnh']}
+  data="Breast Cancer Wisconsin (Diagnostic) (UCI, Street và cộng sự 1993; bản đi kèm scikit-learn): 569 khối u, 30 đặc trưng. Hồi quy logistic huấn luyện trên 398 ca, chấm điểm 171 ca kiểm tra (scripts/ml-datasets/prepare_stats.py)."
+  scope="Mọi chỉ số (ma trận nhầm lẫn, precision, recall, F1, ROC, AUC, average precision) tính lại trong trình duyệt từ điểm và nhãn thật; AUC và AP khớp scikit-learn. Precision ở tỷ lệ bệnh khác là phép tính Bayes từ độ nhạy và độ đặc hiệu đo được, không phải đo trên quần thể thật.">
+  <Fragment slot="controls">
+    <label class="field" data-chapters="0 2 3"><span class="field-row"><span>Ngưỡng</span><output data-value="threshold"></output></span><input type="range" name="threshold" min="2" max="98" step="1" value="50" /></label>
+    <label class="field" data-chapters="4"><span class="field-row"><span>Tỷ lệ bệnh π</span><output data-value="prevalence"></output></span><input type="range" name="prevalence" min="0" max="5" step="1" value="1" /></label>
+    <div class="actions" data-chapters="0 2 3"><button type="button" data-autoplay>Xem lại hoạt cảnh tự động</button></div>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initClassifierMetricsLab } from './render';
+  initClassifierMetricsLab();
+</script>

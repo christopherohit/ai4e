@@ -1,0 +1,131 @@
+---
+title: 'Đánh giá bộ phân loại: ma trận nhầm lẫn, precision, recall, F1 và ROC-AUC'
+description: 'Vì sao accuracy đánh lừa, ngưỡng quyết định đổi precision lấy recall thế nào, ROC-AUC và đường precision–recall, và vì sao precision phụ thuộc tỷ lệ bệnh. Dữ liệu ung thư vú thật.'
+category: kien-thuc
+topic: nen-tang
+tags: ['Đánh giá mô hình', 'Precision', 'Recall', 'ROC', 'Học máy']
+viz: classifier-metrics-explainer
+cover: ../../../../assets/covers/classifier-metrics-explainer.webp
+order: 10
+date: 2026-10-28
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+## Một con số không đủ
+
+“Mô hình đúng 97%” nghe rất tốt. Nhưng sai 3% theo kiểu nào? Báo nhầm một khối u lành tính là ác tính (bệnh nhân lo lắng, làm thêm sinh thiết) khác rất xa với bỏ sót một khối u ác tính. Bài này đi qua các chỉ số đánh giá bộ phân loại nhị phân trên dữ liệu thật: **Breast Cancer Wisconsin (Diagnostic)**, 569 khối u với 30 đặc trưng đo từ ảnh tế bào. Một mô hình hồi quy logistic được huấn luyện trên 398 ca, và mọi chỉ số đo trên **171 ca kiểm tra** mà mô hình chưa thấy (64 ác tính, 107 lành tính).
+
+## Ngưỡng biến điểm thành quyết định
+
+Bộ phân loại hiếm khi trả lời thẳng “có/không”. Nó cho mỗi ca một **điểm** (ở đây là xác suất ác tính). Ta chọn **ngưỡng**: điểm ≥ ngưỡng thì dự đoán dương tính. Mỗi ngưỡng cho một **ma trận nhầm lẫn**:
+
+| | Dự đoán ác tính | Dự đoán lành tính |
+| --- | --- | --- |
+| **Thật: ác tính** | TP (dương tính thật) | FN (bỏ sót) |
+| **Thật: lành tính** | FP (báo động giả) | TN (âm tính thật) |
+
+Ở ngưỡng 0,5: TP = 60, FN = 4, FP = 1, TN = 106.
+
+<Callout type="try">
+
+Chương **Ngưỡng** vẽ phân bố điểm của hai lớp (lành tính ở trên, ác tính ở dưới) và ma trận nhầm lẫn. Kéo **Ngưỡng** để thấy các ca chuyển giữa bốn ô.
+
+</Callout>
+
+## Accuracy có thể đánh lừa
+
+$$
+\text{accuracy} = \frac{TP + TN}{TP + FP + TN + FN}
+$$
+
+Ở ngưỡng 0,5, accuracy là 97,1%. Nhưng một “mô hình” luôn trả lời lành tính cũng đạt 62,6% trên tập này mà không phát hiện được ca ác tính nào. Khi lớp quan tâm hiếm (gian lận thẻ 0,1%, một bệnh hiếm 1%), đoán toàn “không” đạt 99% accuracy và hoàn toàn vô dụng. Cần các chỉ số tách riêng từng loại lỗi.
+
+## Precision, recall, specificity, F1
+
+$$
+\text{recall} = \frac{TP}{TP + FN} \qquad \text{precision} = \frac{TP}{TP + FP} \qquad \text{specificity} = \frac{TN}{TN + FP}
+$$
+
+$$
+F_1 = \frac{2 \cdot \text{precision} \cdot \text{recall}}{\text{precision} + \text{recall}}
+$$
+
+- **Recall** (độ nhạy, sensitivity, TPR): trong các ca ác tính thật, bắt được bao nhiêu.
+- **Precision** (giá trị dự đoán dương, PPV): trong các ca bị báo ác tính, bao nhiêu thật sự ác tính.
+- **Specificity** (độ đặc hiệu): trong các ca lành tính, bao nhiêu được báo đúng là lành tính.
+- **F1**: trung bình điều hòa của precision và recall, thấp nếu một trong hai thấp.
+
+| Ngưỡng | TP | FN | FP | Precision | Recall | F1 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0,2 | 62 | 2 | 16 | 79,5% | 96,9% | 87,3% |
+| 0,5 | 60 | 4 | 1 | 98,4% | 93,8% | 96,0% |
+| 0,8 | 56 | 8 | 0 | 100% | 87,5% | 93,3% |
+
+Hạ ngưỡng, recall tăng còn precision giảm; nâng ngưỡng thì ngược lại. Chọn ngưỡng là một **quyết định nghiệp vụ**: sàng lọc ung thư ưu tiên recall (bỏ sót rất đắt), bộ lọc thư rác ưu tiên precision (xóa nhầm thư quan trọng rất đắt).
+
+<Callout type="try">
+
+Chương **Precision & recall** vẽ ba đường theo ngưỡng. Tìm ngưỡng làm F1 lớn nhất, rồi so với ngưỡng bạn sẽ chọn nếu bỏ sót một ca ác tính đắt gấp 20 lần một báo động giả.
+
+</Callout>
+
+## ROC và AUC: mọi ngưỡng cùng lúc
+
+Mỗi ngưỡng cho một điểm (FPR, TPR) với FPR = FP/(FP + TN) = 1 − specificity. Nối mọi ngưỡng được **đường ROC**. Đường chéo là đoán ngẫu nhiên; góc trên trái là hoàn hảo.
+
+**AUC** (diện tích dưới đường ROC) có một nghĩa rất trực quan: xác suất một ca dương tính chọn ngẫu nhiên được chấm điểm cao hơn một ca âm tính chọn ngẫu nhiên. Mô hình ở đây đạt **AUC = 0,991** (lab tính lại, khớp scikit-learn). AUC không phụ thuộc ngưỡng và không phụ thuộc tỷ lệ hai lớp, nên hợp để so sánh mô hình, nhưng không nói gì về việc nên dùng ngưỡng nào.
+
+<Callout type="try">
+
+Chương **ROC & AUC** vẽ đường ROC từng bước và chấm vị trí của ngưỡng hiện tại.
+
+</Callout>
+
+## Precision phụ thuộc tỷ lệ bệnh
+
+Recall và specificity là tính chất của bộ phân loại. **Precision thì phụ thuộc thêm tỷ lệ dương tính $\pi$ của quần thể**, theo công thức Bayes:
+
+$$
+\text{precision} = \frac{\text{TPR} \cdot \pi}{\text{TPR} \cdot \pi + \text{FPR} \cdot (1 - \pi)}
+$$
+
+Tập kiểm tra có 37% ca ác tính, nên ở ngưỡng 0,5 precision là 98,4%. Giữ nguyên độ nhạy 93,8% và độ đặc hiệu 99,1%, nhưng áp vào một nhóm sàng lọc chỉ có **1%** người bệnh: precision còn khoảng **50%**. Một nửa số người bị báo dương tính thật ra không bệnh. Đây là lý do xét nghiệm sàng lọc luôn cần một bước xác nhận.
+
+Với lớp hiếm, **đường precision–recall** (và average precision) phản ánh thực tế tốt hơn ROC, vì ROC có thể trông rất đẹp trong khi precision thì tệ.
+
+<Callout type="try">
+
+Chương **Tỷ lệ bệnh** vẽ đường precision–recall (average precision 0,988) và precision theo tỷ lệ bệnh từ 0,1% tới 50%. Kéo **Tỷ lệ bệnh π** để thấy precision sụp xuống khi bệnh hiếm.
+
+</Callout>
+
+## Chọn chỉ số nào?
+
+| Tình huống | Chỉ số nên xem |
+| --- | --- |
+| Hai lớp cân bằng, lỗi nào cũng như nhau | accuracy, F1 |
+| Bỏ sót rất đắt (sàng lọc bệnh, phát hiện gian lận) | recall ở mức precision chấp nhận được |
+| Báo nhầm rất đắt (lọc thư rác, gợi ý tự động) | precision ở mức recall chấp nhận được |
+| So sánh mô hình, chưa chọn ngưỡng | ROC-AUC; PR-AUC nếu lớp dương hiếm |
+| Cần xác suất đáng tin (định giá rủi ro) | thêm độ hiệu chỉnh (calibration), log loss, Brier score |
+| Nhiều lớp | precision/recall theo từng lớp, macro hoặc weighted F1, ma trận nhầm lẫn đầy đủ |
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- Bộ phân loại cho điểm; ngưỡng biến điểm thành quyết định và một ma trận nhầm lẫn.
+- Accuracy che giấu loại lỗi và đánh lừa khi lớp mất cân bằng.
+- Recall = TP/(TP + FN), precision = TP/(TP + FP); ngưỡng đổi cái này lấy cái kia; F1 là trung bình điều hòa.
+- ROC-AUC tóm tắt mọi ngưỡng, không phụ thuộc tỷ lệ lớp (ở đây 0,991).
+- Precision phụ thuộc tỷ lệ bệnh: cùng mô hình, 98% ở tập test nhưng khoảng 50% khi bệnh chỉ chiếm 1%.
+
+</Callout>
+
+## Nguồn
+
+- Street, W. N., Wolberg, W. H. & Mangasarian, O. L. (1993). *Nuclear feature extraction for breast tumor diagnosis*. Dữ liệu: UCI Breast Cancer Wisconsin (Diagnostic), bản đi kèm scikit-learn.
+- Fawcett, T. (2006). *An introduction to ROC analysis*. Pattern Recognition Letters.
+- Saito, T. & Rehmsmeier, M. (2015). *The Precision-Recall Plot Is More Informative than the ROC Plot When Evaluating Binary Classifiers on Imbalanced Datasets*. PLOS ONE.
+- Script: `scripts/ml-datasets/prepare_stats.py`.

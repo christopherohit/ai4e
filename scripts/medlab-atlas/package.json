@@ -1,0 +1,12 @@
+{
+  "name": "@ai4e/medlab-atlas-build",
+  "private": true,
+  "type": "module",
+  "description": "Builds the compact anatomy atlas used by tools/du-an/medlab-body-atlas.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "meshoptimizer": "1.2.0"
+  }
+}

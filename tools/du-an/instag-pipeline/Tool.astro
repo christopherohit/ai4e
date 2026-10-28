@@ -1,0 +1,15 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="instag-pipeline" title="InsTaG từng bước · Gaussian, prior chuyển động, motion field, face–mouth hook" label="Hoạt cảnh cơ chế InsTaG: splatting một pixel, prior chuyển động không định danh và thích nghi ít dữ liệu, motion field thật, face–mouth hook, kết quả thật"
+  chapters={['Splatting', 'Prior ít dữ liệu', 'Motion field thật', 'Face–mouth hook', 'Kết quả thật']}
+  data="Chương 3 dùng số đo thật từ mô hình InsTaG đã huấn luyện (độ dịch Δμ của 10 546 Gaussian mặt và 858 Gaussian miệng ở 25 frame thử nghiệm) cùng tín hiệu OpenFace AU25 của đoạn Obama 10 giây; chương 5 là kết quả trên tập thử nghiệm của hai mô hình huấn luyện thật (docs/development/radiance-labs.md). Chương 1, 2, 4 là mô phỏng nhỏ tính trong trình duyệt."
+  scope="Splatting sáu Gaussian, các đường cong độ mở miệng của năm người và nhánh miệng có/không hook là mô phỏng cơ chế, không phải đầu ra của mạng InsTaG. Mô hình thật (render, alpha từng nhánh, vector Δμ) nằm ở bài InsTaG phần 1.">
+  <Fragment slot="controls">
+    <label class="field" data-chapters="1"><span class="field-row"><span>Số frame của người mới</span><output data-value="frames"></output></span><input type="range" name="frames" min="3" max="80" step="1" value="10" /></label>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initInstagPipelineLab } from './render';
+  initInstagPipelineLab();
+</script>

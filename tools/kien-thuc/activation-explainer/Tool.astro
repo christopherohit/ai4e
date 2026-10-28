@@ -1,0 +1,25 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="activation" title="Vì sao mạng neural cần hàm kích hoạt phi tuyến?" label="Hoạt cảnh biến đổi affine, ReLU gập mặt phẳng và không gian ẩn của mạng neural trên dữ liệu hai mặt trăng"
+  chapters={['Affine', 'Chồng lớp', 'ReLU gập', 'Không gian ẩn', 'Ranh giới']}
+  data="Hai mặt trăng sinh bằng scikit-learn make_moons: 400 điểm huấn luyện và 2 000 điểm kiểm tra (nhiễu 0,12). Đây là dữ liệu tổng hợp dùng để nhìn hình học, không phải dữ liệu đo thật."
+  scope="Các mạng 2-2-1, 2-3-1 và 2-8-1 được huấn luyện thật bằng Adam (toàn bộ dữ liệu, 3 000 bước) trong scripts/ml-datasets/prepare_nn_pca.py; trình duyệt chỉ chạy lan truyền xuôi với trọng số đã lưu. Mạng tanh có weight decay nhỏ để không gian ẩn không bị bão hòa. Mạng XOR dùng trọng số viết tay.">
+  <Fragment slot="controls">
+    <label class="field" data-chapters="2"><span class="field-row"><span>Mức gập của ReLU</span><output data-value="fold"></output></span><input type="range" name="fold" min="0" max="100" step="1" value="100" /></label>
+    <label class="field" data-chapters="3"><span class="field-row"><span>Epoch huấn luyện</span><output data-value="epoch"></output></span><input type="range" name="epoch" min="0" max="35" step="1" value="35" /></label>
+    <p class="hint" data-chapters="3">Kéo trên khối lập phương để xoay. Tấm trắng là mặt phẳng quyết định của lớp đầu ra.</p>
+    <fieldset class="segmented" data-chapters="4"><legend>Mô hình</legend>
+      <label><input type="radio" name="model" value="linear" /><span>Logistic</span></label>
+      <label><input type="radio" name="model" value="none8" /><span>8 nơron, không kích hoạt</span></label>
+      <label><input type="radio" name="model" value="relu2" /><span>2 ReLU</span></label>
+      <label><input type="radio" name="model" value="relu8" /><span>8 ReLU</span></label>
+      <label><input type="radio" name="model" value="tanh3" /><span>3 tanh</span></label>
+    </fieldset>
+    <div class="actions" data-chapters="2 3 4"><button type="button" data-autoplay>Xem lại hoạt cảnh tự động</button></div>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initActivationLab } from './render';
+  initActivationLab();
+</script>

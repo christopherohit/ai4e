@@ -1,0 +1,19 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="mini-batch-sgd" title="Batch, Mini-batch và SGD · huấn luyện trên 20 640 khu dân cư thật" label="Hoạt cảnh so sánh batch gradient descent, mini-batch và SGD trên dữ liệu California Housing"
+  chapters={['Batch GD', 'SGD', 'Mini-batch', 'Cuộc đua']}
+  data="California Housing (StatLib; Pace & Barry 1997), lấy từ điều tra dân số Mỹ năm 1990: 20 640 khu dân cư với thu nhập trung vị và giá nhà trung vị. Giá nhà trong dữ liệu gốc bị chặn ở 500 001 $ (4,8% số khu)."
+  scope="Hồi quy tuyến tính một biến trên toàn bộ 20 640 khu, gradient tính chính xác trong trình duyệt. Thứ tự xáo trộn dùng hạt giống cố định; learning rate cố định, không momentum. Một epoch luôn tốn 20 640 lần tính gradient mẫu dù chia lô thế nào.">
+  <Fragment slot="controls">
+    <p class="hint" data-chapters="0">Mỗi chấm mờ là một khu dân cư. Batch GD dùng tất cả các chấm cho mỗi bước nên đường đi trên bản đồ loss thẳng và đều.</p>
+    <p class="hint" data-chapters="1">Kéo thanh thời gian về đầu để xem từng khu được bốc ra và kéo đường thẳng về phía nó. Từ giây thứ 7 hoạt cảnh tua nhanh qua cả epoch.</p>
+    <label class="field" data-chapters="2"><span class="field-row"><span>Kích thước lô B</span><output data-value="batch"></output></span><input type="range" name="batch" min="0" max="5" step="1" value="2" /></label>
+    <p class="hint" data-chapters="2">Kéo B từ 1 lên 20 640: quạt mũi tên cam co lại về mũi tên xanh lá (gradient thật), thanh nhiễu tương ứng ngắn dần theo √B.</p>
+    <p class="hint" data-chapters="3">Ba thuật toán nhận cùng ngân sách tính toán. Mỗi cách dùng learning rate gần mức ổn định của riêng nó; bảng bên dưới ghi MSE tại các mốc epoch.</p>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initMiniBatchSgdLab } from './render';
+  initMiniBatchSgdLab();
+</script>

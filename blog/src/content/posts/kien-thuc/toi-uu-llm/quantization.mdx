@@ -1,0 +1,151 @@
+---
+title: 'Quantization trong LLM: nén trọng số xuống 8, 4, 2 bit mà vẫn dùng được'
+description: 'Định dạng số, lượng tử hóa đối xứng, vì sao ngoại lai làm hỏng thang đo chung, per-channel và per-group, GPTQ, AWQ, GGUF, FP8; đo perplexity thật trên Qwen2.5-0.5B.'
+category: kien-thuc
+topic: toi-uu-llm
+tags: ['Quantization', 'LLM', 'Suy luận', 'GPTQ', 'AWQ']
+viz: quantization-explainer
+cover: ../../../../assets/covers/quantization-explainer.webp
+order: 5
+date: 2026-10-28
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+## Vì sao phải nén?
+
+Một mô hình 70 tỷ tham số ở BF16 (16 bit mỗi trọng số) cần 140 GB chỉ để chứa trọng số, nhiều hơn một GPU 80 GB. Còn khi chạy, mỗi bước decode phải đọc toàn bộ số trọng số đó từ bộ nhớ (xem bài Inference Engineering), nên **số byte trên mỗi trọng số quyết định trực tiếp tốc độ**. **Lượng tử hóa** (quantization) lưu trọng số, và đôi khi cả activation và KV cache, bằng ít bit hơn: 8, 4, thậm chí 2 bit.
+
+Câu hỏi là mất bao nhiêu chất lượng. Bài này trả lời bằng số đo thật: lượng tử hóa mọi ma trận trong 24 lớp của **Qwen2.5-0.5B-Instruct** (358 triệu trên 494 triệu tham số) theo nhiều cách, rồi đo **perplexity** trên 16 384 token của WikiText-2 và hỏi mô hình một câu đơn giản.
+
+## Định dạng số
+
+| Định dạng | Bit | Cấu trúc | Dùng cho |
+| --- | --- | --- | --- |
+| FP32 | 32 | 1 dấu, 8 mũ, 23 định trị | huấn luyện (trọng số chính, trạng thái tối ưu) |
+| BF16 | 16 | 1 dấu, 8 mũ, 7 định trị | huấn luyện và suy luận; cùng phạm vi với FP32 |
+| FP16 | 16 | 1 dấu, 5 mũ, 10 định trị | suy luận; phạm vi hẹp hơn, dễ tràn số |
+| FP8 E4M3 | 8 | 1 dấu, 4 mũ, 3 định trị | suy luận và huấn luyện trên H100/B200 |
+| INT8 | 8 | số nguyên −128…127 | trọng số và activation (W8A8) |
+| INT4 | 4 | số nguyên −8…7 | trọng số (W4A16) |
+
+Số mũ quyết định **phạm vi**, phần định trị quyết định **độ chính xác**. Với số nguyên, cần thêm một **thang đo** (scale) để đổi về giá trị thật.
+
+<Callout type="try">
+
+Chương **Định dạng** vẽ bố cục bit của từng định dạng và bộ nhớ trọng số của mô hình 7B, 70B ở FP16, INT8, INT4.
+
+</Callout>
+
+## Lượng tử hóa đối xứng: làm tròn về lưới
+
+Cách đơn giản nhất, **làm tròn gần nhất** (round-to-nearest, RTN) đối xứng với $b$ bit:
+
+$$
+s = \frac{\max |w|}{2^{b-1} - 1}, \qquad q = \text{clamp}\Big(\text{round}\big(\tfrac{w}{s}\big),\ -2^{b-1},\ 2^{b-1} - 1\Big), \qquad \hat w = s \cdot q
+$$
+
+Chỉ cần lưu $q$ ($b$ bit) và thang đo $s$. Mọi trọng số bị kéo về **vạch gần nhất** của một lưới $2^b$ mức cách đều; sai số lớn nhất là nửa khoảng cách vạch, tức $s/2$.
+
+<Callout type="try">
+
+Chương **Làm tròn** lấy 512 trọng số thật của một hàng trong `layers.12.mlp.down_proj`. Histogram cho thấy phần lớn trọng số rất gần 0. Kéo **Số bit** từ 8 xuống 2 và đổi **Thang đo** giữa “cả hàng”, “nhóm 128”, “nhóm 32” để xem lưới thưa hay dày, bao nhiêu trọng số bị làm tròn về 0, và RMSE.
+
+</Callout>
+
+## Ngoại lai làm hỏng thang đo chung
+
+Thang đo được chọn theo **giá trị lớn nhất**. Nếu một ma trận có vài trọng số lớn bất thường (ngoại lai), khoảng cách vạch giãn ra theo chúng, và hàng triệu trọng số nhỏ còn lại đều rơi vào một hai vạch quanh 0.
+
+Trong Qwen2.5-0.5B, tỷ lệ $\max|w| / \sigma$ của 168 ma trận có trung vị 16,7 và lớn nhất 65,5 (ở `layers.8.self_attn.q_proj`). Với phân phối chuẩn, giá trị lớn nhất trong một triệu mẫu chỉ khoảng 5σ: trọng số LLM có **đuôi rất dài**. Activation còn tệ hơn: một vài chiều có giá trị lớn gấp hàng chục lần phần còn lại (Dettmers và cộng sự, LLM.int8(), 2022).
+
+Giải pháp là dùng **thang đo mịn hơn**:
+
+- **Per-tensor**: một thang đo cho cả ma trận.
+- **Per-channel**: một thang đo cho mỗi hàng (kênh đầu ra).
+- **Per-group**: một thang đo cho mỗi $g$ trọng số liền nhau (thường $g$ = 32, 64 hoặc 128), cách của GPTQ, AWQ và các định dạng k-quant của llama.cpp.
+
+Cái giá là thêm thang đo: với nhóm 128 và thang đo 16 bit, INT4 thành $4 + 16/128 = 4{,}125$ bit mỗi trọng số; với nhóm 32 là 4,5 bit.
+
+<Callout type="try">
+
+Chương **Ngoại lai** vẽ tỷ lệ max/σ của từng ma trận (attention xanh, MLP cam) và RMSE trọng số của INT4 theo bốn mức độ mịn.
+
+</Callout>
+
+## Kết quả đo thật
+
+| Cấu hình | Bit/trọng số | Perplexity WikiText-2 | “Thủ đô của Việt Nam là thành phố nào?” |
+| --- | --- | --- | --- |
+| FP32 (gốc) | 32 | 17,57 | Thủ đô của Việt Nam là Hà Nội. |
+| INT8 per-tensor | 8 | 18,27 | Thủ đô của Việt Nam là Hà Nội. |
+| INT8 per-channel | 8 | 17,48 | Thủ đô của Việt Nam là Hà Nội. |
+| INT4 per-tensor | 4 | 60 676 396 | chuỗi ký tự vô nghĩa |
+| INT4 per-channel | 4 | 40,80 | Thủ đô của Việt Nam chính là thành phố Hà Nội… |
+| INT4 nhóm 128 | 4,125 | 24,50 | Thủ đô của Việt Nam là Hà Nội. |
+| INT4 nhóm 32 | 4,5 | 20,90 | Thủ đô của Việt Nam là Hà Nội. |
+| INT3 nhóm 128 | 3,125 | 364,7 | chuỗi ký tự vô nghĩa |
+| INT2 nhóm 32 | 2,5 | 1 122 009 | chuỗi ký tự vô nghĩa |
+
+Đọc bảng:
+
+- **INT8 theo kênh gần như miễn phí**: perplexity 17,48 so với 17,57 (dao động nhỏ quanh mức gốc).
+- **INT4 với một thang đo cho cả ma trận phá hủy mô hình** hoàn toàn, dù cùng 4 bit. Chỉ đổi độ mịn của thang đo: theo kênh 40,8, nhóm 128 là 24,5, nhóm 32 là 20,9.
+- **Dưới 4 bit, RTN không còn đủ**: INT3 nhóm 128 đã hỏng. Mô hình nhỏ như 0,5B cũng nhạy với lượng tử hóa hơn mô hình lớn; các mô hình 70B thường chịu 4 bit tốt hơn nhiều.
+
+<Callout type="try">
+
+Chương **Chất lượng** vẽ perplexity (thang log) của chín cấu hình và in nguyên văn câu trả lời của mô hình đã lượng tử hóa. Kéo **Cấu hình** để xem từng câu trả lời.
+
+</Callout>
+
+## Làm tốt hơn RTN
+
+| Phương pháp | Ý tưởng |
+| --- | --- |
+| **LLM.int8()** | tách các chiều activation ngoại lai ra tính bằng FP16, phần còn lại INT8 |
+| **GPTQ** (Frantar và cộng sự, 2022) | lượng tử hóa từng cột, rồi cập nhật các cột chưa lượng tử hóa để bù sai số, dùng thông tin bậc hai (Hessian) từ một ít dữ liệu hiệu chỉnh |
+| **AWQ** (Lin và cộng sự, 2023) | tìm 1% kênh trọng số quan trọng nhất theo độ lớn activation, nhân chúng với hệ số trước khi lượng tử hóa để bảo vệ |
+| **SmoothQuant** | chuyển “độ khó” từ activation sang trọng số bằng phép co giãn theo kênh, cho phép W8A8 |
+| **GGUF k-quants** (llama.cpp) | nhóm nhỏ với thang đo cũng được lượng tử hóa (super-block), nhiều mức Q2_K…Q8_0 |
+| **QAT / QLoRA** | huấn luyện (hoặc tinh chỉnh) khi đã có lượng tử hóa trong vòng lặp, mô hình tự thích nghi |
+| **FP8** | không cần thang đo theo nhóm nhỏ nhờ có số mũ; tensor core FP8 tăng tốc cả prefill |
+
+## Nhanh hơn bao nhiêu?
+
+Ở batch nhỏ, mỗi token decode đọc toàn bộ trọng số một lần, nên tốc độ tối đa xấp xỉ băng thông chia số byte:
+
+$$
+\text{token/s} \lesssim \frac{\text{băng thông HBM}}{\text{số tham số} \times \text{bit} / 8}
+$$
+
+Với H100 (3,35 TB/s), mô hình 7B: FP16 tối đa khoảng 239 token/s, INT4 nhóm 128 khoảng 928 token/s. Thực tế thấp hơn vì còn đọc KV cache và chi phí giải nén, nhưng tỷ lệ tăng tốc gần đúng như vậy.
+
+Lượng tử hóa **chỉ trọng số** (W4A16, W8A16) tăng tốc decode (memory-bound) nhưng không tăng tốc prefill (compute-bound), vì phép nhân vẫn chạy ở 16 bit sau khi giải nén. Muốn tăng tốc prefill phải lượng tử hóa cả activation (W8A8 INT8 hoặc FP8) để dùng tensor core số nguyên hoặc FP8. **KV cache** cũng lượng tử hóa được (FP8, INT4) để chứa thêm yêu cầu, kết hợp với PagedAttention.
+
+<Callout type="try">
+
+Chương **Tốc độ** so sánh giới hạn trên token/s cho mô hình 7B và 70B trên H100 ở ba độ chính xác.
+
+</Callout>
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- Lượng tử hóa = lưu số nguyên $b$ bit + thang đo; RTN đối xứng: $\hat w = s \cdot \text{round}(w/s)$.
+- Ngoại lai làm thang đo chung giãn ra; dùng thang đo theo kênh hoặc theo nhóm (chi phí $16/g$ bit).
+- Đo thật trên Qwen2.5-0.5B: INT8 theo kênh 17,48 ≈ gốc 17,57; INT4 per-tensor sụp đổ; INT4 nhóm 32 là 20,9.
+- Dưới 4 bit cần GPTQ, AWQ, k-quants hoặc huấn luyện có lượng tử hóa.
+- Ít byte hơn ⇒ decode nhanh hơn gần tỷ lệ; muốn tăng tốc prefill phải lượng tử hóa cả activation.
+
+</Callout>
+
+## Nguồn
+
+- Dettmers, T. và cộng sự (2022). *LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale*. NeurIPS.
+- Frantar, E. và cộng sự (2023). *GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers*. ICLR.
+- Lin, J. và cộng sự (2024). *AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration*. MLSys.
+- Xiao, G. và cộng sự (2023). *SmoothQuant*. ICML.
+- Micikevicius, P. và cộng sự (2022). *FP8 Formats for Deep Learning*. arXiv:2209.05433.
+- Merity, S. và cộng sự (2016). *Pointer Sentinel Mixture Models* (WikiText). Số đo: `scripts/llm-bake/quantize.py`.

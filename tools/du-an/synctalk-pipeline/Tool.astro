@@ -1,0 +1,18 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="synctalk-pipeline" title="SyncTalk từng bước · âm thanh, biểu cảm, tư thế, tri-plane, ghép ảnh" label="Hoạt cảnh cơ chế SyncTalk: đồng bộ âm và môi, tách vùng điều khiển, ổn định tư thế đầu, tri-plane hash và volume rendering"
+  chapters={['Âm thanh ↔ môi', 'Tách vùng', 'Tư thế đầu', 'Tri-plane hash', 'Render & ghép']}
+  data="Chương 1–2 dùng tín hiệu thật của 10 giây video thử nghiệm Obama (Instag-data, tập test, 250 frame): OpenFace AU25, AU45, AU01 và RMS âm thanh 16 kHz, cùng đoạn với lab SyncTalk và InsTaG. Chương 3–5 là mô phỏng nhỏ tính trong trình duyệt."
+  scope="Tương quan ở chương 1–2 là số đo trên đúng 250 frame này, không phải đặc trưng bên trong mạng SyncTalk. Tư thế đầu, bộ nhớ lưới đặc trưng, tia sáng và lát cắt ghép ảnh là mô phỏng cơ chế; mô hình SyncTalk đã huấn luyện thật nằm ở bài SyncTalk (phần 1).">
+  <Fragment slot="controls">
+    <label class="field" data-chapters="0"><span class="field-row"><span>Dịch âm thanh</span><output data-value="lag"></output></span><input type="range" name="lag" min="-10" max="10" step="1" value="0" /></label>
+    <label class="field" data-chapters="2"><span class="field-row"><span>Cửa sổ trung bình trượt</span><output data-value="window"></output></span><input type="range" name="window" min="1" max="31" step="2" value="9" /></label>
+    <label class="field" data-chapters="3"><span class="field-row"><span>Độ phân giải lưới</span><output data-value="res"></output></span><input type="range" name="res" min="6" max="11" step="1" value="9" /></label>
+    <label class="field" data-chapters="4"><span class="field-row"><span>Độ mờ mặt nạ</span><output data-value="blur"></output></span><input type="range" name="blur" min="0" max="0.3" step="0.01" value="0.08" /></label>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initSyncTalkPipelineLab } from './render';
+  initSyncTalkPipelineLab();
+</script>

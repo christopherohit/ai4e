@@ -1,0 +1,20 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="naive-bayes" title="Naive Bayes · bộ lọc spam học từ 4 457 tin nhắn thật" label="Hoạt cảnh Naive Bayes trên SMS Spam Collection"
+  chapters={['Đếm từ', 'Bản đồ từ', 'Phân loại', 'Kết quả thật']}
+  data="SMS Spam Collection v.1 (UCI Machine Learning Repository; Almeida & Gómez Hidalgo 2011): 5 572 tin nhắn tiếng Anh, 747 spam. Chia 80% huấn luyện, 20% kiểm tra, phân tầng, hạt giống 42. Trang chỉ lưu số đếm từ và số liệu tổng hợp, không lưu nội dung tin nhắn."
+  scope="Multinomial Naive Bayes với từ vựng 3 672 từ (xuất hiện ít nhất 2 lần trong tập huấn luyện), tách từ theo chữ thường và chữ số. Độ chính xác trên tập kiểm tra được tính sẵn và khớp với scikit-learn; tin bạn gõ được chấm điểm ngay trong trình duyệt bằng cùng bảng đếm.">
+  <Fragment slot="controls">
+    <p class="hint" data-chapters="0">Bảng đếm là toàn bộ mô hình. Từ được sắp theo tỉ số xác suất giữa hai lớp (đã bỏ “lt”, “gt”, “amp”, vốn là mã HTML lẫn trong dữ liệu gốc).</p>
+    <label class="field" data-chapters="1 2 3"><span class="field-row"><span>Làm trơn Laplace α</span><output data-value="alpha"></output></span><input type="range" name="alpha" min="0" max="6" step="1" value="4" /></label>
+    <p class="hint" data-chapters="1">Rê chuột lên một chấm để xem từ đó; nhấp để ghim vào thẻ chi tiết. Kéo α về 0,01 để thấy các từ chưa gặp trong một lớp bị đẩy ra rìa.</p>
+    <label class="field" data-chapters="2">Tin nhắn (tiếng Anh, như dữ liệu huấn luyện)<textarea data-message rows="3" spellcheck="false"></textarea></label>
+    <div class="field" data-chapters="2">Ví dụ<div class="chips"><button type="button" data-example="0">Trúng thưởng</button><button type="button" data-example="1">Nhạc chuông</button><button type="button" data-example="2">Hẹn về nhà</button><button type="button" data-example="3">Lẫn lộn</button></div></div>
+    <p class="hint" data-chapters="3">Độ chính xác, precision và recall đổi theo α. Biểu đồ phân bố xác suất dùng α = 1.</p>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initNaiveBayesLab } from './render';
+  initNaiveBayesLab();
+</script>

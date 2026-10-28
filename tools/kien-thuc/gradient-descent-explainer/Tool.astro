@@ -1,0 +1,20 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="gradient-descent" title="Gradient Descent · lăn xuống mặt loss của 392 chiếc xe thật" label="Hoạt cảnh gradient descent trên dữ liệu Auto MPG"
+  chapters={['Dữ liệu thật', 'Mặt loss 3D', 'Learning rate', 'Chuẩn hóa']}
+  data="Auto MPG (UCI Machine Learning Repository, Quinlan 1993): 392 mẫu xe 1970–1982 có đủ khối lượng và mức tiêu thụ nhiên liệu."
+  scope="Hồi quy tuyến tính một biến, MSE và gradient tính chính xác trong trình duyệt trên toàn bộ 392 xe. Mỗi bước dùng gradient của cả tập dữ liệu (batch gradient descent); mô hình thật thường có hàng triệu tham số và mặt loss không lồi.">
+  <Fragment slot="controls">
+    <p class="hint" data-chapters="0">Rê chuột lên các chấm để xem từng mẫu xe. Màu chấm là nơi sản xuất: xanh dương Mỹ, tím châu Âu, xanh lá Nhật.</p>
+    <p class="hint" data-chapters="1">Kéo trên hình để xoay mặt loss. Bấm ↺ để thả lại viên bi; kéo thanh thời gian để xem từng đoạn đường.</p>
+    <label class="field" data-chapters="2"><span class="field-row"><span>Learning rate của viên bi cam</span><output data-value="lr"></output></span><input type="range" name="lr" min="0.005" max="0.11" step="0.005" value="0.09" /></label>
+    <div class="field" data-chapters="2">Thử nhanh<div class="chips"><button type="button" data-lr="0.02">0,02</button><button type="button" data-lr="0.07">0,07</button><button type="button" data-lr="0.09">0,09</button><button type="button" data-lr="0.095">0,095</button><button type="button" data-lr="0.11">0,11</button></div></div>
+    <p class="hint" data-chapters="2">Ngưỡng hội tụ là 2/λ_max ≈ 0,0951. Thử 0,095 rồi 0,11: chênh nhau rất ít nhưng một bên hội tụ, một bên bùng nổ.</p>
+    <p class="hint" data-chapters="3">Hai bên dùng cùng dữ liệu và cùng đường thẳng xuất phát. Bảng bên dưới so sánh độ cong, η tối đa và số bước cần thiết.</p>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initGradientDescentLab } from './render';
+  initGradientDescentLab();
+</script>

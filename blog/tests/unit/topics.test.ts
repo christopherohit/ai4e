@@ -15,7 +15,7 @@ describe('project structure', () => {
     expect(validToolName('du-an', 'synctalk')).toBe(true);
   });
   it('keeps native visualization entries in tools with knowledge naming conventions', () => {
-    expect(Object.keys(nativeTools)).toHaveLength(9);
+    expect(Object.keys(nativeTools)).toHaveLength(27);
     for (const [slug, tool] of Object.entries(nativeTools)) {
       expect(tool.source).toBe(`tools/${tool.category}/${slug}`);
       if (tool.category === 'kien-thuc') expect(slug).toMatch(/-explainer$/);
@@ -29,8 +29,8 @@ describe('project structure', () => {
     }
   });
   it('separates knowledge topics from project topics', () => {
-    expect(categoryTopics('kien-thuc').map(topic => topic.slug)).toEqual(['nen-tang', 'thi-giac-may-tinh', 'xu-ly-ngon-ngu', 'mo-hinh-sinh']);
-    expect(categoryTopics('du-an').map(topic => topic.slug)).toEqual(['giai-thich-mo-hinh', 'danh-gia-thien-lech', 'nang-luong-ai', 'nhan-vat-so', 'agent-ky-thuat']);
+    expect(categoryTopics('kien-thuc').map(topic => topic.slug)).toEqual(['nen-tang', 'thi-giac-may-tinh', 'xu-ly-ngon-ngu', 'mo-hinh-sinh', 'toi-uu-llm']);
+    expect(categoryTopics('du-an').map(topic => topic.slug)).toEqual(['giai-thich-mo-hinh', 'danh-gia-thien-lech', 'nang-luong-ai', 'nhan-vat-so', 'agent-ky-thuat', 'medlab']);
   });
 
   it('keeps all eight source recipes resolvable under tools', () => {
@@ -44,7 +44,7 @@ describe('project structure', () => {
   it('stores every article under its category/topic with a unique public slug', () => {
     const directory = resolve('src/content/posts');
     const articles = readdirSync(directory, { recursive: true }).map(String).filter(path => path.endsWith('.mdx'));
-    expect(articles).toHaveLength(17);
+    expect(articles).toHaveLength(35);
     const slugs = new Set<string>();
     for (const file of articles) {
       const [category, topic, filename] = file.split('/');

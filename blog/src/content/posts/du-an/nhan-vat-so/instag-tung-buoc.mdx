@@ -1,0 +1,227 @@
+---
+title: 'InsTaG từng bước: dựng nhân vật nói chuyện 3D từ 10 giây video'
+description: 'Gaussian splatting tô pixel thế nào, vì sao prior chuyển động từ người khác giúp học từ 10 giây video, motion field thật, face–mouth hook và kết quả thật so với SyncTalk.'
+category: du-an
+topic: nhan-vat-so
+tags: ['InsTaG', '3D Gaussian Splatting', 'Talking head', 'Few-shot', 'Motion prior']
+viz: instag-pipeline
+cover: ../../../../assets/covers/instag-pipeline.webp
+order: 8
+date: 2026-10-28
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+[Bài InsTaG phần 1](/du-an/instag/) cho xem mô hình đã huấn luyện thật: render, alpha của từng nhánh, vector chuyển động của từng Gaussian. Bài này giải thích **vì sao** InsTaG được thiết kế như vậy, từng bước một, mỗi bước kèm một chương hoạt cảnh. Nên đọc [SyncTalk từng bước](/du-an/synctalk-tung-buoc/) trước: hai hệ thống giải cùng một bài toán, và InsTaG được hiểu rõ nhất khi so với SyncTalk.
+
+## Câu hỏi InsTaG trả lời
+
+SyncTalk cần **vài phút** video của người cần dựng (mô hình ở phần 1 học từ 7 272 frame, gần 5 phút) và học từ đầu cho mỗi người. Muốn dựng nhân vật cho một người mới chỉ có **vài giây** video thì sao?
+
+Vấn đề không chỉ là ít ảnh. Một video 10 giây **không chứa mọi âm**: có thể không có âm “o” tròn môi, không có lúc cười to, chỉ vài góc đầu. Học từ đầu, mô hình khớp được những gì nó thấy nhưng đoán bừa với âm thanh mới.
+
+Ý tưởng của InsTaG: **cách miệng chuyển động khi nói phần lớn giống nhau giữa người với người**. Học phần chung đó một lần trên video của nhiều người (huấn luyện trước), rồi với người mới chỉ cần học **ngoại hình** và **căn chỉnh** phần chung cho khớp khuôn mặt mới.
+
+| | SyncTalk | InsTaG |
+| --- | --- | --- |
+| Biểu diễn 3D | NeRF, tri-plane hash | 3D Gaussian Splatting |
+| Render | lấy mẫu dọc tia | xếp lớp các vết Gaussian đã chiếu |
+| Dữ liệu của người cần dựng | vài phút | vài giây (thêm prior từ người khác) |
+| Chuyển động | field có điều kiện audio cho từng người | Universal Motion Field dùng chung + căn chỉnh |
+| Vùng miệng | một field | hai nhánh mặt / khoang miệng nối bằng hook |
+
+## Bước 1: Gaussian splatting tô một pixel thế nào
+
+Thay vì một hàm liên tục như NeRF, InsTaG biểu diễn khuôn mặt bằng **hàng nghìn Gaussian 3D**: mô hình đã huấn luyện có **10 546** Gaussian cho mặt và **858** cho khoang miệng. Mỗi Gaussian là một “đốm” có:
+
+$$
+\theta = \{\boldsymbol{\mu}, \mathbf{s}, \mathbf{q}, \alpha, \mathbf{f}\}
+$$
+
+tâm $\boldsymbol{\mu}$, kích thước theo ba trục $\mathbf{s}$, hướng $\mathbf{q}$ (quaternion), độ đục $\alpha$ và hệ số màu $\mathbf{f}$ (spherical harmonics, màu đổi theo hướng nhìn).
+
+Render một khung hình:
+
+1. **Chiếu** mỗi Gaussian lên ảnh: hiệp phương sai 3D $\Sigma = R S S^\top R^\top$ thành hiệp phương sai 2D $\Sigma' = J W \Sigma W^\top J^\top$, tức một vết elip mờ.
+2. **Xếp** các vết theo độ sâu, gần trước xa sau.
+3. **Tô** mỗi pixel bằng cách xếp lớp: vết thứ $i$ che một phần $\alpha_i$, phần còn lại $T_i$ để lộ các vết phía sau:
+
+$$
+\alpha_i = o_i \exp\!\big(-\tfrac{1}{2}\mathbf{d}^\top \Sigma_i'^{-1}\mathbf{d}\big),
+\qquad
+\mathbf{C} = \sum_i T_i\,\alpha_i\,\mathbf{c}_i,
+\qquad
+T_i = \prod_{j<i}(1-\alpha_j)
+$$
+
+với $\mathbf{d}$ là khoảng cách từ pixel tới tâm vết. Công thức cộng màu **giống hệt** volume rendering của NeRF; khác biệt là không cần đi dọc tia và hỏi mạng ở từng mẫu, chỉ cần cộng các vết đã chiếu, nên nhanh hơn nhiều (xem [bài 3DGS](/kien-thuc/gaussian-splatting/)).
+
+<Callout type="try">
+
+Chương **Splatting** vẽ sáu Gaussian đã chiếu và một pixel di chuyển giữa chúng. Biểu đồ bên phải là đóng góp $w = T\cdot\alpha$ của từng vết theo thứ tự gần tới xa: vết gần nhất ở tâm pixel thường chiếm phần lớn, các vết sau bị che dần.
+
+</Callout>
+
+### Làm khuôn mặt chuyển động
+
+Gaussian đứng yên chỉ cho một khuôn mặt tĩnh. InsTaG thêm một **motion field**: với mỗi Gaussian, một mạng nhỏ nhận vị trí của nó cùng đặc trưng âm thanh $\mathbf{a}$ và biểu cảm vùng trên $\mathbf{e}$, rồi trả về độ biến dạng:
+
+$$
+\delta = \text{MLP}\big(\mathcal{H}(\boldsymbol{\mu}) \oplus \mathbf{C}\big) = \{\Delta\boldsymbol{\mu}, \Delta\mathbf{s}, \Delta\mathbf{q}\},
+\qquad \mathbf{C} = \{\mathbf{a}, \mathbf{e}\}
+$$
+
+$\mathcal{H}$ là tri-plane hash encoding (giống SyncTalk). Gaussian dời tâm, đổi kích thước và hướng theo từng frame; opacity và màu giữ nguyên.
+
+## Bước 2: Prior chuyển động, vì sao 10 giây là đủ
+
+Đây là ý quan trọng nhất của InsTaG. Chương 2 mô phỏng nó bằng một bài toán một chiều dễ nhìn: trục ngang là một đặc trưng âm thanh (âm mở miệng tới đâu), trục dọc là độ mở miệng.
+
+**Huấn luyện trước không định danh (identity-free pre-training).** Năm người khác nhau có cùng dáng đường cong nhưng biên độ và độ lệch khác nhau. InsTaG học trên video của nhiều người cùng lúc với hai phần:
+
+- **Universal Motion Field** $\mathcal{U}$ dùng chung cho mọi người: học phần chuyển động chung.
+- **Personalized Field** nhỏ cho từng người $i$: học phần riêng.
+
+$$
+\tilde{\theta}^i = \theta^i + \delta_U + \delta_P^i,
+\qquad \delta_U = \mathcal{U}(\boldsymbol{\mu}, \mathbf{C})
+$$
+
+Nguy cơ: phần riêng của mỗi người có thể học luôn cả phần chung, khiến $\mathcal{U}$ học được rất ít. **Loss tương phản âm** (negative contrast) phạt khi phần riêng của hai người cùng hướng:
+
+$$
+\mathcal{L}_C = \max\big(0,\ \Delta\boldsymbol{\mu}_P^i \cdot \Delta\boldsymbol{\mu}_P^j\big),\quad i \ne j
+$$
+
+Phần nào giống nhau giữa mọi người bị đẩy sang $\mathcal{U}$. Ví dụ: $\Delta\mu^i = (1, 0, 0)$, $\Delta\mu^j = (0{,}5, 0, 0)$ cho loss 0,5; nếu $\Delta\mu^j = (-0{,}5, 0, 0)$ thì loss bằng 0.
+
+**Thích nghi có căn chỉnh (motion-aligned adaptation).** Người mới có khuôn mặt to nhỏ khác, môi ở chỗ khác, nói mạnh nhẹ khác. Hỏi $\mathcal{U}$ đúng tọa độ cũ chưa chắc trúng vùng môi của người mới. **Motion Aligner** học hai thứ:
+
+$$
+\Delta\boldsymbol{\mu} = \mathcal{U}(\boldsymbol{\mu} + \Delta\boldsymbol{\mu}_A, \mathbf{C}),
+\qquad
+\Delta\boldsymbol{\mu}' = \Delta\boldsymbol{\mu} \odot \boldsymbol{\tau}_A
+$$
+
+- **độ lệch tọa độ** $\Delta\boldsymbol{\mu}_A$: hỏi prior **ở đâu**;
+- **hệ số** $\boldsymbol{\tau}_A$ (theo từng trục): chuyển động **lớn bao nhiêu**.
+
+Ví dụ: prior trả về $(0;\ 0{,}02;\ 0)$, hệ số $(1;\ 1{,}5;\ 1)$ thì chuyển động cuối là $(0;\ 0{,}03;\ 0)$: theo chiều dọc mạnh hơn 50%.
+
+Trong mô phỏng, prior + căn chỉnh chỉ có **hai tham số** (độ lệch $\delta$ và hệ số $\tau$), còn “học từ đầu” là một đa thức bậc 5. Trung vị sai số trên toàn dải âm thanh, qua 101 đoạn video ngắn ngẫu nhiên:
+
+| Số frame của người mới | Học từ đầu | Prior + căn chỉnh |
+| --- | --- | --- |
+| 3 | 0,59 | 0,16 |
+| 10 | 0,66 | 0,056 |
+| 40 | 0,49 | 0,026 |
+| 80 | 0,41 | 0,029 |
+
+Học từ đầu **không tốt lên nhiều khi thêm frame** vì đoạn video ngắn chỉ phủ một khoảng âm thanh: thêm frame trong cùng khoảng đó không dạy được gì về âm chưa gặp. Prior thì mang sẵn hiểu biết về cả dải, chỉ cần căn chỉnh. Đây chính là lý do InsTaG cần ít dữ liệu: **thông tin về chuyển động đến từ người khác, video ngắn chỉ cần dạy ngoại hình và độ lệch.**
+
+<Callout type="try">
+
+Chương **Prior ít dữ liệu**: kéo **Số frame của người mới** từ 3 tới 80. Đường đỏ (học từ đầu) uốn theo các điểm trong vùng sáng và bay đi ngoài vùng đó; đường xanh lá (prior + căn chỉnh) bám đường thật trên cả dải ngay cả khi chỉ có vài điểm.
+
+</Callout>
+
+## Bước 3: Motion field thật làm gì?
+
+Chương 3 dùng **số đo thật** từ mô hình đã huấn luyện ở phần 1: ở 25 frame thử nghiệm, độ dịch trung bình $|\Delta\boldsymbol{\mu}|$ của nhánh mặt khoảng $10{,}6\cdot10^{-3}$ và nhánh miệng khoảng $2{,}8\cdot10^{-3}$ (đơn vị không gian chuẩn hóa của đầu). Cả hai đi cùng độ mở môi AU25 đo bằng OpenFace, tương quan khoảng **0,43** trên 25 frame.
+
+Tương quan không gần 1 vì đây là **trung bình trên hàng nghìn Gaussian**, gồm cả trán, má, cằm, mỗi vùng chuyển động theo cách riêng; còn AU25 chỉ đo môi. Phần 1 vẽ từng vector $\Delta\boldsymbol{\mu}$: quanh môi và cằm vạch dài ra khi AU25 cao, ở trán gần như không đổi.
+
+## Bước 4: Face–mouth hook
+
+Miệng gồm môi (ngoài) và răng, lưỡi, khoang tối (trong). InsTaG tách hai nhánh Gaussian: **mặt** (gồm môi) và **khoang miệng**. Tách ra giúp mỗi nhánh học dễ hơn, nhưng với vài giây dữ liệu, hai nhánh dễ **lệch nhịp**: môi đã khép mà răng còn lộ, hoặc môi mở mà bên trong tối đen.
+
+**Hook** nối hai nhánh: từ biến dạng của nhánh mặt, lấy biên độ
+
+$$
+\boldsymbol{\mu}_{dist} = \Delta\boldsymbol{\mu}_{max} - \Delta\boldsymbol{\mu}_{min},
+\qquad
+\varphi = \{\Delta\boldsymbol{\mu}_{max}, \Delta\boldsymbol{\mu}_{min}, \boldsymbol{\mu}_{dist}\}
+$$
+
+rồi nhánh miệng dùng nó vừa làm điều kiện, vừa để co giãn chuyển động của mình:
+
+$$
+\Delta\boldsymbol{\mu}^M = \mathcal{U}^M(\boldsymbol{\mu}, \{\mathbf{a}, \varphi\}),
+\qquad
+\boldsymbol{\mu}^M_{hook} = \Delta\boldsymbol{\mu}^M \odot \boldsymbol{\tau}_M,
+\qquad
+\boldsymbol{\tau}_M = \text{MLP}\big(\mathcal{H}^M(\boldsymbol{\mu}) \oplus \boldsymbol{\mu}_{dist}\big)
+$$
+
+Môi mở bao nhiêu thì bên trong mở bấy nhiêu. Nhánh miệng không nhận biểu cảm vùng trên $\mathbf{e}$ và chỉ dời tâm, không đổi kích thước hay hướng.
+
+Trong mô phỏng ở chương 4, nhánh mặt chuyển động theo AU25 thật; nhánh miệng tự đoán từ âm thanh lệch với môi **0,168**, có hook còn **0,015**.
+
+<Callout type="try">
+
+Chương **Face–mouth hook** đặt hai cái miệng cạnh nhau theo từng frame. Bên trái (không hook) thỉnh thoảng hiện “răng lộ qua môi” hoặc “môi mở, trong tối”; bên phải luôn khớp.
+
+</Callout>
+
+## Bước 5: Ràng buộc hình học khi dữ liệu ít
+
+Với vài giây video và ít góc nhìn, nhiều hình dạng 3D khác nhau cho ra cùng ảnh: mô hình có thể “vẽ” đúng ảnh lên một hình học sai, rồi vỡ khi đầu quay. InsTaG thêm **prior hình học** từ mô hình ước lượng độ sâu và pháp tuyến một ảnh ($\check D$, $\check N$):
+
+$$
+\mathcal{L}_{Geo} = \lambda_D\,\mathcal{L}_D(D, \check D) + \lambda_N \sum_{i,j}\big(1 - N_{i,j}\cdot \check N_{i,j}\big)
+$$
+
+$\mathcal{L}_D$ là loss độ sâu **không phụ thuộc tỷ lệ** (độ sâu ước lượng từ một ảnh không biết tỷ lệ thật); hạng pháp tuyến bằng 0 khi hai pháp tuyến cùng hướng, bằng 2 khi ngược hướng. Đây là ràng buộc mềm từ một mô hình ước lượng, không phải độ sâu đo thật.
+
+Ảnh được giám sát bằng L1 cộng D-SSIM như 3DGS gốc:
+
+$$
+\mathcal{L}_I = (1-\lambda)\,\|I - I_{GT}\|_1 + \lambda\,\mathcal{L}_{D\text{-}SSIM}(I, I_{GT})
+$$
+
+## Kết quả thật
+
+Cả hai mô hình được huấn luyện bằng code gốc trên cùng người (Obama), đo trên cùng đoạn thử nghiệm chưa thấy khi huấn luyện:
+
+| | SyncTalk | InsTaG |
+| --- | --- | --- |
+| Frame của người cần dựng | 7 272 (gần 5 phút) | **250 (10 giây)** |
+| Huấn luyện trước | không (AVE huấn luyện trước trên LRS2) | 5 người khác (30k vòng mặt + 30k vòng miệng) |
+| Frame thử nghiệm | 728 | 727 |
+| PSNR ↑ | 35,49 dB | 33,63 dB |
+| LPIPS ↓ | 0,018 | 0,027 |
+| LMD môi ↓ | 2,73 | 2,93 |
+
+Với ít hơn **29 lần** dữ liệu của người cần dựng, InsTaG kém SyncTalk một chút về độ nét (PSNR thấp hơn 1,9 dB) và độ khớp môi (LMD cao hơn 0,2). Hai hệ thống khác cả biểu diễn lẫn cách học, nên đây là so sánh hai hệ thống hoàn chỉnh, không tách riêng được ảnh hưởng của dữ liệu.
+
+<Callout type="try">
+
+Chương **Kết quả thật** vẽ ba biểu đồ: số frame của người cần dựng, PSNR và LMD. Bảng dữ liệu bên dưới có thêm LPIPS.
+
+</Callout>
+
+## Dùng thực tế cần gì
+
+- **Dữ liệu huấn luyện trước:** video vài người nói chuyện, đã tiền xử lý đầy đủ (frame 25 fps, đặc trưng audio, pose camera, OpenFace AU, face parsing, mặt nạ răng).
+- **Video người mới:** 5 đến 10 giây, một người, mặt rõ, cùng tiền xử lý. Lệch chỉ số ảnh–audio ở đây vẫn làm hỏng kết quả; prior tốt không sửa được dữ liệu sai.
+- Prior không phải phép màu: góc đầu, ánh sáng, kiểu tóc quá khác dữ liệu huấn luyện trước vẫn làm chất lượng giảm.
+- Gaussian render nhanh, phù hợp chạy thời gian thực hơn NeRF.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- InsTaG = 3D Gaussian Splatting + motion field có điều kiện audio + prior chuyển động học từ nhiều người + căn chỉnh cho người mới.
+- Gaussian splatting tô pixel bằng cùng công thức $\sum T_i\alpha_i c_i$ như NeRF, nhưng cộng các vết đã chiếu thay vì đi dọc tia.
+- Video ngắn không chứa mọi âm; học từ đầu đoán bừa ngoài khoảng đã thấy. Prior mang hiểu biết chung, video ngắn chỉ cần dạy ngoại hình và độ lệch (Motion Aligner: hỏi ở đâu, lớn bao nhiêu).
+- Loss tương phản âm đẩy phần chung về Universal Motion Field; face–mouth hook giữ môi và khoang miệng cùng nhịp.
+- Thật: 250 frame cho PSNR 33,63 dB, LMD 2,93 so với SyncTalk 7 272 frame 35,49 dB, 2,73.
+
+</Callout>
+
+## Nguồn
+
+- Li, J. và cộng sự (2025). *InsTaG: Learning Personalized 3D Talking Head from Few-Second Video*. CVPR. [Code](https://github.com/Fictionarry/InsTaG).
+- Kerbl, B. và cộng sự (2023). *3D Gaussian Splatting for Real-Time Radiance Field Rendering*. SIGGRAPH.
+- Peng, Z. và cộng sự (2024). *SyncTalk*. CVPR.
+- Số đo chương 3 và 5: mô hình huấn luyện thật của dự án (docs/development/radiance-labs.md).

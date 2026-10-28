@@ -1,0 +1,139 @@
+---
+title: 'PagedAttention: chia KV cache thành trang để LLM phục vụ hàng nghìn người'
+description: 'Vì sao cấp phát KV cache liền mạch lãng phí bộ nhớ GPU, PagedAttention chia cache thành khối 16 token với bảng khối như bộ nhớ ảo, và copy-on-write cho tiền tố chung.'
+category: kien-thuc
+topic: toi-uu-llm
+tags: ['PagedAttention', 'vLLM', 'KV cache', 'Suy luận', 'LLM serving']
+viz: paged-attention-explainer
+cover: ../../../../assets/covers/paged-attention-explainer.webp
+order: 2
+date: 2026-10-28
+---
+
+import Callout from '../../../../components/Callout.astro';
+import Figure from '../../../../components/Figure.astro';
+import Infographic from '../../../../assets/figures/paged-attention-infographic.webp';
+
+## Bộ nhớ, không phải tính toán, giới hạn số người dùng
+
+Khi một LLM trả lời, mỗi token đã đọc hoặc đã sinh để lại một **key** và một **value** ở mỗi lớp attention. Lưu chúng lại (**KV cache**) giúp mỗi bước sau chỉ tính token mới thay vì tính lại cả đoạn hội thoại. Cái giá là bộ nhớ:
+
+$$
+\text{byte/token} = 2 \times L \times H_{kv} \times d_{\text{head}} \times \text{byte mỗi số}
+$$
+
+| Mô hình | Lớp $L$ | Đầu KV | $d_{\text{head}}$ | KV/token (fp16) | 2 048 token |
+| --- | --- | --- | --- | --- | --- |
+| Qwen2.5-0.5B | 24 | 2 | 64 | 12 KB | 25 MB |
+| Qwen2.5-7B | 28 | 4 | 128 | 57 KB | 117 MB |
+| Llama-2-13B | 40 | 40 | 128 | 819 KB | 1,68 GB |
+| Llama-3-70B | 80 | 8 | 128 | 328 KB | 671 MB |
+
+Công thức này được kiểm tra trên mô hình thật: với Qwen2.5-0.5B ở float32, tensor cache đo được đúng 24 576 byte mỗi token, bằng $2 \times 24 \times 2 \times 64 \times 4$. Llama-2-13B không dùng grouped-query attention nên mỗi token tốn gần 0,8 MB; một cuộc hội thoại 2 048 token chiếm 1,68 GB.
+
+Trên một GPU, sau khi nạp trọng số, phần bộ nhớ còn lại dành cho KV cache quyết định **có thể xử lý bao nhiêu yêu cầu cùng lúc**, và vì bước giải mã bị giới hạn bởi băng thông bộ nhớ (xem bài Inference Engineering), số yêu cầu chạy cùng lúc gần như tỷ lệ thuận với thông lượng.
+
+<Figure src={Infographic} alt="Infographic: GPU memory với cấp phát liền mạch truyền thống bị phân mảnh, còn PagedAttention chia KV cache thành các trang nhỏ cố định nằm rải rác; phép so sánh giá sách và lợi ích trong sản xuất." caption="Vấn đề phân mảnh và lời giải phân trang, cùng phép so sánh giá sách – mục lục." credit="infographic do bạn đọc cung cấp" />
+
+## Vấn đề: cấp phát liền mạch
+
+Các hệ thống phục vụ trước vLLM (như FasterTransformer, Orca) cấp cho mỗi yêu cầu một **vùng nhớ liền mạch**. Nhưng lúc nhận yêu cầu, không ai biết câu trả lời sẽ dài bao nhiêu, nên phải giữ trước cho **độ dài tối đa**. Có ba kiểu lãng phí:
+
+1. **Giữ trước** (reservation): vùng dành cho các token sẽ sinh nhưng chưa sinh.
+2. **Phân mảnh trong** (internal fragmentation): câu trả lời kết thúc sớm, phần giữ trước không bao giờ được dùng.
+3. **Phân mảnh ngoài** (external fragmentation): các yêu cầu xong ở thời điểm khác nhau để lại những khe trống rời rạc, khe nào cũng quá nhỏ cho một vùng liền mạch mới.
+
+Bài báo vLLM (Kwon và cộng sự, SOSP 2023) đo được rằng ở các hệ thống cũ, chỉ khoảng 20–38% bộ nhớ KV cache thực sự chứa trạng thái token; phần còn lại bị lãng phí.
+
+<Callout type="try">
+
+Chương **Liền mạch** chạy hai bộ cấp phát trên cùng luồng yêu cầu. Độ dài lấy từ 600 mẫu thật của **Dolly-15k** (câu hỏi trung vị 16 token, câu trả lời trung vị 45 token, đếm bằng tokenizer Qwen2.5). Bên trái giữ trước 2 048 token: ô viền là phần đã giữ nhưng trống. Bên phải là bộ cấp phát “biết trước” độ dài chính xác (không thể có trong thực tế): không giữ thừa nhưng vẫn bị phân mảnh ngoài. Kéo **Bước giải mã** để xem bộ nhớ ở từng thời điểm.
+
+</Callout>
+
+## Lời giải: phân trang như bộ nhớ ảo
+
+PagedAttention mượn ý tưởng **bộ nhớ ảo phân trang** của hệ điều hành:
+
+- KV cache của mỗi chuỗi được chia thành các **khối** (block) cố định, mặc định 16 token trong vLLM.
+- Khối có thể nằm **ở bất cứ đâu** trong bộ nhớ GPU, không cần liền nhau.
+- Mỗi chuỗi có một **bảng khối** (block table) ánh xạ khối logic 0, 1, 2… sang khối vật lý, như bảng trang ánh xạ trang ảo sang khung vật lý.
+- Khối mới chỉ được cấp **khi cần**: khi chuỗi vừa lấp đầy khối cuối.
+
+Token thứ $i$ của một chuỗi nằm ở khối vật lý `block_table[i // 16]`, vị trí `i % 16` trong khối. Kernel attention được viết lại để đọc K, V theo bảng khối thay vì từ một mảng liền mạch. Chi phí của mức gián tiếp này nhỏ so với lợi ích.
+
+Lãng phí duy nhất còn lại là phần chưa đầy của khối cuối mỗi chuỗi: **dưới 16 token mỗi yêu cầu**. vLLM báo cáo lãng phí dưới 4%.
+
+<Callout type="try">
+
+Chương **Chia trang** vẽ bộ nhớ 960 khối (mỗi ô một khối 16 token). Màu là yêu cầu sở hữu, độ sáng là mức đầy. Ô viền trắng là các khối của một yêu cầu đang chạy; bảng bên phải là bảng khối của nó, với đường nối tới vị trí vật lý rải rác.
+
+</Callout>
+
+Phép so sánh trong infographic rất sát: không cần một kệ sách dài liền mạch cho cả cuốn sách; mỗi chương đặt ở một ngăn trống bất kỳ, và một **mục lục** ghi chương nào ở ngăn nào.
+
+## Bao nhiêu người dùng hơn?
+
+Trên cùng luồng yêu cầu, cùng bộ nhớ 960 khối (15 360 token), cùng tốc độ đến:
+
+| Cách cấp phát | Yêu cầu chạy cùng lúc (TB) | Bộ nhớ đã cấp chứa token thật | Token sinh ra sau 480 bước |
+| --- | --- | --- | --- |
+| Giữ trước 2 048 token | 6,9 | 6,1% | 3 343 |
+| Giữ đúng độ dài (biết trước) | 31,5 | 55,8% | 15 980 |
+| PagedAttention, khối 16 | 78,6 | 95,3% | 34 167 |
+
+PagedAttention sinh nhiều hơn khoảng **10 lần** so với giữ trước độ dài tối đa và **2,1 lần** so với bộ cấp phát lý tưởng biết trước độ dài. Đây là mô phỏng đếm bước, với bộ nhớ và tốc độ đến minh họa; trên GPU thật, bài báo vLLM đo được thông lượng cao hơn **2–4 lần** so với FasterTransformer và Orca ở cùng mức độ trễ.
+
+Khi hết khối giữa chừng, vLLM **ưu tiên lại** (preempt) yêu cầu đến sau cùng: giải phóng khối của nó rồi tính lại (recompute) hoặc chuyển cache sang bộ nhớ CPU (swap) khi có chỗ. Trong mô phỏng, điều này xảy ra 23 lần.
+
+<Callout type="try">
+
+Chương **Thông lượng** vẽ số yêu cầu chạy cùng lúc theo thời gian cho cả ba cách và tổng token sinh ra.
+
+</Callout>
+
+## Chia sẻ tiền tố và copy-on-write
+
+Phân trang còn mở ra một khả năng mà cấp phát liền mạch không làm được: **nhiều chuỗi dùng chung khối**.
+
+- **Parallel sampling**: sinh $n$ câu trả lời cho cùng một câu hỏi. Các khối đầy của câu hỏi chỉ cần lưu một lần; bảng khối của cả $n$ mẫu trỏ tới chúng, kèm **bộ đếm tham chiếu**.
+- Khi một mẫu cần ghi vào khối dùng chung (khối cuối của câu hỏi còn chỗ), khối đó được **sao chép khi ghi** (copy-on-write), như `fork()` trong hệ điều hành.
+- **Beam search** chia sẻ còn nhiều hơn: các beam có chung phần lớn lịch sử và tách ra dần.
+- **Prefix caching**: system prompt hay tài liệu dùng chung giữa nhiều yêu cầu khác nhau chỉ cần prefill và lưu một lần.
+
+Với câu hỏi 100 token và 4 mẫu mỗi mẫu 60 token: lưu riêng cần $4 \times \lceil 160/16 \rceil = 40$ khối; chia sẻ cần 6 khối chung + $4 \times 4$ khối riêng = 22 khối, tiết kiệm 45%.
+
+<Callout type="try">
+
+Chương **Chia sẻ tiền tố** cho thấy các khối chung gộp lại và khối cuối được copy-on-write. Kéo **Số mẫu song song** từ 2 tới 8: càng nhiều mẫu, tỷ lệ tiết kiệm càng lớn.
+
+</Callout>
+
+## Lợi ích trong sản xuất
+
+- Nhiều người dùng đồng thời hơn trên cùng GPU.
+- Dùng bộ nhớ GPU gần hết cho token thật (lãng phí dưới 4%).
+- Không còn phân mảnh ngoài vì mọi khối cùng kích thước.
+- Thông lượng cao hơn, chi phí suy luận trên mỗi token thấp hơn.
+- Nền tảng cho prefix caching, parallel sampling và beam search hiệu quả.
+
+PagedAttention là lõi của **vLLM** và ý tưởng phân trang KV cache nay có mặt trong hầu hết các engine phục vụ (SGLang, TensorRT-LLM, Hugging Face TGI). Câu tóm gọn trong infographic rất đúng: *KV cache làm LLM nhanh; PagedAttention giữ cho chúng nhanh khi phục vụ quy mô lớn.*
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- KV cache mỗi token = 2 × lớp × đầu KV × chiều đầu × byte; Llama-2-13B tốn khoảng 0,8 MB mỗi token.
+- Cấp phát liền mạch phải giữ trước cho độ dài tối đa: lãng phí do giữ trước, phân mảnh trong và phân mảnh ngoài.
+- PagedAttention chia cache thành khối 16 token đặt ở bất cứ đâu, với bảng khối như bảng trang của hệ điều hành.
+- Khối chung + bộ đếm tham chiếu + copy-on-write cho phép chia sẻ tiền tố giữa các mẫu và các yêu cầu.
+- Mô phỏng trên độ dài thật của Dolly-15k: 78,6 so với 6,9 yêu cầu đồng thời, 95% bộ nhớ dùng thật.
+
+</Callout>
+
+## Nguồn
+
+- Kwon, W. và cộng sự (2023). [*Efficient Memory Management for Large Language Model Serving with PagedAttention*](https://arxiv.org/abs/2309.06180). SOSP 2023.
+- Yu, G.-I. và cộng sự (2022). *Orca: A Distributed Serving System for Transformer-Based Generative Models*. OSDI 2022.
+- Dữ liệu độ dài: databricks-dolly-15k (Databricks 2023, CC BY-SA 3.0). Script đo: `scripts/llm-bake/inference.py`.
+- Infographic “How LLMs Scale to Thousands of Users with PagedAttention” do bạn đọc cung cấp, dùng làm ảnh đại diện bài.

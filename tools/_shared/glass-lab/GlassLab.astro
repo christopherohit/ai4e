@@ -1,0 +1,49 @@
+---
+// Chrome for the glass labs: a dark animated screen with HUD and subtitles, a video-style player, chapter tabs, the
+// transcript of the current chapter, a controls slot, a data table and the data/scope footer.
+import './glass.css';
+interface Props { id: string; title: string; chapters: string[]; label: string; data: string; scope: string }
+const { id, title, chapters, label, data, scope } = Astro.props;
+---
+<section class="tool-workspace glass-workspace" aria-labelledby="cong-cu">
+  <header class="tool-heading">
+    <h2 id="cong-cu">{title}</h2>
+    <a href="#huong-dan">Đọc nguyên lý <span aria-hidden="true">↓</span></a>
+  </header>
+  <section id="native-tool-root" class="glass-lab" data-glass-lab={id} aria-busy="true">
+    <div class="glass-screen" data-screen>
+      <canvas data-canvas role="img" aria-label={label}></canvas>
+      <div class="hud-top">
+        <p class="hud-chapter" data-chapter-label></p>
+        <ul class="hud-metrics" data-metrics aria-live="polite"></ul>
+      </div>
+      <p class="hud-subtitle" data-subtitle aria-live="polite"></p>
+    </div>
+    <div class="glass-player">
+      <button type="button" class="round primary" data-play aria-label="Phát" aria-pressed="false">▶</button>
+      <button type="button" class="round" data-replay aria-label="Phát lại chương này">↺</button>
+      <input type="range" class="scrub" data-scrub min="0" max="1000" step="1" value="0" aria-label="Thời điểm trong chương" />
+      <output class="time" data-time>0:00 / 0:00</output>
+      <button type="button" class="speed" data-speed aria-label="Tốc độ phát">1×</button>
+    </div>
+    <ol class="glass-chapters" aria-label="Các chương">
+      {chapters.map((chapter, index) => (
+        <li><button type="button" data-chapter={index} aria-pressed={index === 0 ? 'true' : 'false'}><span class="num">{index + 1}</span><span class="name">{chapter}</span><span class="bar"><span data-progress></span></span></button></li>
+      ))}
+    </ol>
+    <div class="glass-dock">
+      <article class="glass-notes">
+        <h3 data-title></h3>
+        <ol class="beats" data-beats aria-label="Lời dẫn của chương, nhấp để tua tới"></ol>
+        <p class="formula" data-formula hidden></p>
+      </article>
+      <aside class="glass-controls" aria-label="Điều khiển"><slot name="controls" /></aside>
+    </div>
+    <slot />
+    <details class="glass-table"><summary>Số liệu của chương này</summary><div class="table-scroll"><table class="data" data-table></table></div></details>
+    <footer class="glass-footer">
+      <p><strong>Dữ liệu:</strong> {data}</p>
+      <p><strong>Phạm vi:</strong> {scope}</p>
+    </footer>
+  </section>
+</section>

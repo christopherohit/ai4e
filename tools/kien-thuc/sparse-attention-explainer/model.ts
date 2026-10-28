@@ -2,6 +2,7 @@
 // query looks for one topic. QSA follows the report's recipe at toy scale: average-pool keys into micro-blocks of r=4,
 // score complete blocks with 4 ReLU indexer heads, keep top-k blocks plus the incomplete tail, then softmax over them.
 import { dot, mean, seeded, softmax, type Vector } from '../../_shared/sequence-lab/math';
+import real from './data/attention.json';
 
 export const BLOCK = 4;
 const TOPICS = ['tên hàm area', 'hằng PI', 'tham số r', 'cú pháp', 'chú thích', 'xuống dòng', 'số', 'biến x'] as const;
@@ -73,3 +74,11 @@ export function coverage(pattern: Pattern, i: number, budget: number) {
 }
 
 export const strongest = (row: number[]) => row.indexOf(Math.max(...row));
+
+// ---- Real measurements: Qwen2.5-0.5B-Instruct on 1 024 WikiText-2 tokens (scripts/llm-bake/sparse_attention.py) ----
+export interface Picture { layer: number; head: number; map: number[][]; row: number[] }
+export const REAL = real as unknown as {
+  model: string; seq: number; block: number; sink: number; windows: number[]; budgets: number[]; layers: number; heads: number; kvHeads: number;
+  tokens: string[]; overall: Record<string, number>; perLayer: Record<string, number>[]; pictures: Picture[];
+};
+export const tokenText = (i: number) => REAL.tokens[i].replace(/Ġ/g, ' ').replace(/Ċ/g, '⏎').trim() || '␣';

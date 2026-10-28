@@ -1,0 +1,41 @@
+# Checks every push and pull request: type check, unit tests and a full static build of the blog.
+name: CI
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            blog/package-lock.json
+            tools/_shared/radiance/package-lock.json
+      - name: Install dependencies
+        run: |
+          npm ci --prefix blog
+          npm ci --prefix tools/_shared/radiance
+      - name: Verify tool registry
+        run: node scripts/workspace.mjs verify
+      - name: Type check
+        run: npm run check --prefix blog
+      - name: Unit tests
+        run: npm test --prefix blog
+      - name: Build
+        working-directory: blog
+        run: npm run build:site

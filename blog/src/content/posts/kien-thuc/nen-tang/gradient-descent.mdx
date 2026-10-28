@@ -1,0 +1,285 @@
+---
+title: 'Gradient Descent: Huấn luyện mô hình bằng cách đi xuống dốc'
+description: 'Gradient Descent hoạt động thế nào, minh họa trên 392 xe thật: đạo hàm chỉ hướng, learning rate và ngưỡng 2/λ, thung lũng hẹp, chuẩn hóa đặc trưng, đáy cục bộ.'
+category: kien-thuc
+topic: nen-tang
+tags: ['Gradient Descent', 'Tối ưu hóa', 'Learning rate', 'Học máy']
+viz: gradient-descent-explainer
+cover: ../../../../assets/covers/gradient-descent.svg
+order: 1
+date: 2026-10-26
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+## Huấn luyện mô hình là đi tìm đáy của một hàm số
+
+Hầu hết mô hình học máy, từ hồi quy tuyến tính tới [CNN](/kien-thuc/cnn-explainer/) và [Transformer](/kien-thuc/transformer-explainer/), có chung một cách huấn luyện. Mô hình có các **tham số** $\theta$ (trọng số, hệ số chặn). Một **hàm mất mát** (loss) $L(\theta)$ đo mức sai của dự đoán trên dữ liệu huấn luyện. Huấn luyện nghĩa là tìm $\theta$ làm $L(\theta)$ nhỏ nhất.
+
+Bài này dùng dữ liệu thật: **Auto MPG**, 392 mẫu xe đời 1970–1982 (UCI Machine Learning Repository). Ta dự đoán mức tiêu hao nhiên liệu $y$ (số dặm đi được mỗi gallon, mpg) từ khối lượng xe $x$ (nghìn pound) bằng đường thẳng
+
+$$
+\hat y = w\,x + b .
+$$
+
+Mô hình chỉ có hai tham số, $\theta = (w, b)$. Với $N$ mẫu dữ liệu, loss là **sai số bình phương trung bình** (MSE):
+
+$$
+L(w,b) = \frac{1}{N}\sum_{i=1}^{N}\bigl(w\,x_i + b - y_i\bigr)^2 .
+$$
+
+Bài toán này có công thức nghiệm đóng (bình phương tối thiểu), nhưng mạng nơ-ron với hàng triệu tham số thì không. Thứ ta luôn tính được là **gradient**: loss thay đổi thế nào khi nhích từng tham số một chút. Gradient Descent chỉ dùng thông tin đó.
+
+## Ẩn dụ: xuống núi trong sương mù
+
+Hãy hình dung bạn đứng trên sườn núi trong sương mù dày, không thấy thung lũng ở đâu. Bạn chỉ cảm nhận được mặt đất dưới chân dốc về phía nào. Chiến lược hợp lý: bước một bước theo hướng dốc xuống nhất, dừng lại, cảm nhận lại, rồi bước tiếp.
+
+Gradient Descent làm đúng như vậy:
+
+- **Vị trí** là giá trị hiện tại của tham số $\theta$.
+- **Độ cao** là loss $L(\theta)$.
+- **Độ dốc dưới chân** là gradient $\nabla L(\theta)$.
+- **Độ dài bước** do **learning rate** $\eta$ quyết định.
+
+Thuật toán không cần biết hình dạng toàn bộ ngọn núi. Đó vừa là sức mạnh (áp dụng được cho mọi hàm khả vi), vừa là giới hạn (chỉ nhìn thấy độ dốc tại chỗ).
+
+## Một tham số: đạo hàm chỉ hướng đi
+
+Tạm giữ $b$ cố định để loss chỉ phụ thuộc $w$. Đồ thị $L(w)$ là một parabol. Đạo hàm $L'(w)$ là độ dốc của tiếp tuyến tại $w$:
+
+- $L'(w) > 0$: tăng $w$ làm loss tăng, nên phải **giảm** $w$.
+- $L'(w) < 0$: tăng $w$ làm loss giảm, nên phải **tăng** $w$.
+- $L'(w) = 0$: tiếp tuyến nằm ngang, ta đang ở đáy (hoặc một điểm dừng khác).
+
+Cả ba trường hợp gói gọn trong một quy tắc cập nhật:
+
+$$
+w_{k+1} = w_k - \eta\, L'(w_k).
+$$
+
+Dấu trừ đảo hướng của đạo hàm để đi xuống. Độ dài bước tỉ lệ với $|L'(w_k)|$: sườn dốc thì bước dài, gần đáy dốc thoải nên bước tự ngắn lại, dù $\eta$ không đổi.
+
+### Ví dụ bằng số trên 392 xe
+
+Lab phía trên bắt đầu từ một đường thẳng đoán bừa: $w_0 = 2$, $b_0 = 20$, nghĩa là xe càng nặng càng *tiết kiệm* xăng. MSE trên 392 xe là 91,95. Hai đạo hàm riêng tại đó là
+
+$$
+\frac{\partial L}{\partial w} \approx 28{,}83, \qquad \frac{\partial L}{\partial b} \approx 5{,}02 .
+$$
+
+Cả hai đều dương: tăng $w$ hay $b$ đều làm loss tăng, nên phải giảm cả hai. Với $\eta = 0{,}09$, bước đầu tiên đưa đường thẳng về
+
+$$
+w_1 = 2 - 0{,}09 \times 28{,}83 \approx -0{,}59, \qquad b_1 = 20 - 0{,}09 \times 5{,}02 \approx 19{,}55 .
+$$
+
+Độ dốc đã đổi dấu: đường thẳng bắt đầu đi xuống như dữ liệu. Lặp lại đủ lâu, gradient descent tới đúng nghiệm bình phương tối thiểu mà scikit-learn tính được:
+
+$$
+\text{mpg} \approx 46{,}22 - 7{,}65 \times \text{khối lượng (nghìn pound)}, \qquad \text{MSE} = 18{,}68 .
+$$
+
+Loss không về 0 vì cùng khối lượng, các xe vẫn khác nhau về động cơ, khí động học, năm sản xuất. Không đường thẳng nào đi qua mọi điểm.
+
+<Callout type="try">
+
+Ở chương **Dữ liệu thật**, xem đường thẳng cam xoay dần về đúng hướng trong khi các vạch hồng (sai số từng xe) ngắn lại. Rê chuột lên một chấm để xem tên xe, năm sản xuất và nơi sản xuất. Biểu đồ bên phải vẽ MSE giảm từ 91,95 xuống 18,68 sau 40 bước.
+
+</Callout>
+
+## Nhiều tham số: gradient là vector độ dốc
+
+Với hai tham số, loss là một mặt cong trên mặt phẳng $(w, b)$. Ta vẽ nó bằng **đường đồng mức**: mỗi đường nối các điểm có cùng loss, như bản đồ địa hình. Với MSE của hồi quy tuyến tính, các đường đồng mức là những elip lồng nhau.
+
+**Gradient** gom các đạo hàm riêng thành một vector:
+
+$$
+\nabla L(w,b) = \left(\frac{\partial L}{\partial w},\ \frac{\partial L}{\partial b}\right)
+= \frac{2}{N}\sum_{i=1}^{N} r_i\,(x_i,\ 1), \qquad r_i = w\,x_i + b - y_i .
+$$
+
+$r_i$ là phần dư của mẫu $i$: dự đoán cao hơn thực tế thì $r_i > 0$. Gradient có hai tính chất quan trọng:
+
+1. Nó chỉ hướng loss **tăng nhanh nhất**, nên $-\nabla L$ là hướng giảm nhanh nhất tại chỗ.
+2. Nó **vuông góc với đường đồng mức** đi qua điểm đang xét.
+
+Quy tắc cập nhật giữ nguyên dạng, chỉ thay số bằng vector:
+
+$$
+\theta_{k+1} = \theta_k - \eta\,\nabla L(\theta_k).
+$$
+
+Với một mạng nơ-ron, $\theta$ có thể có hàng tỉ thành phần, nhưng công thức vẫn chỉ là dòng này.
+
+### Thuật toán đầy đủ
+
+```python
+import numpy as np
+
+def gradient_descent(x, y, lr=0.09, steps=300):
+    w, b = 2.0, 20.0                      # khởi tạo (đường thẳng đoán bừa)
+    for _ in range(steps):
+        r = w * x + b - y                 # phần dư của mọi mẫu
+        grad_w = 2 * np.mean(r * x)       # ∂L/∂w
+        grad_b = 2 * np.mean(r)           # ∂L/∂b
+        w, b = w - lr * grad_w, b - lr * grad_b
+        if np.hypot(grad_w, grad_b) < 1e-6:
+            break                         # gradient gần 0: đã tới điểm dừng
+    return w, b
+```
+
+Bốn thành phần cần chọn: điểm khởi tạo, learning rate, cách tính gradient và điều kiện dừng. Phần còn lại của bài lần lượt xem từng thứ.
+
+## Learning rate: tham số quan trọng nhất
+
+### Trên một parabol
+
+Với loss bậc hai, có thể tính chính xác điều gì xảy ra. Gọi $L''$ là độ cong (đạo hàm bậc hai, không đổi trên parabol). Khoảng cách tới đáy sau mỗi bước được nhân với cùng một hệ số:
+
+$$
+w_{k+1} - w^{\star} = (1 - \eta L'')\,(w_k - w^{\star}).
+$$
+
+Hệ số $1 - \eta L''$ quyết định toàn bộ hành vi:
+
+| $1 - \eta L''$ | Hành vi |
+| --- | --- |
+| gần 1 ($\eta$ rất nhỏ) | Hội tụ chậm: mỗi bước chỉ rút ngắn một phần nhỏ khoảng cách |
+| từ 0 tới 1 | Hội tụ đều, không vượt đáy |
+| từ −1 tới 0 | Vượt qua đáy rồi quay lại, biên độ giảm dần |
+| nhỏ hơn hoặc bằng −1 | Mỗi lần vượt xa hơn lần trước: **phân kỳ** |
+
+Điều kiện hội tụ là $|1 - \eta L''| < 1$, tức
+
+$$
+0 < \eta < \frac{2}{L''} .
+$$
+
+Learning rate quá nhỏ chỉ làm chậm, còn quá lớn thì làm hỏng hoàn toàn. Vì thế khi huấn luyện mà loss tăng vọt hoặc thành `NaN`, việc đầu tiên nên thử là giảm learning rate.
+
+### Trên dữ liệu thật
+
+Với hai tham số, giới hạn được quyết định bởi hướng cong nhất của mặt loss (xem mục tiếp theo). Trên 392 xe, ngưỡng đó là $\eta < 0{,}0951$. Bốn learning rate cho bốn số phận rất khác nhau:
+
+| $\eta$ | MSE sau 10 bước | sau 30 bước | sau 60 bước | Số bước tới 1% của mức tối thiểu |
+| --- | --- | --- | --- | --- |
+| 0,01 | 70,7 | 67,7 | 63,9 | 2 065 |
+| 0,05 | 65,1 | 54,0 | 42,0 | 412 |
+| 0,09 | 62,3 | 44,0 | 30,7 | 229 |
+| 0,10 | 202 | 7 391 | 2,7 triệu | không bao giờ |
+
+$\eta = 0{,}09$ và $\eta = 0{,}10$ chỉ chênh nhau 0,01, nhưng một bên hội tụ nhanh nhất, một bên bùng nổ.
+
+<Callout type="try">
+
+Mở chương **Learning rate**: bốn viên bi xuất phát cùng chỗ trên bản đồ loss. Kéo thanh learning rate của viên bi cam qua lại quanh 0,095 rồi bấm các nút 0,095 và 0,11 để thấy ranh giới giữa hội tụ và phân kỳ.
+
+</Callout>
+
+### Nhiều chiều: thung lũng hẹp và bước chữ chi
+
+Với nhiều tham số, mặt loss có thể cong mạnh theo hướng này nhưng thoải theo hướng khác. Độ cong theo từng hướng chính là các trị riêng của ma trận đạo hàm bậc hai (Hessian). Với 392 xe và khối lượng tính bằng nghìn pound:
+
+- Hướng cong nhất có độ cong $\lambda_{\max} \approx 21{,}03$.
+- Hướng thoải nhất có độ cong $\lambda_{\min} \approx 0{,}137$.
+
+Learning rate bị giới hạn bởi hướng cong nhất: $\eta < 2/\lambda_{\max} \approx 0{,}0951$. Nhưng với $\eta$ như vậy, hướng thoải chỉ tiến được $\eta\lambda_{\min} \approx 1{,}2\%$ khoảng cách mỗi bước. Tỉ số $\lambda_{\max}/\lambda_{\min} \approx 154$ (gọi là **số điều kiện**) cho biết thung lũng hẹp và dài cỡ nào.
+
+Kết quả là đường đi **chữ chi**: gradient vuông góc với đường đồng mức nên chủ yếu chỉ ngang thung lũng, thay vì dọc theo nó về phía đáy. Viên bi tới đáy theo chiều ngang chỉ sau vài bước nhưng mất hơn 200 bước để bò dọc thung lũng.
+
+<Callout type="try">
+
+Chương **Mặt loss 3D** vẽ MSE như một mặt cong thật trên mặt phẳng $(w, b)$. Kéo để xoay: thung lũng hẹp và dài, viên bi đi chữ chi ở đoạn đầu rồi chậm rãi trượt dọc đáy. Bản đồ bên phải là cùng mặt cong nhìn từ trên xuống, mũi tên hồng là hướng $-\nabla L$, luôn vuông góc với đường đồng mức.
+
+</Callout>
+
+### Chuẩn hóa đặc trưng: biến thung lũng thành cái bát
+
+Vì sao thung lũng hẹp? Khối lượng $x$ luôn dương (từ 1,6 tới 5,1 nghìn pound), nên tăng $w$ hay tăng $b$ đều nâng toàn bộ đường thẳng lên theo cách gần giống nhau: hai tham số "dẫm chân" nhau. Cách sửa đơn giản nhất là **chuẩn hóa**: thay $x$ bằng $z = (x - \bar x)/s_x$, với $\bar x \approx 2{,}98$ và $s_x \approx 0{,}848$.
+
+Trên cùng 392 xe, sau khi chuẩn hóa:
+
+| | $x$ thô | $z$ chuẩn hóa |
+| --- | --- | --- |
+| Số điều kiện | 154 | 1 |
+| $\eta$ tối đa ($2/\lambda_{\max}$) | 0,095 | 1,0 |
+| Số bước tới 1% của mức tối thiểu | 229 (với $\eta = 0{,}09$) | 4 (với $\eta = 0{,}3$) |
+
+Mặt loss thành một cái bát tròn, gradient chỉ thẳng về đáy và bước có thể dài hơn 10 lần. Mô hình không đổi: đổi ngược về pound, cả hai cách cho cùng một đường thẳng. Đây là lý do gần như mọi quy trình học máy đều chuẩn hóa đặc trưng trước khi huấn luyện.
+
+<Callout type="try">
+
+Chương **Chuẩn hóa** chạy hai viên bi song song từ cùng một đường thẳng xuất phát: bên trái với $x$ thô, bên phải với $z$ chuẩn hóa. Bảng số liệu bên dưới lab so sánh độ cong, learning rate tối đa và số bước cần thiết.
+
+</Callout>
+
+Ngoài chuẩn hóa, có hai cách phổ biến khác để bớt chữ chi:
+- **Momentum**: cộng dồn các bước trước, nên phần chữ chi triệt tiêu nhau còn phần dọc thung lũng được tích lũy.
+- **Learning rate thích nghi** (AdaGrad, RMSProp, Adam): mỗi tham số có bước riêng, chia theo độ lớn gradient gần đây của nó.
+
+## Khi mặt loss không lồi
+
+MSE của hồi quy tuyến tính là hàm **lồi**: chỉ có một đáy, nên với $\eta$ đủ nhỏ thì xuất phát ở đâu cũng tới đó. Loss của mạng nơ-ron thì không lồi. Mặt loss có thể có:
+
+- **Đáy cục bộ**: điểm thấp hơn mọi điểm lân cận nhưng không phải thấp nhất.
+- **Điểm yên ngựa**: gradient bằng 0, đi theo hướng này thì lên dốc, hướng kia thì xuống dốc.
+- **Vùng bằng phẳng**: gradient rất nhỏ trên một vùng rộng, nên các bước gần như không di chuyển.
+
+Gradient Descent chỉ dừng ở nơi gradient bằng 0 và không phân biệt được những điểm này với đáy thật. Xét ví dụ hàm một biến
+
+$$
+f(w) = \tfrac{1}{4}w^4 - w^2 + 0{,}3\,w + 1{,}5
+$$
+
+có đáy sâu tại $w \approx -1{,}48$ ($f \approx 0{,}07$), đáy nông tại $w \approx 1{,}33$ ($f \approx 0{,}91$) và một đỉnh tại $w \approx 0{,}15$. Với $\eta = 0{,}1$, xuất phát từ $w_0 = 0{,}1$ thì tới đáy sâu, còn $w_0 = 0{,}2$ thì kẹt ở đáy nông. Hai điểm xuất phát chỉ cách nhau 0,1 nhưng nằm ở hai phía của đỉnh.
+
+Vậy tại sao Gradient Descent vẫn huấn luyện được mạng nơ-ron rất tốt? Câu trả lời đầy đủ vẫn đang được nghiên cứu, nhưng có vài lý do được chấp nhận rộng rãi:
+
+- Trong không gian hàng triệu chiều, điểm yên ngựa phổ biến hơn đáy cục bộ xấu nhiều. Một điểm yên ngựa chỉ cần một hướng đi xuống là có lối thoát.
+- Với mạng đủ lớn, nhiều đáy cục bộ có loss gần bằng nhau. Kẹt ở một đáy "đủ tốt" thường không sao.
+- Gradient nhiễu của [SGD và mini-batch](/kien-thuc/batch-mini-batch-sgd/) giúp thoát khỏi điểm yên ngựa và các đáy hẹp.
+- Cách khởi tạo trọng số (Xavier, He) được thiết kế để bắt đầu ở vùng có gradient tốt.
+
+## Khi nào dừng?
+
+Gradient Descent là thuật toán lặp nên phải có điều kiện dừng. Thường dùng một hoặc kết hợp các tiêu chí:
+
+- **Số vòng lặp tối đa** hoặc số epoch cố định: đơn giản và phổ biến nhất.
+- **Gradient đủ nhỏ**: $\lVert\nabla L\rVert < \varepsilon$, nghĩa là đã gần một điểm dừng.
+- **Loss gần như không giảm nữa** sau một số bước liên tiếp.
+- **Early stopping**: theo dõi loss trên tập validation và dừng khi nó bắt đầu tăng, dù loss huấn luyện vẫn giảm. Đây là dấu hiệu mô hình bắt đầu học thuộc dữ liệu huấn luyện (overfitting).
+
+## Gradient Descent và backpropagation khác nhau thế nào?
+
+Hai khái niệm này hay bị gộp làm một nhưng làm hai việc khác nhau:
+
+- **Backpropagation** là cách *tính* gradient của loss theo mọi trọng số của mạng nơ-ron, bằng quy tắc dây chuyền đi ngược từ đầu ra về đầu vào.
+- **Gradient Descent** (hay biến thể của nó như Adam) là cách *dùng* gradient đó để cập nhật trọng số.
+
+Mỗi vòng huấn luyện gồm: forward tính loss, backward tính gradient, rồi optimizer cập nhật tham số. Ở ví dụ hồi quy tuyến tính, gradient có công thức trực tiếp nên không cần backpropagation.
+
+## Những hiểu lầm thường gặp
+
+- **"Learning rate càng lớn càng học nhanh."** Chỉ đúng tới ngưỡng $2/\lambda_{\max}$. Vượt ngưỡng, loss tăng thay vì giảm.
+- **"Gradient chỉ thẳng về điểm tối ưu."** Gradient chỉ hướng dốc nhất *tại chỗ*, vuông góc với đường đồng mức. Trong thung lũng hẹp, hướng đó gần như vuông góc với hướng tới đáy.
+- **"Loss về 0 nghĩa là mô hình tốt."** Loss huấn luyện bằng 0 thường là dấu hiệu học thuộc. Với 392 xe, MSE nhỏ nhất là 18,68 vì khối lượng không giải thích hết mức tiêu hao nhiên liệu, và đó là kết quả đúng.
+- **"Hội tụ là tìm được nghiệm tốt nhất."** Với hàm không lồi, hội tụ chỉ có nghĩa là tới một điểm có gradient bằng 0.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- Gradient Descent lặp lại một quy tắc: $\theta \leftarrow \theta - \eta\,\nabla L(\theta)$.
+- Gradient chỉ hướng loss tăng nhanh nhất và vuông góc với đường đồng mức; đi ngược nó để giảm loss.
+- Learning rate phải nhỏ hơn $2/\lambda_{\max}$ để hội tụ. Thung lũng hẹp (số điều kiện lớn) gây bước chữ chi và hội tụ chậm; chuẩn hóa đặc trưng sửa được phần lớn vấn đề này.
+- Với loss không lồi, kết quả phụ thuộc điểm xuất phát và learning rate.
+
+</Callout>
+
+## Đọc tiếp
+
+- [Batch, Mini-batch và SGD](/kien-thuc/batch-mini-batch-sgd/): tính gradient trên bao nhiêu dữ liệu cho mỗi bước, và vì sao gần như mọi mạng nơ-ron được huấn luyện bằng mini-batch.
+- [CNN Explainer](/kien-thuc/cnn-explainer/): các trọng số mà Gradient Descent cập nhật trong một mạng tích chập.
+- Sebastian Ruder, [An overview of gradient descent optimization algorithms](https://arxiv.org/abs/1609.04747): tổng quan momentum, AdaGrad, RMSProp, Adam.
+- Ian Goodfellow, Yoshua Bengio, Aaron Courville, [Deep Learning](https://www.deeplearningbook.org/), mục 4.3 và chương 8: tối ưu dựa trên gradient và các khó khăn khi huấn luyện mạng sâu.
+- Dữ liệu: [Auto MPG](https://archive.ics.uci.edu/dataset/9/auto+mpg), UCI Machine Learning Repository (Quinlan, 1993). Lab dùng 392 xe có đủ số liệu; hệ số và MSE được kiểm tra lại bằng scikit-learn.

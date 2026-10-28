@@ -1,0 +1,23 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="svm" title="SVM · tìm dải phân cách rộng nhất giữa các loài hoa Iris" label="Hoạt cảnh support vector machine trên dữ liệu hoa Iris"
+  chapters={['Nhiều đường', 'Lề cực đại', 'Lề mềm & C', 'Kernel RBF']}
+  data="Iris (Fisher 1936; số đo của Anderson 1935): 150 bông hoa thuộc 3 loài, mỗi bông đo 4 kích thước tính bằng cm; bản đi kèm scikit-learn."
+  scope="SVM huấn luyện thật trong trình duyệt bằng SMO cho bài toán đối ngẫu, trên hai đặc trưng đã chuẩn hóa như StandardScaler. Lề cứng xấp xỉ bằng C = 10 000. Kết quả khớp với sklearn.svm.SVC: lề 0,421 với 4 support vector, 94% ở C = 1, 96,7% với RBF γ = 0,5. Iris chỉ có 150 mẫu, nên cross-validation dao động vài điểm phần trăm.">
+  <Fragment slot="controls">
+    <label class="field" data-chapters="0"><span class="field-row"><span>Tự xoay đường phân tách</span><output data-value="angle"></output></span><input type="range" name="angle" min="-90" max="90" step="1" value="-32" /></label>
+    <p class="hint" data-chapters="0">Kéo thanh trượt để tự chọn hướng; bấm ↺ để xem lại hoạt cảnh quét mọi hướng.</p>
+    <p class="hint" data-chapters="1">Nhấp vào một bông hoa trên hình để bỏ nó khỏi dữ liệu; nhấp lần nữa để đưa lại.</p>
+    <div class="actions" data-chapters="1"><button type="button" data-reset-points>Đưa lại mọi bông hoa</button></div>
+    <label class="field" data-chapters="2"><span class="field-row"><span>Hệ số phạt C</span><output data-value="c"></output></span><input type="range" name="c" min="0" max="8" step="1" value="4" /></label>
+    <p class="hint" data-chapters="2">Vòng trắng: support vector nằm đúng mép dải. Vòng đỏ: điểm bị phạt (nằm trong dải hoặc sang nhầm phía).</p>
+    <label class="field" data-chapters="3"><span class="field-row"><span>γ của kernel RBF</span><output data-value="gamma"></output></span><input type="range" name="gamma" min="0" max="7" step="1" value="2" /></label>
+    <p class="hint" data-chapters="3">Kéo trên mặt cong để xoay. Thử γ = 100: ranh giới uốn quanh từng bông, độ chính xác huấn luyện gần 100% nhưng cross-validation tụt.</p>
+    <div class="actions" data-chapters="0 2"><button type="button" data-autoplay>Xem lại hoạt cảnh tự động</button></div>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initSvmLab } from './render';
+  initSvmLab();
+</script>

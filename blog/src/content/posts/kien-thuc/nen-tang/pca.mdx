@@ -1,0 +1,182 @@
+---
+title: 'PCA hoạt động thế nào? Hướng có phương sai lớn nhất và vector riêng'
+description: 'Phân tích thành phần chính từ hình học tới đại số: chuẩn hóa, xoay trục tìm phương sai lớn nhất, vector riêng của ma trận hiệp phương sai, giảm chiều ảnh chữ số 64 chiều.'
+category: kien-thuc
+topic: nen-tang
+tags: ['PCA', 'Giảm chiều', 'Đại số tuyến tính', 'Học máy']
+viz: pca-explainer
+cover: ../../../../assets/covers/pca-explainer.webp
+order: 8
+date: 2026-10-28
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+## Nhiều cột, ít thông tin mới
+
+Dữ liệu thật thường có nhiều cột đo cùng một thứ dưới các góc khác nhau. Một chiếc xe nặng thường có động cơ mạnh; một bức ảnh chữ số có 64 điểm ảnh nhưng các điểm cạnh nhau sáng tối gần giống nhau. **PCA** (Principal Component Analysis, phân tích thành phần chính) tìm một hệ trục mới sao cho vài trục đầu tiên giữ được phần lớn sự khác biệt giữa các mẫu, để ta bỏ bớt các trục còn lại.
+
+Bài này đi theo đúng mạch của video [“Cách hoạt động của PCA”](https://www.youtube.com/watch?v=7nlTBzwyy0g) trên kênh GlassBox AI: từ một bài toán tối ưu hình học dẫn tới vector riêng. Lab dùng hai bộ dữ liệu thật:
+
+- **Auto MPG** (UCI, Quinlan 1993): khối lượng và công suất của 392 chiếc xe, đủ nhỏ để vẽ trên mặt phẳng.
+- **Chữ số viết tay 8×8** (UCI, Alpaydin & Kaynak 1998, bản đi kèm scikit-learn): 1 797 ảnh, mỗi ảnh 64 điểm ảnh.
+
+## Bước 1: đưa về tâm và cùng thang đo
+
+Khối lượng xe tính bằng nghìn pound (khoảng 1,6 tới 5,1), công suất tính bằng mã lực (46 tới 230). Nếu để nguyên, cột có con số lớn sẽ chiếm gần hết phương sai chỉ vì đơn vị. Vì vậy ta **chuẩn hóa** từng cột:
+
+$$
+z_{ij} = \frac{x_{ij} - \mu_j}{\sigma_j}
+$$
+
+Sau bước này mỗi cột có trung bình 0, phương sai 1. Mức độ hai cột đi cùng nhau được tóm trong **ma trận hiệp phương sai**:
+
+$$
+S = \frac{1}{n}\sum_{i=1}^{n} \mathbf{z}_i\mathbf{z}_i^\top =
+\begin{bmatrix} 1 & 0{,}8645 \\ 0{,}8645 & 1 \end{bmatrix}
+$$
+
+Phần tử ngoài đường chéo 0,8645 chính là hệ số tương quan giữa khối lượng và công suất: rất mạnh.
+
+<Callout type="try">
+
+Chương **Chuẩn hóa** cho đám mây 392 xe trượt về tâm rồi co giãn về cùng thang đo. Ô bên phải điền dần ma trận $S$.
+
+</Callout>
+
+Không phải lúc nào cũng cần chia cho $\sigma_j$: nếu các cột cùng đơn vị và độ lớn có ý nghĩa (ví dụ các điểm ảnh cùng thang 0–16), chỉ cần trừ trung bình. Lab làm đúng như vậy với ảnh chữ số.
+
+## Bước 2: hướng nào giữ nhiều thông tin nhất?
+
+Chọn một hướng bất kỳ, biểu diễn bằng vector đơn vị $\mathbf{u}$ ($\|\mathbf{u}\| = 1$). Chiếu vuông góc mỗi điểm lên đường thẳng theo hướng đó, ta được một con số $t_i = \mathbf{u}^\top\mathbf{z}_i$. Nếu chỉ được giữ một con số cho mỗi xe, ta muốn các con số này **khác nhau càng nhiều càng tốt**, tức là phương sai của chúng lớn nhất:
+
+$$
+\text{Var}(\mathbf{u}^\top\mathbf{z}) = \frac{1}{n}\sum_i (\mathbf{u}^\top\mathbf{z}_i)^2 = \mathbf{u}^\top S\,\mathbf{u}
+$$
+
+Thành phần chính thứ nhất là nghiệm của bài toán tối ưu:
+
+$$
+\text{PC1} = \arg\max_{\|\mathbf{u}\| = 1} \mathbf{u}^\top S\,\mathbf{u}
+$$
+
+<Callout type="try">
+
+Chương **Xoay trục** quét $\mathbf{u}$ qua mọi góc từ −90° tới 90°. Các điểm cam là hình chiếu; biểu đồ bên phải ghi lại phương sai của chúng. Có đúng một đỉnh, ở 45°, phương sai 1,8645. Kéo thanh trượt **Hướng u** để tự thử: ở −45° các hình chiếu co cụm, phương sai chỉ 0,1355.
+
+</Callout>
+
+Hướng 45° có nghĩa PC1 = $(0{,}7071;\ 0{,}7071) = (1/\sqrt2;\ 1/\sqrt2)$: cộng khối lượng chuẩn hóa với công suất chuẩn hóa. Với hai biến đã chuẩn hóa và tương quan dương, PC1 luôn nằm ở 45°; độ lớn tương quan chỉ quyết định PC1 giữ được bao nhiêu phương sai.
+
+## Bước 3: lời giải là vector riêng
+
+Giải bài toán tối ưu có ràng buộc bằng nhân tử Lagrange:
+
+$$
+\mathcal{L}(\mathbf{u}, \lambda) = \mathbf{u}^\top S\,\mathbf{u} - \lambda(\mathbf{u}^\top\mathbf{u} - 1)
+\quad\Rightarrow\quad
+\frac{\partial\mathcal{L}}{\partial\mathbf{u}} = 2S\mathbf{u} - 2\lambda\mathbf{u} = 0
+$$
+
+tức là
+
+$$
+S\,\mathbf{u} = \lambda\,\mathbf{u}
+$$
+
+Điểm tối ưu phải là một **vector riêng** của $S$. Thay lại vào hàm mục tiêu: $\mathbf{u}^\top S\mathbf{u} = \lambda\,\mathbf{u}^\top\mathbf{u} = \lambda$. Vậy phương sai theo một vector riêng bằng đúng giá trị riêng của nó, và PC1 là vector riêng có **giá trị riêng lớn nhất**.
+
+Về hình học, vector riêng là hướng mà ma trận $S$ **không xoay**, chỉ kéo dài hay co lại. Nhân $S$ với vòng tròn đơn vị cho một elip; hai trục của elip chính là hai vector riêng.
+
+<Callout type="try">
+
+Chương **Vector riêng** quay vector trắng $\mathbf{u}$ và vẽ $S\mathbf{u}$ (mũi tên cam). Thường $S\mathbf{u}$ lệch hướng so với $\mathbf{u}$; công thức dưới hình in góc lệch. Khi $\mathbf{u}$ đi qua 45° hoặc −45°, góc lệch về 0 và mũi tên chuyển xanh: $S\mathbf{u} = \lambda\mathbf{u}$. Ô bên phải vẽ elip hiệp phương sai trên dữ liệu thật, trục dài là PC1.
+
+</Callout>
+
+Với Auto MPG: $\lambda_1 = 1{,}8645$, $\lambda_2 = 0{,}1355$. Tổng hai giá trị riêng bằng tổng phương sai ($1 + 1 = 2$), đúng như tính chất vết của ma trận. Thành phần chính thứ hai là vector riêng thứ hai, vuông góc với PC1 (ma trận đối xứng luôn có các vector riêng trực giao).
+
+Ở $d$ chiều, ta lấy $k$ vector riêng ứng với $k$ giá trị riêng lớn nhất. Trong thực tế thư viện thường tính bằng **SVD** của ma trận dữ liệu đã trừ trung bình $Z = U\Sigma V^\top$: các cột của $V$ là thành phần chính và $\lambda_j = \sigma_j^2 / n$. SVD ổn định số học hơn việc lập $S$ rồi phân rã.
+
+## Bước 4: giảm chiều bằng phép chiếu
+
+Giữ $k$ thành phần đầu, mỗi mẫu được mô tả bằng $k$ tọa độ mới:
+
+$$
+\mathbf{t}_i = V_k^\top \mathbf{z}_i, \qquad \hat{\mathbf{z}}_i = V_k\,\mathbf{t}_i
+$$
+
+trong đó $V_k$ gồm $k$ vector riêng đầu. Tỷ lệ phương sai giữ lại:
+
+$$
+\frac{\lambda_1 + \dots + \lambda_k}{\lambda_1 + \dots + \lambda_d}
+$$
+
+<Callout type="try">
+
+Chương **Giảm chiều** cho mọi xe trượt vuông góc xuống trục PC1. Đoạn trượt (màu đỏ) là phần thông tin bị bỏ. PC1 giữ 93,2% phương sai: một con số “độ lớn của xe” thay cho hai cột.
+
+</Callout>
+
+PCA cũng là lời giải của một bài toán thứ hai, tương đương: trong mọi không gian con $k$ chiều, không gian sinh bởi $k$ thành phần chính cho **tổng bình phương khoảng cách chiếu nhỏ nhất**. “Giữ nhiều phương sai nhất” và “làm mất ít thông tin nhất khi tái tạo” là cùng một việc.
+
+## 64 chiều: ảnh chữ số viết tay
+
+Mỗi ảnh chữ số 8×8 là một vector 64 số. PCA trên 1 797 ảnh cho:
+
+| | Tỷ lệ phương sai |
+| --- | --- |
+| PC1 | 14,9% |
+| PC2 | 13,6% |
+| PC3 | 11,8% |
+| 2 thành phần đầu | 28,5% |
+| 29 thành phần đầu | ≥ 95% |
+
+Chỉ hai thành phần giữ 28,5% phương sai, nhưng như vậy đã đủ để các chữ số tự tụ thành cụm trên mặt phẳng, dù PCA **không hề biết nhãn**: nó là phương pháp không giám sát.
+
+Mỗi thành phần chính cũng là một vector 64 số, nên vẽ được thành một ảnh 8×8, gọi là **eigen-digit** (tương tự “eigenface” trong nhận dạng khuôn mặt). Một ảnh bất kỳ là ảnh trung bình cộng với tổ hợp các eigen-digit:
+
+$$
+\mathbf{x} \approx \boldsymbol{\mu} + c_1\,\text{PC}_1 + c_2\,\text{PC}_2 + \dots + c_k\,\text{PC}_k, \qquad c_j = \text{PC}_j^\top(\mathbf{x} - \boldsymbol{\mu})
+$$
+
+<Callout type="try">
+
+Chương **Ảnh chữ số** vẽ cả 1 797 ảnh trên mặt phẳng PC1 × PC2, bảy eigen-digit đầu (vàng là cộng sáng, xanh là trừ bớt) và tái tạo một chữ số từ $k$ thành phần. Kéo **Số thành phần k** từ 1 lên 64 và chọn chữ số khác bằng các nút. Với $k = 29$ ảnh đã rất giống bản gốc: nén 64 số xuống 29.
+
+</Callout>
+
+## PCA dùng để làm gì, và khi nào không nên dùng
+
+**Dùng tốt cho:**
+
+- Trực quan hóa dữ liệu nhiều chiều trên 2D/3D.
+- Nén và khử nhiễu: các thành phần nhỏ thường chủ yếu là nhiễu.
+- Tiền xử lý trước mô hình khác khi các cột tương quan mạnh (giảm đa cộng tuyến, tăng tốc huấn luyện).
+
+**Giới hạn:**
+
+- PCA chỉ bắt **quan hệ tuyến tính**. Dữ liệu nằm trên một mặt cong (như hai mặt trăng) cần phương pháp phi tuyến như kernel PCA, t-SNE hay UMAP.
+- Phương sai lớn không đồng nghĩa với hữu ích cho bài toán dự đoán: hướng tách lớp có thể có phương sai nhỏ. Khi có nhãn, LDA tối ưu trực tiếp khả năng tách lớp.
+- Kết quả phụ thuộc thang đo: luôn cân nhắc có chuẩn hóa hay không.
+- Thành phần chính là tổ hợp của mọi cột, nên khó diễn giải hơn cột gốc.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- Chuẩn hóa (hoặc ít nhất trừ trung bình) trước khi chạy PCA.
+- PC1 là hướng $\mathbf{u}$ làm phương sai hình chiếu $\mathbf{u}^\top S\mathbf{u}$ lớn nhất.
+- Lời giải thỏa $S\mathbf{u} = \lambda\mathbf{u}$: thành phần chính là vector riêng của ma trận hiệp phương sai, phương sai giữ lại bằng giá trị riêng.
+- Các thành phần chính vuông góc với nhau; tỷ lệ phương sai giữ lại là $\sum_{j\le k}\lambda_j / \sum_j \lambda_j$.
+- Auto MPG: PC1 giữ 93,2%. Ảnh chữ số: 29/64 thành phần giữ 95%.
+
+</Callout>
+
+## Nguồn
+
+- Video gốc: GlassBox AI, [“Cách hoạt động của PCA”](https://www.youtube.com/watch?v=7nlTBzwyy0g). Bài viết và lab dựng lại ý tưởng bằng mã và dữ liệu riêng.
+- Pearson, K. (1901). *On lines and planes of closest fit to systems of points in space*. Philosophical Magazine.
+- Hotelling, H. (1933). *Analysis of a complex of statistical variables into principal components*. Journal of Educational Psychology.
+- Jolliffe, I. T. & Cadima, J. (2016). [*Principal component analysis: a review and recent developments*](https://doi.org/10.1098/rsta.2015.0202). Phil. Trans. R. Soc. A.
+- Dữ liệu: Auto MPG (UCI, Quinlan 1993); Optical Recognition of Handwritten Digits (UCI, Alpaydin & Kaynak 1998).
