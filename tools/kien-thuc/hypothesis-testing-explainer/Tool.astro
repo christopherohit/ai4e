@@ -1,0 +1,23 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="hypothesis" title="Kiểm định giả thuyết và p-value" label="Hoạt cảnh kiểm định giả thuyết: giả thuyết H0, phân phối dưới H0, p-value, vùng bác bỏ, các phép kiểm định, sai lầm loại I/II và p-hacking"
+  chapters={['H₀ và H₁', 'Phân phối dưới H₀', 'p-value & α', 'Các phép kiểm định', 'Sai lầm & lực', 'Hiểu sai']}
+  data="Giấc ngủ của 10 bệnh nhân với hai thuốc (Cushny & Peebles 1905, dữ liệu “Student” 1908); Auto MPG (UCI); 891 hành khách Titanic (bản seaborn-data). Kết quả tham chiếu tính bằng scipy.stats trong scripts/ml-datasets/prepare_stats.py."
+  scope="Phân phối t, chuẩn, chi-square và phép đổi dấu chính xác (1 024 tổ hợp) tính lại trong trình duyệt và được kiểm thử với scipy. Chương sai lầm loại I/II là mô phỏng với bộ sinh số ngẫu nhiên cố định; lực kiểm định trên biểu đồ dùng xấp xỉ chuẩn.">
+  <Fragment slot="controls">
+    <label class="field" data-chapters="2 4"><span class="field-row"><span>Mức ý nghĩa α</span><output data-value="alpha"></output></span><input type="range" name="alpha" min="0" max="2" step="1" value="1" /></label>
+    <fieldset class="segmented" data-chapters="2"><legend>H₁</legend>
+      <label><input type="radio" name="side" value="two" checked /><span>Hai phía (≠)</span></label>
+      <label><input type="radio" name="side" value="right" /><span>Phải (&gt;)</span></label>
+      <label><input type="radio" name="side" value="left" /><span>Trái (&lt;)</span></label>
+    </fieldset>
+    <label class="field" data-chapters="3"><span class="field-row"><span>Phép kiểm định</span><output data-value="test"></output></span><input type="range" name="test" min="0" max="3" step="1" value="0" /></label>
+    <label class="field" data-chapters="4"><span class="field-row"><span>n mỗi nhóm</span><output data-value="n"></output></span><input type="range" name="n" min="0" max="7" step="1" value="2" /></label>
+    <label class="field" data-chapters="4"><span class="field-row"><span>Kích thước hiệu ứng d</span><output data-value="d"></output></span><input type="range" name="d" min="1" max="12" step="1" value="5" /></label>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initHypothesisLab } from './render';
+  initHypothesisLab();
+</script>

@@ -1,0 +1,133 @@
+---
+title: 'Mixture of Experts: mô hình khổng lồ, mỗi token chỉ gọi vài chuyên gia'
+description: 'MoE thay khối FFN bằng nhiều expert và một router chọn top-k cho mỗi token: router, chuyên môn hóa, loss cân bằng tải, expert parallelism và chi phí suy luận.'
+category: kien-thuc
+topic: toi-uu-llm
+tags: ['MoE', 'Mixture of Experts', 'LLM', 'Kiến trúc', 'Suy luận']
+viz: moe-explainer
+cover: ../../../../assets/covers/moe-explainer.webp
+order: 4
+date: 2026-10-28
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+## Muốn biết nhiều hơn mà không tính nhiều hơn
+
+Trong một Transformer dense, mọi tham số tham gia xử lý mọi token. Tăng gấp đôi tham số thì mỗi token cũng tốn gấp đôi phép tính. **Mixture of Experts** (MoE) tách hai thứ đó ra: tổng số tham số (dung lượng “kiến thức”) có thể rất lớn, trong khi số tham số **kích hoạt** cho mỗi token vẫn nhỏ.
+
+| Mô hình | Tổng tham số | Kích hoạt mỗi token | Expert | Chọn mỗi token |
+| --- | --- | --- | --- | --- |
+| Mixtral 8×7B | 46,7 tỷ | 12,9 tỷ | 8 | 2 |
+| Qwen3-30B-A3B | 30,5 tỷ | 3,3 tỷ | 128 | 8 |
+| gpt-oss-120b | 117 tỷ | 5,1 tỷ | 128 | 4 |
+| Qwen3-235B-A22B | 235 tỷ | 22 tỷ | 128 | 8 |
+| Llama 4 Maverick | 400 tỷ | 17 tỷ | 128 (+ expert chung) | 1 |
+| DeepSeek-V3 | 671 tỷ | 37 tỷ | 256 (+ 1 expert chung) | 8 |
+
+DeepSeek-V3 chỉ dùng 5,5% tham số cho mỗi token. Đó là lý do hầu hết các LLM lớn nhất hiện nay đều là MoE.
+
+<Callout type="try">
+
+Chương **Dense vs thưa** so sánh tổng tham số và tham số kích hoạt (thang log) của các mô hình trên, cùng tỷ lệ kích hoạt từ khoảng 4% tới 28%.
+
+</Callout>
+
+## Cấu trúc một lớp MoE
+
+Trong mỗi khối Transformer, phần attention giữ nguyên. Khối **FFN** (MLP) được thay bằng:
+
+- $E$ **expert**, mỗi expert là một FFN riêng (thường nhỏ hơn FFN của mô hình dense tương ứng);
+- một **router** (gating network), thường chỉ là một lớp tuyến tính $W_r$.
+
+Với hidden state $\mathbf{x}$ của một token:
+
+$$
+\mathbf{g} = \text{softmax}(W_r\,\mathbf{x}), \qquad \mathcal{T} = \text{top-}k(\mathbf{g})
+$$
+
+$$
+\mathbf{y} = \sum_{i \in \mathcal{T}} \frac{g_i}{\sum_{j \in \mathcal{T}} g_j}\, \text{Expert}_i(\mathbf{x})
+$$
+
+Chỉ $k$ expert được chọn thực sự chạy; trọng số của chúng được chuẩn hóa lại để cộng bằng 1 (cách của Mixtral). Các biến thể khác nhau ở chi tiết: Switch Transformer chọn $k = 1$; DeepSeek dùng sigmoid thay softmax cho điểm của router và thêm **expert dùng chung** (shared expert) luôn chạy cho mọi token, để các expert định tuyến tập trung vào phần chuyên biệt.
+
+<Callout type="try">
+
+Chương **Router** chạy một lớp MoE nhỏ đã huấn luyện thật (8 expert, chọn 2) trên ảnh chữ số viết tay 8×8. Ở LLM, mỗi “ảnh” tương ứng với hidden state của một token. Xem router cho xác suất cho 8 expert, giữ 2 cao nhất, rồi trộn đầu ra. Chọn chữ số khác ở bảng điều khiển.
+
+</Callout>
+
+## Expert chuyên môn hóa thế nào?
+
+Không ai gán nhiệm vụ cho expert. Router và expert được huấn luyện cùng nhau bằng gradient, và sự phân công tự hình thành. Trên mô hình chữ số, chữ số 0 được gửi chủ yếu tới expert 3 và 7, chữ số 4 tới expert 6 và 8.
+
+Ở LLM thật, nghiên cứu Mixtral (Jiang và cộng sự, 2024) nhận thấy router **không** phân công rõ theo chủ đề (toán, sinh học, triết học…), mà theo **cú pháp và loại token**: dấu câu, từ khóa lập trình như `self` hay khoảng trắng thụt lề, các token liền nhau thường đi cùng một expert. “Expert” vì vậy không phải là một chuyên gia theo nghĩa con người hiểu.
+
+<Callout type="try">
+
+Chương **Chuyên môn hóa** là bảng nhiệt chữ số × expert trên 540 ảnh kiểm tra: mỗi ô là phần trăm lượt chọn.
+
+</Callout>
+
+## Cân bằng tải: tránh expert chết
+
+Huấn luyện router có một vòng lặp nguy hiểm: expert được chọn nhiều thì nhận nhiều gradient, học tốt hơn, nên lại được chọn nhiều hơn. Kết quả là vài expert gánh hết việc, các expert khác “chết”.
+
+Mô hình chữ số huấn luyện **không có** biện pháp cân bằng cho thấy đúng điều đó: expert 3 không được chọn lần nào, expert 4 nhận 30% lượt chọn. Giải pháp kinh điển là **loss cân bằng tải** của Switch Transformer (Fedus và cộng sự, 2022):
+
+$$
+\mathcal{L}_{\text{aux}} = \alpha \cdot E \cdot \sum_{i=1}^{E} f_i \, P_i
+$$
+
+với $f_i$ là phần token được gửi tới expert $i$ và $P_i$ là xác suất router trung bình dành cho $i$. Loss nhỏ nhất khi mọi expert nhận đều $1/E$. Với $\alpha = 0{,}02$, mỗi expert trong mô hình chữ số nhận 10–17% lượt chọn.
+
+Các cách khác:
+
+- **Capacity factor**: mỗi expert chỉ nhận tối đa $C \cdot \text{token}/E$ token mỗi batch, phần thừa bị bỏ qua (token dropping) hoặc chuyển expert khác.
+- **Router z-loss** (ST-MoE): phạt logit router quá lớn để huấn luyện ổn định.
+- **Cân bằng không cần loss phụ** (DeepSeek-V3): cộng một độ lệch vào điểm của từng expert khi chọn top-k, điều chỉnh dần để expert quá tải bị chọn ít đi, không ảnh hưởng gradient của mô hình chính.
+
+<Callout type="try">
+
+Chương **Cân bằng tải** đặt hai biểu đồ cạnh nhau: không có loss phụ (một expert 0%) và có loss phụ (mọi expert 10–17%), cùng đường phần lượt chọn theo epoch.
+
+</Callout>
+
+## Chi phí khi suy luận
+
+MoE giảm **phép tính** nhưng không giảm **bộ nhớ**: mọi expert phải sẵn sàng vì không biết token tiếp theo sẽ cần expert nào. Mixtral 8×7B tính như mô hình 12,9 tỷ tham số nhưng cần khoảng 93 GB để giữ trọng số ở fp16.
+
+- **Ở batch nhỏ**, mỗi bước decode chỉ đọc trọng số của các expert được chọn, nên nhanh như một mô hình nhỏ. Đây là lý do MoE như Qwen3-30B-A3B chạy rất nhanh trên máy cá nhân nếu đủ RAM.
+- **Ở batch lớn**, các token chọn khác nhau và gần như mọi expert đều bị chạm. Nếu mỗi token chọn ngẫu nhiên $k$ trong $E$ expert, phần expert bị chạm trong batch $B$ token là $1 - (1 - k/E)^B$: với Mixtral (2/8) đã khoảng 99% ở 16 token. Lợi thế băng thông giảm dần, chỉ còn lợi thế phép tính.
+- **Expert parallelism**: đặt các expert lên các GPU khác nhau và gửi token qua lại (all-to-all). Cân bằng tải lúc này quyết định trực tiếp tốc độ, vì expert quá tải làm cả batch chờ.
+
+<Callout type="try">
+
+Chương **Suy luận** vẽ phần expert phải đọc theo kích thước batch cho Mixtral, Qwen3 và DeepSeek-V3.
+
+</Callout>
+
+Một kết quả trung thực từ mô hình minh họa: MoE chữ số đạt 96,9% với 5 340 tham số kích hoạt (19 800 tổng), còn mạng dense cùng cỡ kích hoạt đạt 98,3%. Ở quy mô nhỏ và dữ liệu đơn giản, MoE không có lợi. Lợi ích của nó xuất hiện khi mô hình đủ lớn để dung lượng (tổng tham số) trở thành nút thắt, như các kết quả của Switch Transformer, Mixtral và DeepSeek.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- MoE thay FFN bằng $E$ expert và một router chọn top-$k$ cho mỗi token; trọng số trộn là softmax chuẩn hóa trên các expert được chọn.
+- Tổng tham số quyết định dung lượng và bộ nhớ; tham số kích hoạt quyết định phép tính mỗi token.
+- Router tự học phân công; ở LLM thường theo loại token chứ không theo chủ đề.
+- Cần cân bằng tải (loss phụ, capacity, hoặc độ lệch động) để tránh expert chết và expert quá tải.
+- Suy luận: nhanh ở batch nhỏ, cần nhiều bộ nhớ, batch lớn chạm gần hết expert; phục vụ quy mô lớn dùng expert parallelism.
+
+</Callout>
+
+## Nguồn
+
+- Shazeer, N. và cộng sự (2017). *Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer*. ICLR.
+- Fedus, W., Zoph, B. & Shazeer, N. (2022). *Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity*. JMLR.
+- Zoph, B. và cộng sự (2022). *ST-MoE: Designing Stable and Transferable Sparse Expert Models*. arXiv:2202.08906.
+- Jiang, A. Q. và cộng sự (2024). *Mixtral of Experts*. arXiv:2401.04088.
+- DeepSeek-AI (2024). *DeepSeek-V3 Technical Report*. arXiv:2412.19437.
+- Qwen Team (2025). *Qwen3 Technical Report*; OpenAI (2025). *gpt-oss model card*; Meta (2025). *Llama 4*.
+- Mô hình chữ số: `scripts/llm-bake/moe.py`, dữ liệu UCI Optical Recognition of Handwritten Digits.

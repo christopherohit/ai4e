@@ -1,0 +1,17 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="quantization" title="Quantization · nén trọng số LLM xuống 8, 4, 2 bit" label="Hoạt cảnh lượng tử hóa trọng số: định dạng số, làm tròn về lưới, ngoại lai và thang đo theo nhóm, perplexity đo thật"
+  chapters={['Định dạng', 'Làm tròn', 'Ngoại lai', 'Chất lượng', 'Tốc độ']}
+  data="Trọng số thật của Qwen2.5-0.5B-Instruct; perplexity đo trên 16 384 token đầu của WikiText-2 (tập test, CC BY-SA 3.0) trong scripts/llm-bake/quantize.py."
+  scope="Lượng tử hóa làm tròn gần nhất (RTN), đối xứng, chỉ trọng số của 168 ma trận trong 24 lớp (embedding và LM head giữ FP32), mô phỏng bằng quantize → dequantize nên toán của từng định dạng là chính xác nhưng không đo tốc độ thật. Tốc độ ở chương 5 là giới hạn trên theo băng thông H100, không phải số đo.">
+  <Fragment slot="controls">
+    <label class="field" data-chapters="1"><span class="field-row"><span>Số bit</span><output data-value="bits"></output></span><input type="range" name="bits" min="2" max="8" step="1" value="4" /></label>
+    <div class="field" data-chapters="1">Thang đo<div class="chips"><button type="button" data-group="0" aria-pressed="true">Cả hàng</button><button type="button" data-group="128" aria-pressed="false">Nhóm 128</button><button type="button" data-group="32" aria-pressed="false">Nhóm 32</button></div></div>
+    <label class="field" data-chapters="3"><span class="field-row"><span>Cấu hình</span><output data-value="config"></output></span><input type="range" name="config" min="0" max="8" step="1" value="5" /></label>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initQuantizationLab } from './render';
+  initQuantizationLab();
+</script>

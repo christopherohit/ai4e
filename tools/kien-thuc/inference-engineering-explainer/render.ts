@@ -1,6 +1,6 @@
 // Inference engineering lab: prefill vs decode on a real model, what the KV cache saves, why decode is memory-bound
 // (roofline), why batching and continuous batching raise throughput, and the learning roadmap.
-import { glassLab, type Frame, type Scene } from '../../_shared/glass-lab/engine';
+import { glassLab, type Scene } from '../../_shared/glass-lab/engine';
 import { C, Plot, alpha, seg, split, vn, type Point } from '../../_shared/glass-lab/gfx';
 import { barChart, categoryChart, lossChart } from '../../_shared/glass-lab/views';
 import { GPUS, M, OUTPUTS, PREFILL_RATE, ROADMAP, TPOT, TTFT_128, attainable, busy, continuousBatching, decodeIntensity, prefillIntensity, ridge, staticBatching } from './model';
@@ -8,7 +8,6 @@ import { GPUS, M, OUTPUTS, PREFILL_RATE, ROADMAP, TPOT, TTFT_128, attainable, bu
 export const explainerKind = 'measured-replay';
 
 const state = { batch: 4, gpu: 1, slots: 6 };
-let currentT = 0;
 const ms = (s: number) => `${vn(s * 1000, 0)} ms`;
 
 // ---------- Chapter 1: prefill and decode ----------
@@ -24,7 +23,7 @@ const chapter1: Scene = {
   ],
   formula: `độ trễ = TTFT + (n − 1) · TPOT = ${ms(TTFT_128)} + ${N_OUT - 1} × ${ms(TPOT)}`,
   render(f) {
-    const { g, t, narrow } = f; currentT = t;
+    const { g, t, narrow } = f;
     const area = f.safe;
     g.panel(area.x, area.y, area.w, area.h, 'Dòng thời gian của một yêu cầu (thời gian thật, CPU)', C.violet);
     const x0 = area.x + 20, w = area.w - 40, total = TTFT_128 + N_OUT * TPOT, px = (s: number) => x0 + s / total * w;
@@ -75,7 +74,7 @@ const chapter2: Scene = {
   ],
   formula: `prefill 2 048 token: ${vn(M.prefill.at(-1)!.seconds, 2)} s → ${vn(PREFILL_RATE, 0)} token/s\ndecode: ${ms(TPOT)}/token → ${vn(1 / TPOT, 1)} token/s`,
   render(f) {
-    const { t, narrow } = f; currentT = t;
+    const { t, narrow } = f;
     const [left, right] = split(f.safe, [1, 1], narrow);
     lossChart(f, left, [{ values: M.prefill.map(p => p.seconds), color: C.amber, x: M.prefill.map(p => p.tokens) }], M.prefill.at(-1)!.tokens * seg(t, 0.5, 3), 4.6, null, 'Thời gian prefill theo độ dài prompt (s)', 'token trong prompt', 2048, v => vn(v, 0));
     barChart(f, right, 'Token xử lý mỗi giây (đo thật)', ['prefill', 'decode'], [PREFILL_RATE, 1 / TPOT], { colors: [C.amber, C.cyan], reveal: seg(t, 3, 5), format: v => `${vn(v, 0)} token/s`, accent: C.lime });
@@ -95,7 +94,7 @@ const chapter3: Scene = {
   ],
   formula: 'không cache: bước thứ n tính lại n token  →  tổng O(n²)\ncó cache: bước thứ n tính 1 token, đọc n cặp K, V  →  tổng O(n) phép tính',
   render(f) {
-    const { t } = f; currentT = t;
+    const { t } = f;
     const cursor = Math.floor(seg(t, 0.5, 8) * 95);
     lossChart(f, f.safe, [{ values: M.decodeWithoutCache.slice(0, cursor + 1), color: C.red }, { values: M.decodeWithCache.slice(0, cursor + 1), color: C.lime }], cursor, 0.42, null, 'Thời gian mỗi bước decode (s): đỏ không cache, xanh có cache', 'bước decode', 95);
   },
@@ -116,7 +115,7 @@ const chapter4: Scene = {
   ],
   formula: () => { const g = GPUS[state.gpu], ai = decodeIntensity(P7B, state.batch, 1024, KV7B); return `FLOP/s đạt được = min(${g.tflops} TFLOP/s, ${g.tbps} TB/s × cường độ)\ndecode 7,6B, batch ${state.batch}, ngữ cảnh 1 024: cường độ ≈ ${vn(ai, 1)} FLOP/byte → ${vn(attainable(g, ai) / 1e12, 1)} TFLOP/s`; },
   render(f) {
-    const { g, t, narrow } = f; currentT = t;
+    const { g, t, narrow } = f;
     const [left, right] = split(f.safe, narrow ? [1.2, 1] : [1.3, 1], narrow);
     const gpu = GPUS[state.gpu];
     g.panel(left.x, left.y, left.w, left.h, `Roofline · ${gpu.name}`, C.violet);
@@ -162,7 +161,7 @@ const chapter5: Scene = {
   },
   formula: () => { const s = staticBatching(OUTPUTS, state.slots), c = continuousBatching(OUTPUTS, state.slots); return `static: ${s.makespan} bước · continuous: ${c.makespan} bước (×${vn(s.makespan / c.makespan, 2)})`; },
   render(f) {
-    const { g, t } = f; currentT = t;
+    const { g, t } = f;
     const [top, bottom] = split(f.safe, [1, 1], true, 12);
     const s = staticBatching(OUTPUTS, state.slots), c = continuousBatching(OUTPUTS, state.slots), max = Math.max(s.makespan, c.makespan);
     const draw = (rect: typeof top, r: typeof s, title: string, accent: string, from: number) => {
@@ -193,7 +192,7 @@ const chapter6: Scene = {
   ],
   metrics: () => [{ label: 'Chặng', value: String(ROADMAP.length), tone: 'violet' }, { label: 'Kỹ thuật tối ưu', value: String(ROADMAP[3].items.length), tone: 'cyan' }],
   render(f) {
-    const { g, t, narrow } = f; currentT = t;
+    const { g, t, narrow } = f;
     const area = f.safe, colors = [C.magenta, C.violet, C.amber, C.cyan, C.lime];
     const n = ROADMAP.length, gap = 10, h = narrow ? (area.h - gap * (n - 1)) / n : area.h, w = narrow ? area.w : (area.w - gap * (n - 1)) / n;
     ROADMAP.forEach((stage, k) => {

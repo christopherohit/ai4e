@@ -1,0 +1,15 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="moe" title="Mixture of Experts · mỗi token chỉ gọi vài chuyên gia" label="Hoạt cảnh Mixture of Experts: router chọn 2 trong 8 expert, chuyên môn hóa, cân bằng tải và chi phí suy luận"
+  chapters={['Dense vs thưa', 'Router', 'Chuyên môn hóa', 'Cân bằng tải', 'Suy luận']}
+  data="Mô hình MoE nhỏ (8 expert, chọn 2) huấn luyện thật trên ảnh chữ số 8×8 UCI (1 257 ảnh huấn luyện, 540 ảnh kiểm tra) trong scripts/llm-bake/moe.py. Kích thước các LLM MoE theo công bố của nhà phát triển."
+  scope="Mô hình chữ số là mô hình dạy học, không phải LLM: đủ nhỏ để nhìn router và từng expert. Các con số về Mixtral, Qwen3, gpt-oss, Llama 4, DeepSeek-V3 là tham số công bố; tỷ lệ expert bị chạm theo batch tính theo giả định router chọn đều.">
+  <Fragment slot="controls">
+    <div class="field" data-chapters="1">Chữ số<div class="chips"><button type="button" data-sample="0" aria-pressed="false">0</button><button type="button" data-sample="1" aria-pressed="false">1</button><button type="button" data-sample="3" aria-pressed="true">3</button><button type="button" data-sample="4" aria-pressed="false">4</button><button type="button" data-sample="7" aria-pressed="false">7</button><button type="button" data-sample="8" aria-pressed="false">8</button><button type="button" data-sample="9" aria-pressed="false">9</button></div></div>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initMoeLab } from './render';
+  initMoeLab();
+</script>

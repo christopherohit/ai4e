@@ -20,6 +20,10 @@ export const nativeTools = {
   'jev-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/jev-explainer', article: 'jev' },
   'paged-attention-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/paged-attention-explainer', article: 'paged-attention' },
   'inference-engineering-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/inference-engineering-explainer', article: 'inference-engineering' },
+  'moe-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/moe-explainer', article: 'mixture-of-experts' },
+  'hypothesis-testing-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/hypothesis-testing-explainer', article: 'p-value' },
+  'quantization-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/quantization-explainer', article: 'quantization' },
+  'classifier-metrics-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/classifier-metrics-explainer', article: 'danh-gia-bo-phan-loai' },
 };
 
 export function validToolName(category, slug) {

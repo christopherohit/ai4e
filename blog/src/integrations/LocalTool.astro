@@ -21,6 +21,10 @@ import PcaExplainer from '../../../tools/kien-thuc/pca-explainer/Tool.astro';
 import JevExplainer from '../../../tools/kien-thuc/jev-explainer/Tool.astro';
 import PagedAttentionExplainer from '../../../tools/kien-thuc/paged-attention-explainer/Tool.astro';
 import InferenceEngineeringExplainer from '../../../tools/kien-thuc/inference-engineering-explainer/Tool.astro';
+import MoeExplainer from '../../../tools/kien-thuc/moe-explainer/Tool.astro';
+import HypothesisTestingExplainer from '../../../tools/kien-thuc/hypothesis-testing-explainer/Tool.astro';
+import QuantizationExplainer from '../../../tools/kien-thuc/quantization-explainer/Tool.astro';
+import ClassifierMetricsExplainer from '../../../tools/kien-thuc/classifier-metrics-explainer/Tool.astro';
 const components = {
   'qwen3-8-flash-next-explainer': QwenExplainer,
   'gated-delta-net-explainer': GatedDeltaNetExplainer,
@@ -43,6 +47,10 @@ const components = {
   'jev-explainer': JevExplainer,
   'paged-attention-explainer': PagedAttentionExplainer,
   'inference-engineering-explainer': InferenceEngineeringExplainer,
+  'moe-explainer': MoeExplainer,
+  'hypothesis-testing-explainer': HypothesisTestingExplainer,
+  'quantization-explainer': QuantizationExplainer,
+  'classifier-metrics-explainer': ClassifierMetricsExplainer,
 };
 interface Props { slug: string }
 const { slug } = Astro.props;
