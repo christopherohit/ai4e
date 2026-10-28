@@ -1,6 +1,6 @@
 ---
 title: 'Bias–Variance Tradeoff: Hiểu Overfitting và Underfitting từ gốc'
-description: 'Bias và variance là gì, vì sao lỗi kỳ vọng bằng bias² + variance + nhiễu, liên hệ với underfitting và overfitting, cách chẩn đoán và cách sửa.'
+description: 'Bias và variance là gì, đo trên 392 xe thật: vì sao lỗi = bias² + variance + nhiễu, liên hệ với underfitting và overfitting, cách chẩn đoán và cách sửa.'
 category: kien-thuc
 topic: nen-tang
 tags: ['Bias–Variance', 'Overfitting', 'Underfitting', 'Học máy']
@@ -18,28 +18,30 @@ Mọi mô hình học máy được huấn luyện trên một tập dữ liệu
 
 Bias–variance tradeoff giải thích vì sao lỗi tổng quát hóa phụ thuộc vào độ phức tạp của mô hình theo hình chữ U, và đặt tên cho hai cách mô hình có thể sai: **quá cứng nhắc** (bias cao) và **quá nhạy với dữ liệu huấn luyện** (variance cao).
 
-Lab phía trên dùng một thí nghiệm kinh điển: dữ liệu sinh từ hàm thật $f(x) = \sin 2\pi x$ cộng nhiễu Gauss $\sigma = 0{,}3$, mỗi tập huấn luyện có 12 điểm, mô hình là đa thức bậc $d$ từ 0 tới 12 học bằng bình phương tối thiểu. Vì ta biết hàm thật, ta đo được bias và variance trực tiếp. Với dữ liệu thật thì không làm được điều này.
+Lab phía trên dùng dữ liệu thật: **Auto MPG**, 392 mẫu xe đời 1970–1982. Ta dự đoán mức tiêu hao nhiên liệu (mpg) từ công suất động cơ (mã lực) bằng đa thức bậc $d$ từ 1 tới 10, học bằng bình phương tối thiểu. Mỗi lần, mô hình chỉ được học từ một nhóm nhỏ xe chọn ngẫu nhiên (mặc định 30 xe), và được kiểm tra trên các xe còn lại. Đây cũng là ví dụ quen thuộc trong sách *An Introduction to Statistical Learning*.
+
+Với dữ liệu thật, ta không biết "đường cong thật" $f(x)$. Lab ước lượng nó bằng một đường làm mượt cục bộ (local linear regression) trên cả 392 xe. Vì vậy bias² và variance trong bài là **ước lượng**; còn lỗi kiểm tra thì được đo trực tiếp trên các xe không dùng để huấn luyện.
 
 ## Underfitting và overfitting trên một tập dữ liệu
 
-Huấn luyện ba mô hình trên cùng một tập 12 điểm:
+Huấn luyện ba mô hình trên cùng 30 xe, kiểm tra trên 362 xe còn lại:
 
-| Bậc | Lỗi huấn luyện | Lỗi kiểm tra | Chẩn đoán |
+| Bậc | Lỗi huấn luyện (mpg²) | Lỗi kiểm tra (mpg²) | Chẩn đoán |
 | --- | --- | --- | --- |
-| 1 (đường thẳng) | 0,198 | 0,293 | **Underfitting**: không đủ linh hoạt để theo hình sin |
-| 3 | 0,039 | 0,102 | Vừa |
-| 9 | 0,007 | 2,852 | **Overfitting**: uốn theo từng điểm nhiễu |
+| 1 (đường thẳng) | 22,7 | 30,0 | **Underfitting**: không theo được độ cong của dữ liệu |
+| 2 | 13,1 | 28,0 | Vừa |
+| 8 | 9,8 | 109,9 | **Overfitting**: uốn qua sát từng xe huấn luyện, vọt lên ở vùng ít xe |
 
 Hai triệu chứng điển hình:
 
-- **Underfitting:** lỗi huấn luyện **cao**, lỗi kiểm tra cũng cao và gần bằng lỗi huấn luyện. Mô hình chưa học được cấu trúc của dữ liệu.
-- **Overfitting:** lỗi huấn luyện **rất thấp**, lỗi kiểm tra cao hơn nhiều. Mô hình học thuộc cả nhiễu, thứ không lặp lại ở dữ liệu mới.
+- **Underfitting:** lỗi huấn luyện **cao**, lỗi kiểm tra cũng cao. Mô hình chưa học được cấu trúc của dữ liệu.
+- **Overfitting:** lỗi huấn luyện **thấp**, lỗi kiểm tra cao hơn nhiều. Mô hình học thuộc cả những dao động ngẫu nhiên của 30 xe cụ thể, thứ không lặp lại ở xe khác.
 
-Lưu ý mức lỗi kiểm tra thấp nhất có thể là $\sigma^2 = 0{,}09$: kể cả biết chính xác $f(x)$, ta vẫn không đoán được phần nhiễu.
+Không mô hình nào chỉ dùng mã lực có thể có lỗi bằng 0: cùng công suất, các xe vẫn khác nhau về khối lượng, năm sản xuất, kiểu truyền động. Phần dao động đó là **nhiễu** đối với mô hình này, ước lượng khoảng $\sigma^2 \approx 18{,}2$ mpg².
 
 <Callout type="try">
 
-Ở bước **Underfit & overfit**, bấm lần lượt **1 · underfit**, **3 · vừa**, **9 · overfit**. Với bậc 9, bấm **Lấy mẫu lại** vài lần: mỗi tập huấn luyện mới cho một đường cong khác hẳn. Biểu đồ phía dưới vẽ lỗi huấn luyện (giảm đều) và lỗi kiểm tra (hình chữ U) theo bậc.
+Ở chương **Underfit & overfit**, hoạt cảnh lần lượt khớp bậc 1, 2 rồi 8 trên 30 xe (chấm cam). Bấm **Lấy 30 xe khác** để thấy bậc 8 đổi hình dạng mạnh thế nào với mỗi nhóm xe. Biểu đồ bên phải (thang log) vẽ lỗi huấn luyện và lỗi kiểm tra trung bình qua 150 lần lấy mẫu: một đường giảm đều, một đường hình chữ U.
 
 </Callout>
 
@@ -53,16 +55,16 @@ $$
 \text{Variance}(x) = \mathbb{E}\Bigl[\bigl(\hat f(x) - \mathbb{E}[\hat f(x)]\bigr)^2\Bigr].
 $$
 
-Kỳ vọng $\mathbb{E}$ lấy trên các tập huấn luyện có thể có.
+Kỳ vọng $\mathbb{E}$ lấy trên các tập huấn luyện có thể có. Lab mô phỏng điều này bằng 150 nhóm 30 xe chọn ngẫu nhiên từ 392 xe.
 
-- **Bias** đo mô hình *trung bình* lệch khỏi sự thật bao nhiêu. Bias cao nghĩa là họ mô hình không thể biểu diễn được hàm thật, dù có bao nhiêu dữ liệu.
+- **Bias** đo mô hình *trung bình* lệch khỏi sự thật bao nhiêu. Bias cao nghĩa là họ mô hình không thể biểu diễn được đường cong thật, dù có bao nhiêu dữ liệu.
 - **Variance** đo dự đoán *dao động* bao nhiêu khi đổi tập huấn luyện. Variance cao nghĩa là mô hình phụ thuộc quá nhiều vào những điểm cụ thể nó được thấy.
 
-Hình ảnh quen thuộc là bắn bia: bias là khoảng cách từ tâm cụm đạn tới hồng tâm; variance là độ tản của cụm đạn. Đường thẳng (bậc 1) bắn tụm nhưng lệch tâm; đa thức bậc 9 bắn quanh tâm nhưng tản khắp nơi.
+Hình ảnh quen thuộc là bắn bia: bias là khoảng cách từ tâm cụm đạn tới hồng tâm; variance là độ tản của cụm đạn. Đường thẳng bắn tụm nhưng lệch tâm; đa thức bậc cao bắn quanh tâm nhưng tản khắp nơi.
 
 <Callout type="try">
 
-Ở bước **Nhiều tập huấn luyện**, mỗi đường cam mờ là một mô hình học từ một tập dữ liệu khác, đường đen là trung bình của 150 mô hình. Với bậc 1, các đường cam gần trùng nhau nhưng đường đen lệch xa hình sin. Với bậc 9, đường đen gần như trùng hình sin nhưng các đường cam bung ra, nhất là ở hai đầu.
+Chương **Bắn bia** vẽ 25 mô hình, mỗi mô hình học từ 30 xe khác nhau, cùng đường trung bình (trắng) và đường tham chiếu (nét đứt xanh lá). Bảng bắn bia bên phải đặt mỗi mô hình thành một chấm: sai số tại 95 mã lực theo chiều ngang, tại 180 mã lực theo chiều dọc. Kéo bậc từ 1 lên 6: cụm chấm từ chụm-nhưng-lệch chuyển thành quanh-tâm-nhưng-tản.
 
 </Callout>
 
@@ -76,38 +78,45 @@ $$
 
 Chứng minh chỉ cần cộng trừ $\mathbb{E}[\hat f(x)]$ bên trong bình phương và dùng tính độc lập giữa nhiễu của điểm mới với tập huấn luyện: các số hạng chéo có kỳ vọng bằng 0.
 
-Lab đo trực tiếp ba thành phần (trung bình theo $x$, qua 150 tập huấn luyện 12 điểm):
+Lab ước lượng ba thành phần tại đúng 392 mức mã lực có trong dữ liệu, trung bình qua 150 nhóm 30 xe:
 
-| Bậc | bias² | variance | σ² | Tổng | Lỗi kiểm tra đo độc lập |
+| Bậc | bias² | variance | σ² | Tổng ước lượng | Lỗi kiểm tra đo trực tiếp |
 | --- | --- | --- | --- | --- | --- |
-| 0 | 0,521 | 0,008 | 0,09 | 0,619 | 0,617 |
-| 1 | 0,171 | 0,017 | 0,09 | 0,278 | 0,277 |
-| 3 | 0,004 | 0,029 | 0,09 | **0,123** | 0,124 |
-| 5 | 0,000 | 0,050 | 0,09 | 0,140 | 0,141 |
-| 7 | 0,001 | 0,125 | 0,09 | 0,216 | 0,216 |
-| 9 | 0,013 | 1,563 | 0,09 | 1,666 | 1,685 |
+| 1 | 5,0 | 1,7 | 18,2 | 25,0 | 26,0 |
+| 2 | 0,3 | 2,2 | 18,2 | **20,7** | **21,4** |
+| 3 | 0,6 | 11,2 | 18,2 | 30,0 | 31,6 |
+| 4 | 5,3 | 87 | 18,2 | 111 | 119 |
+| 5 | 236 | 4 968 | 18,2 | 5 222 | 5 654 |
+| 8 | 9,1 × 10⁴ | 4,1 × 10⁶ | 18,2 | 4,2 × 10⁶ | 4,6 × 10⁶ |
 
-Cột cuối được đo trên 3000 điểm mới, độc lập với phép phân rã, và khớp với tổng ba thành phần. Bảng cho thấy rõ sự đánh đổi:
+Cột cuối được đo trực tiếp trên các xe không được chọn, độc lập với phép phân rã, và khớp khá sát với tổng ước lượng (chênh lệch đến từ việc đường tham chiếu chỉ là ước lượng của sự thật). Bảng cho thấy rõ sự đánh đổi:
 
-- Tăng bậc làm **bias² giảm** (từ 0,521 xuống gần 0 từ bậc 3).
-- Nhưng **variance tăng** (từ 0,008 lên 1,563 ở bậc 9).
-- Tổng nhỏ nhất ở **bậc 3**: không phải nơi bias bằng 0, cũng không phải nơi variance nhỏ nhất, mà nơi tổng của chúng nhỏ nhất.
+- Từ bậc 1 lên bậc 2, **bias² giảm** từ 5,0 xuống 0,3: đường cong theo kịp dữ liệu.
+- Nhưng **variance tăng** nhanh: 2,2 ở bậc 2, 11 ở bậc 3, gần 5 000 ở bậc 5. Với 30 xe, rất ít xe có trên 200 mã lực, nên đa thức bậc cao phải ngoại suy và văng lên xuống dữ dội ở vùng đó. (Từ bậc 5, bias² cũng tăng theo: trung bình của các đường cong văng lung tung không còn bám đường thật nữa.)
+- Tổng nhỏ nhất ở **bậc 2**: không phải nơi bias nhỏ nhất tuyệt đối, cũng không phải nơi variance nhỏ nhất, mà nơi tổng của chúng nhỏ nhất.
 
 <Callout type="try">
 
-Ở bước **Phân rã lỗi**, kéo bậc đa thức và xem bốn thanh bias², variance, nhiễu và tổng. Biểu đồ phía dưới vẽ cả ba đường theo bậc: bias² đi xuống, variance đi lên, lỗi kỳ vọng tạo hình chữ U.
+Ở chương **Phân rã lỗi**, dải cam là trung bình ± độ lệch chuẩn của 150 mô hình. Kéo bậc từ 2 lên 5: dải phình to ở hai đầu, nơi ít xe. Biểu đồ bên phải (thang log) vẽ bốn đường: lỗi đo trên xe kiểm tra, tổng ước lượng, variance và bias².
 
 </Callout>
 
 ## Thêm dữ liệu thay đổi điều gì?
 
-Với 100 điểm thay vì 12, bias gần như không đổi (đa thức bậc 1 vẫn là đường thẳng) nhưng variance giảm mạnh: ở bậc 9 chỉ còn 0,008 thay vì 1,563. Lỗi kỳ vọng ở bậc 9 giảm từ 1,666 xuống 0,098, gần mức nhiễu.
+Giữ đa thức bậc 5 và tăng số xe huấn luyện:
 
-Với hồi quy tuyến tính có $p$ tham số và $n$ điểm, variance trung bình xấp xỉ $\sigma^2 p / n$: tỉ lệ thuận với số tham số, tỉ lệ nghịch với lượng dữ liệu. Vì vậy "mô hình phức tạp" là khái niệm **tương đối so với lượng dữ liệu**. Đa thức bậc 9 overfit nặng với 12 điểm nhưng hoàn toàn ổn với 100 điểm, và điểm tối ưu dịch về phía mô hình phức tạp hơn khi dữ liệu tăng.
+| Số xe huấn luyện | 15 | 30 | 100 | 300 |
+| --- | --- | --- | --- | --- |
+| Variance | 4,3 × 10⁶ | 4 968 | 5,7 | 0,10 |
+| Lỗi kiểm tra | 4,6 × 10⁶ | 5 654 | 26,5 | 19,4 |
+
+Variance giảm hàng triệu lần; với 300 xe, lỗi kiểm tra chỉ còn 19,4, sát mức nhiễu 18,2. Bias gần như không đổi vì mô hình vẫn là đa thức bậc 5.
+
+Với hồi quy tuyến tính có $p$ tham số và $n$ điểm, variance trung bình xấp xỉ $\sigma^2 p / n$ khi $n$ đủ lớn: tỉ lệ thuận với số tham số, tỉ lệ nghịch với lượng dữ liệu. Vì vậy "mô hình phức tạp" là khái niệm **tương đối so với lượng dữ liệu**. Đa thức bậc 5 overfit thảm hại với 30 xe nhưng hoàn toàn ổn với 300 xe, và điểm tối ưu dịch về phía mô hình phức tạp hơn khi dữ liệu tăng.
 
 <Callout type="try">
 
-Ở bước **Thêm dữ liệu**, giữ bậc 9 và kéo số điểm huấn luyện từ 12 lên 100. Các đường cam co cụm lại quanh hình sin. Biểu đồ phía dưới cho thấy vùng đáy của chữ U mở rộng sang phải.
+Ở chương **Thêm dữ liệu**, hoạt cảnh tăng số xe từ 15 lên 300 với bậc 5: 25 đường mô hình co cụm lại quanh đường tham chiếu. Biểu đồ bên phải vẽ variance theo số xe cho bậc 1, 2, 5 và 8.
 
 </Callout>
 
@@ -165,3 +174,5 @@ Các mạng sâu hiện đại thường có nhiều tham số hơn số mẫu h
 - Stuart Geman, Elie Bienenstock, René Doursat, [Neural Networks and the Bias/Variance Dilemma](https://doi.org/10.1162/neco.1992.4.1.1), Neural Computation, 1992.
 - Trevor Hastie, Robert Tibshirani, Jerome Friedman, [The Elements of Statistical Learning](https://hastie.su.domains/ElemStatLearn/), mục 2.9 và chương 7.
 - Mikhail Belkin, Daniel Hsu, Siyuan Ma, Soumik Mandal, [Reconciling modern machine learning practice and the bias-variance trade-off](https://arxiv.org/abs/1812.11118), PNAS 2019.
+- Gareth James, Daniela Witten, Trevor Hastie, Robert Tibshirani, [An Introduction to Statistical Learning](https://www.statlearning.com/), mục 2.2 và 5.1: bias–variance và chọn bậc đa thức trên chính dữ liệu Auto (mpg theo mã lực).
+- Dữ liệu: [Auto MPG](https://archive.ics.uci.edu/dataset/9/auto+mpg), UCI Machine Learning Repository (Quinlan, 1993).

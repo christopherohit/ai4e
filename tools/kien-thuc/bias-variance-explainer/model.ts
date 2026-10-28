@@ -1,88 +1,72 @@
-// Bias–variance lab model: fit polynomials of degree d to n noisy samples of f(x) = sin(2πx) on [0, 1], repeated over
-// many independent training sets so bias² and variance can be measured directly instead of assumed.
-import { seeded } from '../../_shared/sequence-lab/math';
+// Bias–variance lab model on Auto MPG: predict mpg from horsepower with polynomials of degree 1–10 fitted to small
+// random subsets of the 392 cars. The unknown true curve is estimated by a local-linear smoother on all cars, so bias²
+// and variance are estimates; the held-out test error is measured directly on the cars left out of each subset.
+import data from '../../_shared/glass-lab/data/auto-mpg.json';
 
-export const truth = (x: number) => Math.sin(2 * Math.PI * x);
-export const NOISE = 0.3;
-export const MAX_DEGREE = 12;
-export const DEGREES = Array.from({ length: MAX_DEGREE + 1 }, (_, degree) => degree);
-/** Evaluation grid: midpoints of 120 slices of [0.02, 0.98], so averages over it approximate averages over x. */
-export const GRID = Array.from({ length: 120 }, (_, index) => 0.02 + 0.96 * (index + 0.5) / 120);
+export const SOURCE = data.source;
+export const HP = data.horsepower, MPG = data.mpg, NAME = data.name;
+export const N = HP.length;
+export const DEGREES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+export const SIZES = [15, 20, 30, 50, 100, 200, 300] as const;
+export const RANGE = [40, 240] as const;
 
-export interface Dataset { x: number[]; y: number[] }
-
-const gaussian = (random: () => number) => Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random());
-/**
- * Training set number `index` of size n: one x per slice [i/n, (i+1)/n) (stratified, so no set leaves a large gap that
- * a high-degree polynomial would extrapolate wildly across), y = f(x) + N(0, σ²). Same index → same data.
- */
-export function dataset(n: number, index: number): Dataset {
-  const random = seeded(9001 + index * 7919 + n * 104729);
-  const x = Array.from({ length: n }, (_, i) => (i + random()) / n);
-  return { x, y: x.map(value => truth(value) + NOISE * gaussian(random)) };
+function seeded(seed: number) {
+  let s = seed >>> 0;
+  return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+/** Training subset number `run` of size n: n distinct cars, seeded so every reader sees the same draws. */
+export function subset(n: number, run: number) {
+  const next = seeded(1234 + run * 7919 + n * 104729), order = Array.from({ length: N }, (_, i) => i);
+  for (let i = 0; i < n; i++) { const j = i + Math.floor(next() * (N - i)); [order[i], order[j]] = [order[j], order[i]]; }
+  return { train: order.slice(0, n), test: order.slice(n) };
 }
 
-/** Legendre polynomials P₀..P_d at t = 2x − 1: far better conditioned than 1, x, x², … on [0, 1]. */
-function basis(x: number, degree: number) {
-  const t = 2 * x - 1, values = [1, t];
-  for (let k = 1; k < degree; k++) values.push(((2 * k + 1) * t * values[k] - k * values[k - 1]) / (k + 1));
-  return values.slice(0, degree + 1);
+/** Legendre basis on t = 2(hp − 40)/200 − 1 ∈ [−1, 1]: well conditioned up to degree 10. */
+function basis(hp: number, degree: number) {
+  const t = 2 * (hp - RANGE[0]) / (RANGE[1] - RANGE[0]) - 1, v = [1, t];
+  for (let k = 1; k < degree; k++) v.push(((2 * k + 1) * t * v[k] - k * v[k - 1]) / (k + 1));
+  return v.slice(0, degree + 1);
 }
-
-/** Least squares with a tiny ridge (1e-8) so under-determined fits (d + 1 > n) stay solvable. */
-export function fit(data: Dataset, degree: number): number[] {
-  const p = degree + 1;
-  const A = Array.from({ length: p }, () => Array(p).fill(0)), rhs = Array(p).fill(0);
-  data.x.forEach((x, i) => {
-    const phi = basis(x, degree);
-    for (let r = 0; r < p; r++) { rhs[r] += phi[r] * data.y[i]; for (let c = 0; c < p; c++) A[r][c] += phi[r] * phi[c]; }
-  });
-  for (let r = 0; r < p; r++) A[r][r] += 1e-8;
-  return solve(A, rhs);
-}
-
-function solve(A: number[][], b: number[]) {
-  const n = b.length, M = A.map((row, i) => [...row, b[i]]);
-  for (let col = 0; col < n; col++) {
-    let pivot = col;
-    for (let row = col + 1; row < n; row++) if (Math.abs(M[row][col]) > Math.abs(M[pivot][col])) pivot = row;
-    [M[col], M[pivot]] = [M[pivot], M[col]];
-    for (let row = col + 1; row < n; row++) {
-      const factor = M[row][col] / M[col][col];
-      for (let k = col; k <= n; k++) M[row][k] -= factor * M[col][k];
-    }
+export function fit(rows: readonly number[], degree: number) {
+  const p = degree + 1, A = Array.from({ length: p }, () => new Array<number>(p).fill(0)), b = new Array<number>(p).fill(0);
+  for (const i of rows) { const phi = basis(HP[i], degree); for (let r = 0; r < p; r++) { b[r] += phi[r] * MPG[i]; for (let c = 0; c < p; c++) A[r][c] += phi[r] * phi[c]; } }
+  for (let r = 0; r < p; r++) A[r][r] += 1e-9;
+  for (let c = 0; c < p; c++) {
+    let m = c; for (let r = c + 1; r < p; r++) if (Math.abs(A[r][c]) > Math.abs(A[m][c])) m = r;
+    [A[c], A[m]] = [A[m], A[c]]; [b[c], b[m]] = [b[m], b[c]];
+    for (let r = c + 1; r < p; r++) { const f = A[r][c] / A[c][c]; for (let k = c; k < p; k++) A[r][k] -= f * A[c][k]; b[r] -= f * b[c]; }
   }
-  const x = Array(n).fill(0);
-  for (let row = n - 1; row >= 0; row--) x[row] = (M[row][n] - M[row].slice(row + 1, n).reduce((sum, value, k) => sum + value * x[row + 1 + k], 0)) / M[row][row];
+  const x = new Array<number>(p).fill(0);
+  for (let r = p - 1; r >= 0; r--) { let s = b[r]; for (let k = r + 1; k < p; k++) s -= A[r][k] * x[k]; x[r] = s / A[r][r]; }
   return x;
 }
+export const predict = (coef: number[], hp: number) => basis(hp, coef.length - 1).reduce((s, v, k) => s + v * coef[k], 0);
+export const mse = (coef: number[], rows: readonly number[]) => rows.reduce((s, i) => s + (predict(coef, HP[i]) - MPG[i]) ** 2, 0) / rows.length;
 
-export const predict = (coef: number[], x: number) => basis(x, coef.length - 1).reduce((sum, value, k) => sum + value * coef[k], 0);
-const mse = (coef: number[], data: Dataset) => data.x.reduce((sum, x, i) => sum + (predict(coef, x) - data.y[i]) ** 2, 0) / data.x.length;
-
-/** A large fresh test set from the same distribution (fixed, shared by all fits). */
-export const TEST: Dataset = dataset(3000, -1);
-export const trainError = (coef: number[], data: Dataset) => mse(coef, data);
-export const testError = (coef: number[]) => mse(coef, TEST);
-
-export interface Decomposition { degree: number; n: number; bias2: number; variance: number; noise: number; expected: number; train: number; test: number; mean: number[]; spread: number[] }
-
-/**
- * Fit `runs` independent training sets. At each grid point: bias = mean prediction − f(x), variance = spread of the
- * predictions. Averaged over x: expected test MSE = bias² + variance + σ².
- */
-export function decompose(degree: number, n: number, runs = 200): Decomposition {
-  const predictions = Array.from({ length: runs }, (_, run) => { const coef = fit(dataset(n, run), degree); return { grid: GRID.map(x => predict(coef, x)), coef, run }; });
-  const mean = GRID.map((_, g) => predictions.reduce((sum, p) => sum + p.grid[g], 0) / runs);
-  const varianceAt = GRID.map((_, g) => predictions.reduce((sum, p) => sum + (p.grid[g] - mean[g]) ** 2, 0) / runs);
-  const bias2 = GRID.reduce((sum, x, g) => sum + (mean[g] - truth(x)) ** 2, 0) / GRID.length;
-  const variance = varianceAt.reduce((sum, value) => sum + value, 0) / GRID.length;
-  const train = predictions.reduce((sum, p) => sum + trainError(p.coef, dataset(n, p.run)), 0) / runs;
-  // Measured on fresh points restricted to the grid's x-range, so it is comparable with bias² + variance + σ².
-  const keep = TEST.x.map(x => x >= 0.02 && x <= 0.98);
-  const inside = { x: TEST.x.filter((_, i) => keep[i]), y: TEST.y.filter((_, i) => keep[i]) };
-  const test = predictions.reduce((sum, p) => sum + mse(p.coef, inside), 0) / runs;
-  return { degree, n, bias2, variance, noise: NOISE ** 2, expected: bias2 + variance + NOISE ** 2, train, test, mean, spread: varianceAt.map(Math.sqrt) };
+/** Local linear regression with a Gaussian kernel (bandwidth in hp): the stand-in for the unknown true curve. */
+export const BANDWIDTH = 14;
+export function reference(hp: number) {
+  let s0 = 0, s1 = 0, s2 = 0, t0 = 0, t1 = 0;
+  for (let i = 0; i < N; i++) { const d = HP[i] - hp, w = Math.exp(-0.5 * (d / BANDWIDTH) ** 2); s0 += w; s1 += w * d; s2 += w * d * d; t0 += w * MPG[i]; t1 += w * d * MPG[i]; }
+  return (s2 * t0 - s1 * t1) / (s0 * s2 - s1 * s1);
 }
+const REF = HP.map(reference);
+/** Noise estimate: mean squared residual of the reference curve over all cars. */
+export const NOISE = HP.reduce((s, _, i) => s + (MPG[i] - REF[i]) ** 2, 0) / N;
 
-export const curve = (degree: number, n: number, run: number) => { const coef = fit(dataset(n, run), degree); return GRID.map(x => predict(coef, x)); };
+export interface Decomposition { degree: number; n: number; bias2: number; variance: number; expected: number; test: number; train: number }
+/** Average over `runs` subsets of size n. Bias² and variance are evaluated at the 392 real horsepower values. */
+export function decompose(degree: number, n: number, runs = 150): Decomposition {
+  const preds = new Float64Array(N);
+  const sq = new Float64Array(N);
+  let test = 0, train = 0;
+  for (let r = 0; r < runs; r++) {
+    const { train: tr, test: te } = subset(n, r), coef = fit(tr, degree);
+    for (let i = 0; i < N; i++) { const p = predict(coef, HP[i]); preds[i] += p; sq[i] += p * p; }
+    test += mse(coef, te); train += mse(coef, tr);
+  }
+  let bias2 = 0, variance = 0;
+  for (let i = 0; i < N; i++) { const m = preds[i] / runs; bias2 += (m - REF[i]) ** 2; variance += Math.max(0, sq[i] / runs - m * m); }
+  bias2 /= N; variance /= N;
+  return { degree, n, bias2, variance, expected: bias2 + variance + NOISE, test: test / runs, train: train / runs };
+}

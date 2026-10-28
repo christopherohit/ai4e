@@ -1,25 +1,22 @@
 ---
-import Lab from '../../_shared/sequence-lab/Lab.astro';
-import '../../_shared/optimization-lab/plots.css';
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
 ---
-<Lab id="svm" title="SVM · đường phân tách có lề rộng nhất" label="Dữ liệu hai lớp, đường biên quyết định, lề và các support vector"
-  steps={['Nhiều đường phân tách', 'Lề cực đại', 'Lề mềm & C', 'Kernel RBF']}
-  scope="Mô phỏng giáo dục: dữ liệu hai chiều tự sinh (16, 36 và 42 điểm), SVM được huấn luyện thật trong trình duyệt bằng thuật toán SMO cho bài toán đối ngẫu. Bước 2 dùng C = 10000 để xấp xỉ lề cứng. Trong thực tế dữ liệu có nhiều chiều hơn và nên được chuẩn hóa trước khi huấn luyện.">
+<GlassLab id="svm" title="SVM · tìm dải phân cách rộng nhất giữa các loài hoa Iris" label="Hoạt cảnh support vector machine trên dữ liệu hoa Iris"
+  chapters={['Nhiều đường', 'Lề cực đại', 'Lề mềm & C', 'Kernel RBF']}
+  data="Iris (Fisher 1936; số đo của Anderson 1935): 150 bông hoa thuộc 3 loài, mỗi bông đo 4 kích thước tính bằng cm; bản đi kèm scikit-learn."
+  scope="SVM huấn luyện thật trong trình duyệt bằng SMO cho bài toán đối ngẫu, trên hai đặc trưng đã chuẩn hóa như StandardScaler. Lề cứng xấp xỉ bằng C = 10 000. Kết quả khớp với sklearn.svm.SVC: lề 0,421 với 4 support vector, 94% ở C = 1, 96,7% với RBF γ = 0,5. Iris chỉ có 150 mẫu, nên cross-validation dao động vài điểm phần trăm.">
   <Fragment slot="controls">
-    <label class="field" data-angle-field><span class="field-row"><span>Góc pháp tuyến của đường</span><output data-value="angle"></output></span><input type="range" name="angle" min="-90" max="90" step="1" value="0" /></label>
-    <label class="field" data-c-field hidden><span class="field-row"><span>Hệ số phạt C</span><output data-value="c"></output></span><input type="range" name="c" min="0" max="8" step="1" value="4" /></label>
-    <fieldset class="segmented" data-kernel-field hidden><legend>Kernel</legend><label><input type="radio" name="kernel" value="linear" /><span>Tuyến tính</span></label><label><input type="radio" name="kernel" value="rbf" checked /><span>RBF</span></label></fieldset>
-    <label class="field" data-gamma-field hidden><span class="field-row"><span>γ của kernel RBF</span><output data-value="gamma"></output></span><input type="range" name="gamma" min="0" max="7" step="1" value="2" /></label>
-    <div class="actions"><button type="button" data-reset>Đặt lại</button></div>
-    <p class="hint">Thử: ở bước 1, tìm góc cho hành lang rộng nhất (khoảng −28°). Ở bước 2, bỏ một điểm không có vòng tròn rồi bỏ một điểm có vòng tròn. Ở bước 4, kéo γ lên 10 và xem độ chính xác kiểm tra.</p>
+    <label class="field" data-chapters="0"><span class="field-row"><span>Tự xoay đường phân tách</span><output data-value="angle"></output></span><input type="range" name="angle" min="-90" max="90" step="1" value="-32" /></label>
+    <p class="hint" data-chapters="0">Kéo thanh trượt để tự chọn hướng; bấm ↺ để xem lại hoạt cảnh quét mọi hướng.</p>
+    <p class="hint" data-chapters="1">Nhấp vào một bông hoa trên hình để bỏ nó khỏi dữ liệu; nhấp lần nữa để đưa lại.</p>
+    <div class="actions" data-chapters="1"><button type="button" data-reset-points>Đưa lại mọi bông hoa</button></div>
+    <label class="field" data-chapters="2"><span class="field-row"><span>Hệ số phạt C</span><output data-value="c"></output></span><input type="range" name="c" min="0" max="8" step="1" value="4" /></label>
+    <p class="hint" data-chapters="2">Vòng trắng: support vector nằm đúng mép dải. Vòng đỏ: điểm bị phạt (nằm trong dải hoặc sang nhầm phía).</p>
+    <label class="field" data-chapters="3"><span class="field-row"><span>γ của kernel RBF</span><output data-value="gamma"></output></span><input type="range" name="gamma" min="0" max="7" step="1" value="2" /></label>
+    <p class="hint" data-chapters="3">Kéo trên mặt cong để xoay. Thử γ = 100: ranh giới uốn quanh từng bông, độ chính xác huấn luyện gần 100% nhưng cross-validation tụt.</p>
+    <div class="actions" data-chapters="0 2"><button type="button" data-autoplay>Xem lại hoạt cảnh tự động</button></div>
   </Fragment>
-  <section class="inspector" aria-labelledby="svm-chart-heading">
-    <div class="section-head"><h3 id="svm-chart-heading" data-chart-title>Biểu đồ</h3><p>Nhấp vào biểu đồ để đổi tham số</p></div>
-    <div class="chart"><svg data-chart role="img" aria-labelledby="svm-chart-heading" aria-describedby="svm-chart-caption"></svg></div>
-    <p id="svm-chart-caption" class="caption">Biểu đồ thay đổi theo bước: độ rộng hành lang theo góc, khoảng cách có dấu của từng điểm, số support vector và lỗi theo C, độ chính xác theo γ. Mọi số liệu đều có trong bảng.</p>
-    <details class="table-view"><summary>Xem dạng bảng</summary><div class="table-scroll"><table class="data" data-table></table></div></details>
-  </section>
-</Lab>
+</GlassLab>
 <script>
   import { initSvmLab } from './render';
   initSvmLab();

@@ -1,24 +1,21 @@
 ---
-import Lab from '../../_shared/sequence-lab/Lab.astro';
-import '../../_shared/optimization-lab/plots.css';
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
 ---
-<Lab id="regularization" title="L1 và L2 · Lasso thưa, Ridge co đều" label="Vùng giới hạn của phạt, hàm co hệ số và đường đi hệ số theo λ"
-  steps={['Kim cương & hình tròn', 'Co hệ số', 'Đường đi hệ số', 'Đặc trưng tương quan']}
-  scope="Mô phỏng giáo dục: bước 1 dùng một loss bậc hai hai chiều tự chọn; bước 3–4 dùng hồi quy tuyến tính 25 mẫu huấn luyện, 500 mẫu kiểm tra và 8 đặc trưng sinh ngẫu nhiên (x₂ gần trùng x₁, bốn đặc trưng vô ích). Ridge giải bằng công thức đóng, Lasso bằng coordinate descent, đều chạy trong trình duyệt. Dữ liệu thật cần chuẩn hóa đặc trưng trước khi phạt và chọn λ bằng cross-validation.">
+<GlassLab id="regularization" title="L1 và L2 · Lasso và Ridge trên dữ liệu 442 bệnh nhân tiểu đường" label="Hoạt cảnh so sánh phạt L1 và L2 trên dữ liệu Diabetes"
+  chapters={['Kim cương & hình tròn', 'Chia hay trừ', 'Đường đi hệ số', 'Biến tương quan']}
+  data="Diabetes (Efron, Hastie, Johnstone & Tibshirani 2004, “Least Angle Regression”): 442 bệnh nhân, 10 chỉ số ban đầu (tuổi, giới tính, BMI, huyết áp, 6 chỉ số huyết thanh s1–s6) và mức tiến triển bệnh sau một năm; bản đi kèm scikit-learn."
+  scope="Đặc trưng được chuẩn hóa, mục tiêu được trừ trung bình; Lasso giải bằng coordinate descent (khớp sklearn.linear_model.lasso_path), Ridge bằng công thức đóng, cùng quy ước (1/2n)‖y − Xβ‖². Cross-validation 10 phần với chuẩn hóa bên trong từng phần; bootstrap 80 mẫu với hạt giống cố định. Chương 2 minh họa trường hợp đặc trưng trực giao.">
   <Fragment slot="controls">
-    <label class="field" data-lam2d-field><span class="field-row"><span>Độ mạnh phạt λ</span><output data-value="lam2d"></output></span><input type="range" name="lam2d" min="0" max="5" step="0.1" value="1.5" /></label>
-    <label class="field" data-lamshrink-field hidden><span class="field-row"><span>Độ mạnh phạt λ</span><output data-value="lamshrink"></output></span><input type="range" name="lamshrink" min="0" max="2" step="0.05" value="0.5" /></label>
-    <label class="field" data-lamindex-field hidden><span class="field-row"><span>Độ mạnh phạt</span><output data-value="lamindex"></output></span><input type="range" name="lamindex" min="0" max="24" step="1" value="14" /></label>
-    <div class="actions"><button type="button" data-reset>Đặt lại</button></div>
-    <p class="hint">Thử: ở bước 1, kéo λ từ 0 lên 1.5 và xem điểm Lasso “rơi” xuống trục w₁. Ở bước 3, kéo λ từ trái sang phải và đếm số hệ số Lasso bằng 0.</p>
+    <label class="field" data-chapters="0"><span class="field-row"><span>Độ mạnh phạt λ</span><output data-value="lam2d"></output></span><input type="range" name="lam2d" min="0" max="50" step="0.5" value="30" /></label>
+    <label class="field" data-chapters="1"><span class="field-row"><span>Độ mạnh phạt λ</span><output data-value="shrink"></output></span><input type="range" name="shrink" min="0" max="2" step="0.05" value="0.6" /></label>
+    <label class="field" data-chapters="2"><span class="field-row"><span>Độ mạnh phạt</span><output data-value="lamindex"></output></span><input type="range" name="lamindex" min="0" max="40" step="1" value="20" /></label>
+    <div class="actions"><button type="button" data-autoplay>Xem lại hoạt cảnh tự động</button></div>
+    <p class="hint" data-chapters="0">Kéo λ qua mốc 26,5: điểm Lasso rơi vào đỉnh hình thoi trên trục BMI và hệ số huyết áp bằng 0 tuyệt đối.</p>
+    <p class="hint" data-chapters="1">Năm chấm trên mỗi đường là năm hệ số β̂ mẫu. Chấm cam ở giữa bị Lasso đưa về 0 khi λ vượt độ lớn của nó.</p>
+    <p class="hint" data-chapters="2">Kéo λ từ phải sang trái để xem các biến lần lượt được Lasso đưa vào mô hình. Bảng bên dưới ghi hệ số và lỗi cross-validation.</p>
+    <p class="hint" data-chapters="3">Hệ số OLS của s1 và s2 lớn, trái dấu và đổi mạnh giữa các mẫu bootstrap: dấu hiệu điển hình của đa cộng tuyến.</p>
   </Fragment>
-  <section class="inspector" aria-labelledby="reg-chart-heading">
-    <div class="section-head"><h3 id="reg-chart-heading">Lỗi kiểm tra theo λ (hồi quy 8 đặc trưng)</h3><p data-chart-note></p></div>
-    <div class="chart"><svg data-chart role="img" aria-labelledby="reg-chart-heading" aria-describedby="reg-chart-caption"></svg></div>
-    <p id="reg-chart-caption" class="caption">λ nhỏ (trái): gần như không phạt, mô hình overfit 25 mẫu huấn luyện. λ lớn (phải): hệ số bị ép về 0, mô hình underfit. Ở giữa là vùng tốt nhất. Giá trị trên 6 bị cắt. Nhấp vào biểu đồ để chọn λ.</p>
-    <details class="table-view"><summary>Xem dạng bảng</summary><div class="table-scroll"><table class="data" data-table></table></div></details>
-  </section>
-</Lab>
+</GlassLab>
 <script>
   import { initRegularizationLab } from './render';
   initRegularizationLab();

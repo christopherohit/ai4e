@@ -1,6 +1,6 @@
 ---
 title: 'L1 (Lasso) và L2 (Ridge) Regularization: Phạt hệ số để chống overfitting'
-description: 'Phân biệt L1 Regularization (Lasso) và L2 Regularization (Ridge): công thức, hình học kim cương và hình tròn, vì sao L1 tạo hệ số bằng 0, đặc trưng tương quan và cách chọn λ.'
+description: 'Phân biệt L1 (Lasso) và L2 (Ridge) trên dữ liệu 442 bệnh nhân tiểu đường: hình học kim cương và hình tròn, vì sao L1 tạo hệ số 0, biến tương quan, chọn λ bằng cross-validation.'
 category: kien-thuc
 topic: nen-tang
 tags: ['Regularization', 'Lasso', 'Ridge', 'Overfitting', 'Học máy']
@@ -29,7 +29,7 @@ $\lambda \ge 0$ điều chỉnh độ mạnh của phạt. $\lambda = 0$ là mô
 | Hệ số | Co nhỏ, gần như không bao giờ bằng 0 | Nhiều hệ số bằng **đúng 0** |
 | Nghiệm | Có công thức đóng | Không có công thức đóng (trừ trường hợp đặc biệt) |
 
-Bài này dùng hồi quy tuyến tính để minh họa, nhưng ý tưởng áp dụng cho mọi mô hình học bằng tối ưu: logistic regression, [SVM](/kien-thuc/svm/) (số hạng $\tfrac12\lVert\mathbf w\rVert^2$ chính là phạt L2), mạng nơ-ron (weight decay).
+Bài này dùng hồi quy tuyến tính trên dữ liệu thật **Diabetes** (Efron, Hastie, Johnstone và Tibshirani, 2004): 442 bệnh nhân tiểu đường, 10 chỉ số đo lúc đầu (tuổi, giới tính, BMI, huyết áp và 6 chỉ số máu s1–s6), mục tiêu là mức tiến triển bệnh sau một năm. Đây chính là bộ dữ liệu trong bài báo giới thiệu thuật toán LARS, nơi đường đi hệ số của Lasso được vẽ lần đầu. Ý tưởng áp dụng cho mọi mô hình học bằng tối ưu: logistic regression, [SVM](/kien-thuc/svm/) (số hạng $\tfrac12\lVert\mathbf w\rVert^2$ chính là phạt L2), mạng nơ-ron (weight decay).
 
 ## Công thức cho hồi quy tuyến tính
 
@@ -70,11 +70,11 @@ Với hai hệ số, vùng $\lVert\beta\rVert_2^2 \le t$ là một **hình tròn
 - Hình tròn trơn đều mọi hướng, nên điểm chạm thường nằm ở vị trí "chung chung" với cả hai hệ số khác 0.
 - Hình thoi có đỉnh nhọn nằm trên trục. Với phần lớn hình dạng elip, điểm chạm đầu tiên rơi vào **đỉnh**, nơi một hệ số bằng đúng 0. Trong nhiều chiều, hình thoi có rất nhiều đỉnh và cạnh nằm trên các mặt phẳng tọa độ, nên lời giải Lasso thường **thưa** (nhiều hệ số bằng 0).
 
-Trong lab, nghiệm không phạt là $w^\star = (2{,}2;\ 0{,}7)$. Khi $\lambda$ tăng, nghiệm Ridge đi dần về gốc theo một đường cong, cả hai hệ số cùng nhỏ lại. Nghiệm Lasso kéo $w_2$ về trục trước và chạm trục ở $\lambda \approx 1{,}01$. Từ đó $w_2 = 0$ đúng tuyệt đối và nghiệm chỉ trượt dọc trục $w_1$. Với $\lambda = 1{,}5$: Ridge cho $(0{,}92;\ 0{,}47)$, Lasso cho $(1{,}77;\ 0)$.
+Chương 1 của lab chỉ giữ hai chỉ số, **BMI** và **huyết áp** (đã chuẩn hóa), nên loss là một hàm thật của đúng hai hệ số và vẽ được trên mặt phẳng. Nghiệm không phạt (OLS) là $(37{,}6;\ 19{,}1)$: mỗi độ lệch chuẩn BMI làm chỉ số tiến triển tăng khoảng 37,6 điểm. Khi $\lambda$ tăng, nghiệm Ridge đi dần về gốc theo một đường cong, cả hai hệ số cùng nhỏ lại. Nghiệm Lasso kéo hệ số huyết áp về trục trước và chạm trục ở $\lambda \approx 26{,}5$. Từ đó hệ số huyết áp bằng 0 đúng tuyệt đối và nghiệm chỉ trượt dọc trục BMI. Với $\lambda = 30$: Lasso cho $(15{,}2;\ 0)$, còn Ridge cho $(1{,}44;\ 1{,}08)$, nhỏ nhưng cả hai vẫn khác 0. (Độ lớn $\lambda$ của hai loại phạt không so sánh trực tiếp với nhau được, vì một bên phạt $\beta^2$, một bên phạt $\lvert\beta\rvert$.)
 
 <Callout type="try">
 
-Ở bước **Kim cương & hình tròn**, kéo $\lambda$ từ 0 lên 5. Đường mảnh trên mỗi hình là quỹ đạo của nghiệm khi $\lambda$ tăng: đường của Lasso gấp khúc đúng lúc chạm trục $w_1$.
+Ở chương **Kim cương & hình tròn**, hoạt cảnh tăng $\lambda$ từ 0 lên 32: vùng giới hạn co lại, elip trắng là đường đồng mức đầu tiên chạm vào nó. Đường nét đứt là quỹ đạo của nghiệm: đường của Lasso gấp khúc đúng lúc chạm trục BMI. Kéo thanh $\lambda$ qua lại quanh 26,5 để thấy hệ số huyết áp bật về 0.
 
 </Callout>
 
@@ -97,46 +97,62 @@ Lý do nằm ở **lực kéo về 0**, tức đạo hàm của khoản phạt. 
 
 <Callout type="try">
 
-Ở bước **Co hệ số**, kéo $\lambda$ và so sánh hai đường: Ridge là đường thẳng thoải dần qua gốc, Lasso có một đoạn nằm ngang bằng 0 trong khoảng $[-\lambda, \lambda]$. Đồ thị bên phải vẽ lực kéo về 0 của từng loại phạt.
+Ở chương **Chia hay trừ**, xem năm chấm $\hat\beta$ trượt dọc hai đường khi $\lambda$ tăng: chấm xanh (Ridge) co theo tỉ lệ, chấm cam (Lasso) ở giữa bị ép về đúng 0. Đồ thị bên phải vẽ lực kéo về 0 của từng loại phạt.
 
 </Callout>
 
-## Đường đi hệ số trên dữ liệu thật hơn
+## Đường đi hệ số trên 442 bệnh nhân
 
-Bước 3 của lab dùng hồi quy với 25 mẫu huấn luyện và 8 đặc trưng. Hệ số thật là $(1{,}5;\ 1{,}5;\ -2;\ 0;\ 0;\ 1;\ 0;\ 0)$: chỉ $x_1, x_2, x_3, x_6$ có ích, bốn đặc trưng còn lại là nhiễu, và $x_2$ gần như là bản sao của $x_1$ (tương quan 0,98). Với 25 mẫu cho 8 hệ số, mô hình không phạt đã overfit: lỗi huấn luyện 1,12, lỗi kiểm tra 3,37.
+Với cả 10 chỉ số, ta quét $\lambda$ từ rất lớn (mọi hệ số bằng 0) về rất nhỏ (gần OLS) và vẽ từng hệ số theo $\lambda$: đó là **đường đi hệ số**.
 
-Khi $\lambda$ tăng:
+- **Lasso** thả từng biến vào mô hình theo thứ tự: **BMI → s5 (triglyceride) → huyết áp → s3 (HDL) → giới tính → s6 → s1 → s4 → s2 → tuổi**. Ở $\lambda = 10$, mô hình chỉ còn 4 biến: BMI, huyết áp, s3, s5. Đây chính là hình kinh điển trong bài báo LARS; lab tính lại bằng coordinate descent và khớp với `lasso_path` của scikit-learn.
+- **Ridge** giữ đủ 10 biến ở mọi $\lambda$, chỉ co chúng nhỏ dần đều. Không hệ số nào về đúng 0.
 
-- **Ridge** thu nhỏ cả 8 hệ số cùng lúc, mượt mà. Không hệ số nào về đúng 0. Lỗi kiểm tra tốt nhất 2,95 tại $\lambda = 0{,}1$.
-- **Lasso** đưa từng hệ số về đúng 0 theo thứ tự: các đặc trưng vô ích $x_5, x_7$ biến mất trước, rồi tới $x_8$. Lỗi kiểm tra tốt nhất 2,77 tại $\lambda \approx 0{,}22$, khi mô hình chỉ còn 5 hệ số khác 0.
+Lỗi cross-validation 10 phần (MSE, đơn vị là bình phương điểm tiến triển):
 
-Ở ví dụ này Lasso thắng vì hệ số thật thưa (một nửa bằng 0). Nếu mọi đặc trưng đều có ích một chút, Ridge thường thắng. Lasso cũng không hoàn hảo: ở $\lambda$ tốt nhất, nó vẫn giữ $x_4$ (hệ số thật bằng 0) với giá trị −0,24.
+| | Lỗi CV | Số biến |
+| --- | --- | --- |
+| OLS (không phạt) | 2 985 | 10 |
+| Ridge tốt nhất ($\lambda \approx 0{,}04$) | 2 979 | 10 |
+| Lasso tốt nhất ($\lambda \approx 0{,}79$) | 2 977 | 8 |
+| Lasso, $\lambda = 1$ | 2 977 | 7 |
+| Lasso, $\lambda = 10$ | 3 258 | 4 |
+
+Kết quả thật này có thể làm bạn bất ngờ: **regularization gần như không giảm lỗi dự đoán**. Lý do: 442 bệnh nhân là khá nhiều cho 10 hệ số, nên mô hình OLS không overfit đáng kể (variance vốn đã thấp). Giá trị của phạt ở đây nằm ở chỗ khác. Lasso với $\lambda = 1$ dùng 7 thay vì 10 biến mà lỗi không đổi: mô hình gọn và dễ giải thích hơn. Như mục tiếp theo cho thấy, các hệ số cũng ổn định hơn nhiều. Regularization giúp giảm lỗi rõ rệt khi số đặc trưng lớn so với số mẫu, như dữ liệu gen, văn bản hay mạng nơ-ron lớn.
 
 <Callout type="try">
 
-Ở bước **Đường đi hệ số**, kéo $\lambda$ từ trái sang phải và đọc bảng hệ số. Biểu đồ phía dưới vẽ lỗi kiểm tra theo $\lambda$ cho cả hai: $\lambda$ nhỏ là overfitting, $\lambda$ lớn là underfitting, ở giữa là vùng tốt nhất.
+Ở chương **Đường đi hệ số**, hoạt cảnh quét $\lambda$ từ phải (phạt mạnh) sang trái: các đường hệ số Lasso lần lượt tách khỏi 0, còn các đường Ridge bung ra cùng lúc. Biểu đồ phía dưới vẽ lỗi cross-validation 10 phần theo $\lambda$, đường nét đứt là OLS.
 
 </Callout>
 
 ## Khi các đặc trưng tương quan mạnh
 
-$x_1$ và $x_2$ gần như trùng nhau, cùng có hệ số thật 1,5. Dữ liệu chỉ xác định được **tổng** ảnh hưởng $\beta_1 + \beta_2 \approx 3$, còn cách chia gần như tùy ý. Ba phương pháp chọn ba cách chia khác nhau:
+s1 (cholesterol toàn phần) và s2 (LDL, "cholesterol xấu") tương quan **0,90**: LDL là một phần của cholesterol toàn phần. Dữ liệu khó phân biệt ảnh hưởng của từng chỉ số, và ba phương pháp xử lý rất khác nhau:
 
-| | $\beta_1$ | $\beta_2$ |
+| Trên cả 442 bệnh nhân | $\beta$ s1 | $\beta$ s2 |
 | --- | --- | --- |
-| Không phạt | −0,09 | 3,06 |
-| Ridge, $\lambda = 0{,}1$ | 1,21 | 1,56 |
-| Lasso, $\lambda = 0{,}1$ | 0 | 2,88 |
+| OLS | −37,7 | +22,7 |
+| Ridge, $\lambda = 0{,}1$ | −4,0 | −3,4 |
+| Lasso, $\lambda = 1$ | −4,8 | 0 |
 
-- **Không phạt** chia rất lệch, và cách chia đổi hẳn nếu đổi vài mẫu: variance cao.
-- **Ridge** ưu tiên chia đều, vì với cùng tổng, $1{,}5^2 + 1{,}5^2 = 4{,}5$ nhỏ hơn $0^2 + 3^2 = 9$. Ridge "chia sẻ" trọng số giữa các đặc trưng tương quan, nên ổn định.
-- **Lasso** thấy $\lvert 1{,}5\rvert + \lvert 1{,}5\rvert = \lvert 0\rvert + \lvert 3\rvert$: phạt như nhau. Nó chọn lời giải thưa và giữ một đặc trưng, bỏ hẳn đặc trưng kia. Đặc trưng nào được giữ phụ thuộc vào chi tiết của dữ liệu và có thể đổi khi lấy mẫu lại.
+OLS cho hai hệ số lớn và **trái dấu**: chúng gần như triệt tiêu nhau. Để thấy chúng bất ổn tới mức nào, lab chạy lại trên 80 mẫu **bootstrap** (chọn lại 442 bệnh nhân có hoàn lại):
+
+| 80 mẫu bootstrap | $\beta$ s1 | $\beta$ s2 | Số lần hệ số bằng 0 |
+| --- | --- | --- | --- |
+| OLS | −36,2 ± 19,6 | +23,4 ± 15,8 | không bao giờ |
+| Ridge, $\lambda = 0{,}1$ | −3,3 ± 2,3 | −2,5 ± 2,6 | không bao giờ |
+| Lasso, $\lambda = 1$ | −4,3 ± 4,0 | −0,5 ± 1,4 | s1: 16 lần, s2: 64 lần |
+
+- **OLS** có variance rất cao: chỉ đổi mẫu bệnh nhân, hệ số s1 có thể dao động cả chục điểm.
+- **Ridge** ưu tiên chia đều trọng số cho hai biến tương quan (cả hai cùng khoảng −3), và ổn định hơn OLS khoảng 8 lần. Lỗi CV của Ridge với $\lambda = 0{,}1$ (2 982) vẫn ngang OLS. Lý do hình học: với cùng tổng, $a^2 + b^2$ nhỏ nhất khi $a = b$.
+- **Lasso** thấy phạt $\lvert a\rvert + \lvert b\rvert$ như nhau dù chia thế nào, nên chọn lời giải thưa: giữ s1, bỏ s2 trong 80% số lần, nhưng 20% số lần lại bỏ s1. Biến được giữ khá tùy ý.
 
 **Elastic Net** (Zou và Hastie, 2005) kết hợp hai loại phạt, $\lambda_1\lVert\beta\rVert_1 + \lambda_2\lVert\beta\rVert_2^2$. Nó vẫn tạo hệ số bằng 0 như Lasso nhưng giữ các đặc trưng tương quan cùng nhau như Ridge. Đây thường là lựa chọn an toàn khi có nhiều đặc trưng tương quan.
 
 <Callout type="try">
 
-Ở bước **Đặc trưng tương quan**, kéo $\lambda$ và xem hệ số của $x_1$ (xanh) và $x_2$ (cam) cho từng phương pháp. Với Lasso, $x_1$ luôn bằng 0 trên toàn bộ đường đi.
+Chương **Biến tương quan** vẽ hệ số của s1 và s2 trên 80 mẫu bootstrap: đám chấm hồng (OLS) trải dài theo đường chéo, nghĩa là hai hệ số bù trừ nhau; chấm xanh (Ridge) co cụm sát gốc; chấm cam (Lasso) nằm trên các trục. Thanh bên phải là hệ số trên toàn bộ 442 bệnh nhân.
 
 </Callout>
 
@@ -208,3 +224,4 @@ Mỗi thư viện chia tỉ lệ $\lambda$ khác nhau. `Lasso` của scikit-lear
 - Robert Tibshirani, [Regression Shrinkage and Selection via the Lasso](https://doi.org/10.1111/j.2517-6161.1996.tb02080.x), JRSS B, 1996.
 - Arthur Hoerl, Robert Kennard, [Ridge Regression: Biased Estimation for Nonorthogonal Problems](https://doi.org/10.1080/00401706.1970.10488634), Technometrics, 1970.
 - Hui Zou, Trevor Hastie, [Regularization and Variable Selection via the Elastic Net](https://doi.org/10.1111/j.1467-9868.2005.00503.x), JRSS B, 2005.
+- Bradley Efron, Trevor Hastie, Iain Johnstone, Robert Tibshirani, [Least Angle Regression](https://doi.org/10.1214/009053604000000067), Annals of Statistics, 2004: nguồn của dữ liệu Diabetes và hình đường đi hệ số Lasso.

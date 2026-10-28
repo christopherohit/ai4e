@@ -1,33 +1,19 @@
 ---
-import Lab from '../../_shared/sequence-lab/Lab.astro';
-import '../../_shared/optimization-lab/plots.css';
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
 ---
-<Lab id="gradient-descent" title="Gradient Descent · đi xuống dốc từng bước" label="Đồ thị loss và đường đi của gradient descent ở bước đang chọn"
-  steps={['Đạo hàm = độ dốc', 'Learning rate', 'Hai tham số', 'Mặt loss không lồi']}
-  scope="Mô phỏng giáo dục: hồi quy tuyến tính ŷ = w·x + b trên 64 điểm dữ liệu tổng hợp (y = 1,5x + 0,8 cộng nhiễu, không phải giá nhà thật), loss MSE và gradient tính chính xác trong trình duyệt. Bước 4 dùng một hàm một biến tự dựng để minh họa mặt loss không lồi; loss của mạng nơ-ron thật có hàng triệu chiều.">
-  <div class="strip" slot="strip">
-    <div class="player">
-      <button type="button" data-prev aria-label="Bước trước">◀</button>
-      <button type="button" data-play aria-pressed="false">▶ Chạy</button>
-      <button type="button" data-next aria-label="Bước sau">▶▶</button>
-      <output data-position></output>
-    </div>
-  </div>
+<GlassLab id="gradient-descent" title="Gradient Descent · lăn xuống mặt loss của 392 chiếc xe thật" label="Hoạt cảnh gradient descent trên dữ liệu Auto MPG"
+  chapters={['Dữ liệu thật', 'Mặt loss 3D', 'Learning rate', 'Chuẩn hóa']}
+  data="Auto MPG (UCI Machine Learning Repository, Quinlan 1993): 392 mẫu xe 1970–1982 có đủ khối lượng và mức tiêu thụ nhiên liệu."
+  scope="Hồi quy tuyến tính một biến, MSE và gradient tính chính xác trong trình duyệt trên toàn bộ 392 xe. Mỗi bước dùng gradient của cả tập dữ liệu (batch gradient descent); mô hình thật thường có hàng triệu tham số và mặt loss không lồi.">
   <Fragment slot="controls">
-    <label class="field"><span class="field-row"><span>Learning rate η</span><output data-value="lr"></output></span><input type="range" name="lr" min="0.01" max="0.7" step="0.01" value="0.1" /></label>
-    <div class="field" data-lr-field>Thử nhanh η<div class="chips"><button type="button" data-lr="0.05">0.05 · chậm</button><button type="button" data-lr="0.2">0.2 · vừa</button><button type="button" data-lr="0.45">0.45 · dao động</button><button type="button" data-lr="0.6">0.6 · quá lớn</button></div></div>
-    <label class="field" data-start-field><span class="field-row"><span>Điểm xuất phát w₀</span><output data-value="start"></output></span><input type="range" name="start" min="-1" max="4" step="0.1" value="-0.5" /></label>
-    <p class="hint" data-map-hint hidden>Nhấp lên bản đồ đường đồng mức để chọn điểm xuất phát (w₀, b₀).</p>
-    <div class="actions"><button type="button" data-reset>Đặt lại</button></div>
-    <p class="hint">Thử: ở bước 2, bấm lần lượt 0.05, 0.2, 0.45 rồi 0.6. Ở bước 4, đặt w₀ = 0.1 rồi 0.2: chỉ lệch 0,1 nhưng kết thúc ở hai thung lũng khác nhau.</p>
+    <p class="hint" data-chapters="0">Rê chuột lên các chấm để xem từng mẫu xe. Màu chấm là nơi sản xuất: xanh dương Mỹ, tím châu Âu, xanh lá Nhật.</p>
+    <p class="hint" data-chapters="1">Kéo trên hình để xoay mặt loss. Bấm ↺ để thả lại viên bi; kéo thanh thời gian để xem từng đoạn đường.</p>
+    <label class="field" data-chapters="2"><span class="field-row"><span>Learning rate của viên bi cam</span><output data-value="lr"></output></span><input type="range" name="lr" min="0.005" max="0.11" step="0.005" value="0.09" /></label>
+    <div class="field" data-chapters="2">Thử nhanh<div class="chips"><button type="button" data-lr="0.02">0,02</button><button type="button" data-lr="0.07">0,07</button><button type="button" data-lr="0.09">0,09</button><button type="button" data-lr="0.095">0,095</button><button type="button" data-lr="0.11">0,11</button></div></div>
+    <p class="hint" data-chapters="2">Ngưỡng hội tụ là 2/λ_max ≈ 0,0951. Thử 0,095 rồi 0,11: chênh nhau rất ít nhưng một bên hội tụ, một bên bùng nổ.</p>
+    <p class="hint" data-chapters="3">Hai bên dùng cùng dữ liệu và cùng đường thẳng xuất phát. Bảng bên dưới so sánh độ cong, η tối đa và số bước cần thiết.</p>
   </Fragment>
-  <section class="inspector" aria-labelledby="gd-chart-heading">
-    <div class="section-head"><h3 id="gd-chart-heading">Loss qua từng bước</h3><p data-chart-note></p></div>
-    <div class="chart"><svg data-chart role="img" aria-labelledby="gd-chart-heading" aria-describedby="gd-chart-caption"></svg></div>
-    <p id="gd-chart-caption" class="caption">Cùng điểm xuất phát, ba learning rate khác nhau. Đường chạm mép trên là loss vượt khỏi khung (phân kỳ). Nhấp vào biểu đồ để nhảy tới bước đó.</p>
-    <details class="table-view"><summary>Xem dạng bảng</summary><div class="table-scroll"><table class="data" data-table></table></div></details>
-  </section>
-</Lab>
+</GlassLab>
 <script>
   import { initGradientDescentLab } from './render';
   initGradientDescentLab();

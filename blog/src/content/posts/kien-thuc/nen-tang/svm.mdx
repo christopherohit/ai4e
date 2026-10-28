@@ -1,6 +1,6 @@
 ---
 title: 'SVM: Đường phân tách có lề rộng nhất, support vector và kernel'
-description: 'Support Vector Machine hoạt động thế nào: lề cực đại, support vector, lề mềm với tham số C, hinge loss và kernel trick cho ranh giới phi tuyến.'
+description: 'Support Vector Machine hoạt động thế nào, minh họa trên 150 bông hoa Iris thật: lề cực đại, support vector, lề mềm với tham số C, hinge loss và kernel RBF.'
 category: kien-thuc
 topic: nen-tang
 tags: ['SVM', 'Phân loại', 'Kernel', 'Học máy']
@@ -18,11 +18,11 @@ Cho các điểm thuộc hai lớp trên mặt phẳng. Nếu hai lớp tách đ
 
 **Support Vector Machine** (SVM) trả lời bằng một nguyên tắc hình học: chọn đường cách **xa nhất** các điểm gần nó của cả hai lớp, tức là đường nằm giữa hành lang trống rộng nhất. Độ rộng hành lang gọi là **lề** (margin).
 
-Trong lab phía trên, bước 1 cho bạn xoay đường phân tách. Với pháp tuyến 0° (đường thẳng đứng), hành lang rộng 1,60. Hành lang rộng nhất là 2,99, đạt ở góc khoảng −28°.
+Lab phía trên dùng bộ dữ liệu kinh điển **Iris** (Fisher, 1936): 150 bông hoa thuộc 3 loài, mỗi bông đo chiều dài, chiều rộng của đài hoa và cánh hoa (cm). Chương 1 lấy 100 bông setosa và versicolor, chỉ dùng hai số đo của đài hoa, đã chuẩn hóa về trung bình 0 và độ lệch chuẩn 1. Hai loài tách được bằng một đường thẳng, nhưng chỉ khi đường đó nằm trong một dải hướng hẹp khoảng 20°. Hành lang rộng nhất (0,421 đơn vị chuẩn hóa) đạt khi pháp tuyến của đường nghiêng khoảng −32°.
 
 <Callout type="try">
 
-Ở bước **Nhiều đường phân tách**, kéo góc pháp tuyến và xem độ rộng hành lang. Biểu đồ phía dưới vẽ độ rộng theo góc: các góc ngoài khoảng giữa không tách được hai lớp (độ rộng 0). Đỉnh của đường cong chính là lời giải SVM.
+Ở chương **Nhiều đường**, hoạt cảnh xoay một đường thẳng qua mọi hướng. Đường đỏ là hướng cắt qua dữ liệu; đường xanh lá là hướng tách được, kèm hành lang trống hai bên. Biểu đồ bên phải vẽ độ rộng hành lang theo hướng: đỉnh nhọn chính là lời giải SVM. Kéo thanh trượt để tự chọn hướng.
 
 </Callout>
 
@@ -46,7 +46,7 @@ $$
 \min_{\mathbf{w}, b}\ \tfrac12\lVert\mathbf{w}\rVert^2 \quad \text{sao cho} \quad y_i(\mathbf{w}\cdot\mathbf{x}_i + b) \ge 1\ \ \forall i.
 $$
 
-Đây là bài toán quy hoạch toàn phương lồi: có đúng một nghiệm tối ưu, không có đáy cục bộ. Trong lab, nghiệm là $\mathbf{w} \approx (0{,}588;\ -0{,}319)$, $b \approx -1{,}147$, lề $2/\lVert\mathbf{w}\rVert \approx 2{,}99$. Con số này trùng với hành lang rộng nhất tìm được bằng cách xoay đường ở bước 1.
+Đây là bài toán quy hoạch toàn phương lồi: có đúng một nghiệm tối ưu, không có đáy cục bộ. Trên 100 bông Iris (đặc trưng đã chuẩn hóa), nghiệm là $\mathbf{w} \approx (4{,}03;\ -2{,}51)$, $b \approx 0{,}93$, lề $2/\lVert\mathbf{w}\rVert \approx 0{,}421$. Con số này trùng với hành lang rộng nhất tìm được bằng cách xoay đường ở chương 1, và trùng với kết quả của `sklearn.svm.SVC`.
 
 ## Support vector: chỉ vài điểm quyết định tất cả
 
@@ -56,13 +56,13 @@ $$
 \mathbf{w} = \sum_i \alpha_i y_i \mathbf{x}_i .
 $$
 
-Điều kiện tối ưu (KKT) buộc $\alpha_i = 0$ với mọi điểm nằm xa hơn mép lề. Chỉ những điểm nằm **đúng trên mép lề** mới có $\alpha_i > 0$: đó là các **support vector**. Trong lab, chỉ 3 trên 16 điểm là support vector.
+Điều kiện tối ưu (KKT) buộc $\alpha_i = 0$ với mọi điểm nằm xa hơn mép lề. Chỉ những điểm nằm **đúng trên mép lề** mới có $\alpha_i > 0$: đó là các **support vector**. Trên Iris, chỉ **4 trong 100** bông hoa là support vector: hai bông setosa (đài 5,5 × 3,5 cm và 4,5 × 2,3 cm) và hai bông versicolor (4,9 × 2,4 cm và 5,4 × 3,0 cm). 96 bông còn lại có $\alpha_i = 0$.
 
 Hệ quả rất trực quan: xóa một điểm không phải support vector, lời giải không đổi chút nào. Xóa một support vector, ràng buộc đang "chống" lề biến mất, lề mở rộng và đường biên dịch chuyển. SVM chỉ "nhớ" các điểm ở vùng biên, nơi khó phân loại nhất.
 
 <Callout type="try">
 
-Ở bước **Lề cực đại**, nhấp một điểm không có vòng tròn để bỏ nó: đường biên đứng yên. Đưa nó lại, rồi bỏ một điểm có vòng tròn: lề rộng ra và đường biên xoay. Biểu đồ phía dưới vẽ $y\cdot f(x)$ của từng điểm: support vector nằm đúng trên vạch 1.
+Ở chương **Lề cực đại**, nhấp một bông hoa không có vòng trắng để bỏ nó: đường biên đứng yên. Đưa nó lại, rồi bỏ một bông có vòng trắng: dải rộng ra và đường biên xoay. Biểu đồ bên phải vẽ hệ số $\alpha_i$ của cả 100 bông: chỉ 4 cột khác 0.
 
 </Callout>
 
@@ -92,19 +92,19 @@ Hinge loss bằng 0 với điểm đúng phía và ngoài lề, tăng tuyến t�
 | Ranh giới | Mượt, ít nhạy với từng điểm | Bám sát các điểm khó, nhạy với nhiễu |
 | Rủi ro | Underfitting | Overfitting |
 
-Trong lab với 36 điểm chồng lấn: $C = 0{,}01$ cho lề 5,64 và 30 support vector; $C = 1$ cho lề 1,68 và 11 support vector; $C = 100$ cho lề 1,35 và 10 support vector. Ở dạng đối ngẫu, lề mềm chỉ thêm một giới hạn trên: $0 \le \alpha_i \le C$. Các điểm có $\alpha_i = C$ là những điểm nằm trong lề hoặc sai phía.
+Chương 3 của lab dùng versicolor và virginica, đo trên cánh hoa: vài bông của hai loài chồng lấn nhau nên không có lề cứng. Trên 100 bông này, $C = 0{,}01$ cho lề 3,32 với 76 support vector; $C = 1$ cho lề 0,93 với 19 support vector và đúng 94%; $C = 100$ cho lề 0,42 với 12 support vector. Độ chính xác gần như không đổi (94–95%) dù lề thay đổi gần 8 lần: C chủ yếu quyết định ranh giới nhạy với những bông nằm ở vùng chồng lấn đến đâu. Ở dạng đối ngẫu, lề mềm chỉ thêm một giới hạn trên: $0 \le \alpha_i \le C$. Các điểm có $\alpha_i = C$ là những điểm nằm trong lề hoặc sai phía.
 
 <Callout type="try">
 
-Ở bước **Lề mềm & C**, kéo $C$ từ 0.01 lên 100. Vòng liền là support vector đúng trên mép lề, vòng đứt là điểm bị phạt. Biểu đồ phía dưới cho thấy số support vector giảm dần khi $C$ tăng.
+Ở chương **Lề mềm & C**, hoạt cảnh quét $C$ từ 0,01 tới 100; sau đó kéo thanh trượt để tự chọn. Vòng trắng là support vector đúng trên mép dải, vòng đỏ là bông bị phạt. Biểu đồ bên phải cho thấy số support vector giảm từ 76 xuống 12 khi $C$ tăng.
 
 </Callout>
 
 ## Kernel trick: ranh giới phi tuyến
 
-Bước 4 của lab có một lớp nằm ở lõi, lớp kia bao thành vòng xung quanh. Không đường thẳng nào tách được: SVM tuyến tính sai 16 trên 42 điểm huấn luyện.
+Chương 4 phân biệt versicolor với hai loài còn lại, dùng số đo cánh hoa. Versicolor nằm **kẹp giữa** setosa (cánh nhỏ) và virginica (cánh lớn). Không đường thẳng nào tách được một loài ở giữa: SVM tuyến tính chỉ đúng 66,7%, đúng bằng việc đoán "không phải versicolor" cho mọi bông.
 
-Ý tưởng: ánh xạ dữ liệu sang không gian nhiều chiều hơn, nơi hai lớp tách được bằng siêu phẳng. Ví dụ, thêm đặc trưng $x_1^2 + x_2^2$ (bình phương khoảng cách tới gốc) thì lõi và vòng ngoài tách được bằng một mặt phẳng ngang.
+Ý tưởng: ánh xạ dữ liệu sang không gian nhiều chiều hơn, nơi hai lớp tách được bằng siêu phẳng. Ví dụ, thêm đặc trưng "bình phương khoảng cách tới tâm cụm versicolor": trong không gian mới, versicolor nằm thấp, hai loài kia nằm cao, và một mặt phẳng ngang tách được chúng.
 
 Điểm mấu chốt nằm ở dạng đối ngẫu: dữ liệu chỉ xuất hiện qua **tích vô hướng** $\mathbf{x}_i \cdot \mathbf{x}_j$. Thay tích vô hướng bằng một **hàm kernel** $K(\mathbf{x}_i, \mathbf{x}_j) = \phi(\mathbf{x}_i)\cdot\phi(\mathbf{x}_j)$, ta làm việc trong không gian của $\phi$ mà không cần tính $\phi$. Hàm quyết định trở thành
 
@@ -122,19 +122,25 @@ Các kernel phổ biến:
 
 Với kernel RBF, $\gamma$ quyết định bán kính ảnh hưởng của mỗi support vector:
 
-- $\gamma$ **nhỏ**: mỗi điểm ảnh hưởng rất xa, ranh giới gần tuyến tính. Trong lab, $\gamma = 0{,}01$ vẫn chưa bao được lõi: chỉ đúng 60% trên tập kiểm tra.
-- $\gamma$ **vừa**: ranh giới gần hình tròn. Với $\gamma = 0{,}1$, đúng 100% huấn luyện và 98% kiểm tra.
-- $\gamma$ **lớn**: mỗi điểm chỉ ảnh hưởng một vùng nhỏ quanh nó, ranh giới uốn quanh từng điểm. Với $\gamma = 10$, vẫn đúng 100% huấn luyện nhưng chỉ còn 71% kiểm tra: overfitting.
+- $\gamma$ **nhỏ**: mỗi điểm ảnh hưởng rất xa, ranh giới gần tuyến tính. Với $\gamma = 0{,}03$, mô hình vẫn chỉ đúng 66,7%.
+- $\gamma$ **vừa**: ranh giới thành một vòng kín quanh versicolor. Với $\gamma = 0{,}3$, đúng 96,0% trên tập huấn luyện và 96,0% khi cross-validation 5 phần.
+- $\gamma$ **lớn**: mỗi điểm chỉ ảnh hưởng một vùng nhỏ quanh nó, ranh giới uốn quanh từng bông. Với $\gamma = 100$, độ chính xác huấn luyện lên 99,3% nhưng cross-validation tụt xuống 90,0%, và 130 trên 150 bông thành support vector: overfitting.
+
+| $\gamma$ | 0,03 | 0,3 | 3 | 30 | 100 |
+| --- | --- | --- | --- | --- | --- |
+| Huấn luyện | 66,7% | 96,0% | 96,7% | 98,7% | 99,3% |
+| Cross-validation 5 phần | 66,7% | 96,0% | 96,0% | 94,0% | 90,0% |
+| Support vector | 101 | 35 | 28 | 77 | 130 |
 
 <Callout type="try">
 
-Ở bước **Kernel RBF**, chọn **Tuyến tính** để thấy SVM thất bại, rồi chọn **RBF** và kéo $\gamma$ từ 0.01 lên 30. Biểu đồ phía dưới so sánh độ chính xác trên tập huấn luyện và tập kiểm tra: khoảng cách giữa hai đường là dấu hiệu overfitting.
+Chương **Kernel RBF** mở đầu bằng SVM tuyến tính thất bại, rồi dựng hàm quyết định $f(\mathbf{x})$ của kernel RBF thành một mặt cong 3D: mặt nhô lên ở vùng versicolor, và vòng trắng nơi mặt cong cắt độ cao 0 chính là ranh giới. Kéo để xoay. Kéo $\gamma$ lên 100 và xem biểu đồ: đường huấn luyện đi lên, đường cross-validation đi xuống.
 
 </Callout>
 
 ## Huấn luyện SVM thế nào?
 
-Lab giải bài toán đối ngẫu bằng **SMO** (Sequential Minimal Optimization, Platt 1998): mỗi bước chọn hai hệ số $\alpha_i, \alpha_j$ và tối ưu chúng bằng công thức đóng, lặp lại cho tới khi mọi điểm thỏa điều kiện KKT. LIBSVM, thư viện bên dưới `sklearn.svm.SVC`, dùng một biến thể của SMO.
+Lab giải bài toán đối ngẫu ngay trong trình duyệt bằng **SMO** (Sequential Minimal Optimization, Platt 1998): mỗi bước chọn hai hệ số $\alpha_i, \alpha_j$ và tối ưu chúng bằng công thức đóng, lặp lại cho tới khi mọi điểm thỏa điều kiện KKT. LIBSVM, thư viện bên dưới `sklearn.svm.SVC`, dùng một biến thể của SMO.
 
 Với kernel, chi phí huấn luyện tăng nhanh hơn tuyến tính theo số mẫu (thường từ $O(n^2)$ tới $O(n^3)$), nên SVM kernel phù hợp với vài chục nghìn mẫu trở xuống. Với dữ liệu lớn và tuyến tính, người ta tối ưu trực tiếp hinge loss bằng (sub)gradient hoặc coordinate descent (LIBLINEAR, `LinearSVC`, `SGDClassifier(loss="hinge")`).
 
@@ -181,3 +187,4 @@ Luôn **chuẩn hóa đặc trưng** trước khi dùng SVM. Lề và kernel RBF
 - Corinna Cortes, Vladimir Vapnik, [Support-Vector Networks](https://doi.org/10.1007/BF00994018), Machine Learning, 1995.
 - John Platt, *Sequential Minimal Optimization: A Fast Algorithm for Training Support Vector Machines*, Microsoft Research Technical Report, 1998.
 - Chih-Wei Hsu, Chih-Chung Chang, Chih-Jen Lin, [A Practical Guide to Support Vector Classification](https://www.csie.ntu.edu.tw/~cjlin/papers/guide/guide.pdf): hướng dẫn chuẩn hóa dữ liệu và chọn $C$, $\gamma$.
+- Dữ liệu: R. A. Fisher, *The Use of Multiple Measurements in Taxonomic Problems*, Annals of Eugenics, 1936 (số đo của Edgar Anderson); bản có trong `sklearn.datasets.load_iris`.

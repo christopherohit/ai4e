@@ -1,112 +1,51 @@
-// Multinomial Naive Bayes spam filter on 16 hand-written Vietnamese emails and a 10-word vocabulary. Small enough that
-// every count, smoothed probability and log-score in the article can be checked by hand.
-export const CLASSES = ['spam', 'thường'] as const;
-export type Label = 0 | 1;
+// Multinomial Naive Bayes trained on the SMS Spam Collection (80% train split, seeded and stratified). Only word counts
+// are stored; test-set metrics for each α come from scripts/ml-datasets/prepare.py and match scikit-learn exactly.
+import data from './data/sms-spam.json';
 
-export const VOCAB = ['miễn phí', 'trúng', 'thưởng', 'khuyến mãi', 'click', 'chuyển khoản', 'họp', 'báo cáo', 'dự án', 'cảm ơn'] as const;
-export type Word = typeof VOCAB[number];
+export const SOURCE = data.source;
+export const TRAIN = data.train, TEST = data.test;
+export const METRICS = data.metrics;
+export const CALIBRATION = data.calibration;
+export const EXTREME = data.extreme;
+export const VOCAB = data.vocab as [string, number, number][];
+const INDEX = new Map(VOCAB.map(([word], i) => [word, i]));
+export const TOTAL = { spam: VOCAB.reduce((s, v) => s + v[1], 0), ham: VOCAB.reduce((s, v) => s + v[2], 0) };
+export const V = VOCAB.length;
+export const PRIOR_SPAM = TRAIN.spam / (TRAIN.spam + TRAIN.ham);
 
-export interface Email { text: string; words: Word[]; label: Label }
-const mail = (label: Label, text: string, ...words: Word[]): Email => ({ text, words, label });
+const TOKEN = new RegExp(data.token, 'g');
+export const tokenize = (text: string) => text.toLowerCase().match(TOKEN) ?? [];
+export const known = (word: string) => INDEX.has(word);
+export const counts = (word: string): [number, number] => { const i = INDEX.get(word); return i === undefined ? [0, 0] : [VOCAB[i][1], VOCAB[i][2]]; };
 
-export const TRAIN: Email[] = [
-  mail(0, 'Miễn phí! Click nhận quà khuyến mãi', 'miễn phí', 'click', 'khuyến mãi'),
-  mail(0, 'Bạn đã trúng thưởng, click để nhận', 'trúng', 'thưởng', 'click'),
-  mail(0, 'Trúng thưởng 100 triệu, chuyển khoản phí để nhận', 'trúng', 'thưởng', 'chuyển khoản'),
-  mail(0, 'Khuyến mãi miễn phí vận chuyển, click ngay', 'khuyến mãi', 'miễn phí', 'click'),
-  mail(0, 'Chúc mừng trúng thưởng iPhone miễn phí', 'trúng', 'thưởng', 'miễn phí'),
-  mail(0, 'Chuyển khoản ngay để giữ khuyến mãi', 'chuyển khoản', 'khuyến mãi'),
-  mail(1, 'Mời họp dự án lúc 9h', 'họp', 'dự án'),
-  mail(1, 'Gửi báo cáo dự án tuần này', 'báo cáo', 'dự án'),
-  mail(1, 'Cảm ơn anh đã gửi báo cáo', 'cảm ơn', 'báo cáo'),
-  mail(1, 'Lịch họp: báo cáo tiến độ dự án', 'họp', 'báo cáo', 'dự án'),
-  mail(1, 'Đã chuyển khoản tiền ăn trưa, cảm ơn', 'chuyển khoản', 'cảm ơn'),
-  mail(1, 'Link tài liệu dự án, click để xem', 'dự án', 'click'),
-  mail(1, 'Cảm ơn mọi người đã dự họp', 'cảm ơn', 'họp'),
-  mail(1, 'Khuyến mãi căng tin: cơm miễn phí cho đội dự án', 'khuyến mãi', 'miễn phí', 'dự án'),
-  mail(1, 'Báo cáo cuộc họp và kế hoạch dự án', 'báo cáo', 'họp', 'dự án'),
-  mail(1, 'Cảm ơn, mình đã nhận được báo cáo', 'cảm ơn', 'báo cáo'),
-];
-
-/** A message to classify: how many times each vocabulary word occurs. */
-export type Counts = Partial<Record<Word, number>>;
-
-export function classCounts() {
-  return [0, 1].map(label => TRAIN.filter(email => email.label === label).length) as [number, number];
+/** P(w | c) = (count + α) / (total words of c + α·|V|). */
+export function likelihood(word: string, alpha: number): [number, number] {
+  const [s, h] = counts(word);
+  return [(s + alpha) / (TOTAL.spam + alpha * V), (h + alpha) / (TOTAL.ham + alpha * V)];
 }
-export const prior = (label: Label) => classCounts()[label] / TRAIN.length;
+/** log P(w | spam) − log P(w | thường): the evidence one occurrence adds to the log-odds. */
+export const logRatio = (word: string, alpha: number) => { const [s, h] = likelihood(word, alpha); return Math.log(s) - Math.log(h); };
 
-/** count(w, c): occurrences of each word over all emails of class c. */
-export function wordCounts(label: Label): Record<Word, number> {
-  const counts = Object.fromEntries(VOCAB.map(word => [word, 0])) as Record<Word, number>;
-  for (const email of TRAIN) if (email.label === label) for (const word of email.words) counts[word]++;
-  return counts;
-}
-export const totalWords = (label: Label) => Object.values(wordCounts(label)).reduce((sum, value) => sum + value, 0);
-
-/** P(w | c) = (count(w, c) + α) / (Σ_w count(w, c) + α·|V|): Laplace (add-α) smoothing. */
-export function likelihood(word: Word, label: Label, alpha: number) {
-  return (wordCounts(label)[word] + alpha) / (totalWords(label) + alpha * VOCAB.length);
+export interface Step { word: string; known: boolean; delta: number; total: number }
+/** Log-odds after the prior and after each token, in reading order. Unknown tokens add nothing. */
+export function evidence(text: string, alpha: number) {
+  const prior = Math.log(PRIOR_SPAM / (1 - PRIOR_SPAM));
+  let total = prior;
+  const steps: Step[] = tokenize(text).map(word => { const k = known(word), delta = k ? logRatio(word, alpha) : 0; total += delta; return { word, known: k, delta, total }; });
+  return { prior, steps, logOdds: total, pSpam: 1 / (1 + Math.exp(-total)) };
 }
 
-export interface Term { word: Word; count: number; logs: [number, number] }
-export interface Score { logPrior: [number, number]; terms: Term[]; logScore: [number, number]; posterior: [number, number] }
-
-/** log P(c) + Σ_w n_w log P(w | c), then normalise. With α = 0 an unseen word gives −∞ for that class. */
-export function classify(message: Counts, alpha: number): Score {
-  const logPrior = [Math.log(prior(0)), Math.log(prior(1))] as [number, number];
-  const terms: Term[] = VOCAB.filter(word => (message[word] ?? 0) > 0).map(word => ({ word, count: message[word]!, logs: [0, 1].map(label => message[word]! * Math.log(likelihood(word, label as Label, alpha))) as [number, number] }));
-  const logScore = [0, 1].map(label => logPrior[label] + terms.reduce((sum, term) => sum + term.logs[label], 0)) as [number, number];
-  return { logPrior, terms, logScore, posterior: normalise(logScore) };
+/** “lt”, “gt”, “amp” come from HTML entities (&lt;#&gt;) left in the corpus, not from words people typed. */
+const ARTIFACTS = new Set(['lt', 'gt', 'amp']);
+/** Words that best separate the classes: largest |log ratio| among words seen at least `min` times. */
+export function strongest(alpha: number, side: 'spam' | 'ham', count: number, min = 15) {
+  return VOCAB.filter(([word, s, h]) => s + h >= min && !ARTIFACTS.has(word)).map(([word, s, h]) => ({ word, spam: s, ham: h, ratio: logRatio(word, alpha) }))
+    .sort((a, b) => (side === 'spam' ? b.ratio - a.ratio : a.ratio - b.ratio)).slice(0, count);
 }
 
-/** Softmax of two log-scores. Both −∞ (each class has an impossible word) is undefined: returned as NaN. */
-export function normalise([a, b]: [number, number]): [number, number] {
-  if (a === -Infinity && b === -Infinity) return [NaN, NaN];
-  const top = Math.max(a, b);
-  const [ea, eb] = [Math.exp(a - top), Math.exp(b - top)];
-  return [ea / (ea + eb), eb / (ea + eb)];
-}
-
-/** P(spam) after the prior and after each word occurrence, in vocabulary order: the evidence piling up. */
-export function evidence(message: Counts, alpha: number) {
-  const score = classify(message, alpha);
-  const steps: { label: string; pSpam: number }[] = [{ label: 'prior', pSpam: normalise(score.logPrior)[0] }];
-  let running = [...score.logPrior] as [number, number];
-  for (const term of score.terms) for (let k = 0; k < term.count; k++) {
-    running = [running[0] + term.logs[0] / term.count, running[1] + term.logs[1] / term.count];
-    steps.push({ label: term.word, pSpam: normalise(running)[0] });
-  }
-  return steps;
-}
-
-/**
- * "trúng" and "thưởng" always appear together in the training spam, so they carry one piece of evidence. Treating them
- * as one feature "trúng thưởng" shows how much the independence assumption double-counts.
- */
-export function classifyMerged(message: Counts, alpha: number) {
-  const pair = Math.max(message['trúng'] ?? 0, message['thưởng'] ?? 0);
-  const rest = { ...message, 'trúng': 0, 'thưởng': 0 };
-  const base = classify(rest, alpha);
-  const vocab = VOCAB.length - 1;
-  const pairLog = [0, 1].map(label => {
-    const counts = wordCounts(label as Label);
-    const total = totalWords(label as Label) - counts['thưởng'];
-    return pair ? pair * Math.log((counts['trúng'] + alpha) / (total + alpha * vocab)) : 0;
-  }) as [number, number];
-  // The other words are rescored with the merged vocabulary so both views use a proper distribution.
-  const restLog = [0, 1].map(label => {
-    const counts = wordCounts(label as Label);
-    const total = totalWords(label as Label) - counts['thưởng'];
-    return base.terms.reduce((sum, term) => sum + term.count * Math.log((counts[term.word] + alpha) / (total + alpha * vocab)), 0);
-  });
-  const logScore = [base.logPrior[0] + restLog[0] + pairLog[0], base.logPrior[1] + restLog[1] + pairLog[1]] as [number, number];
-  return { pairLog, logScore, posterior: normalise(logScore) };
-}
-
-export const EXAMPLES: { name: string; counts: Counts }[] = [
-  { name: 'Trúng thưởng, click', counts: { 'trúng': 1, 'thưởng': 1, 'click': 1 } },
-  { name: 'Báo cáo dự án', counts: { 'báo cáo': 1, 'dự án': 1 } },
-  { name: 'Khuyến mãi miễn phí cho dự án', counts: { 'khuyến mãi': 1, 'miễn phí': 1, 'dự án': 1 } },
-  { name: 'Trúng thưởng… mời họp', counts: { 'trúng': 1, 'thưởng': 1, 'họp': 1 } },
+export const EXAMPLES = [
+  { name: 'Trúng thưởng', text: 'WINNER! You have won a guaranteed £1000 cash prize. To claim call now' },
+  { name: 'Nhạc chuông', text: 'Free ringtone waiting for you, txt STOP to end' },
+  { name: 'Hẹn về nhà', text: 'Ok lor, I will call you later when I get home' },
+  { name: 'Lẫn lộn', text: 'Did you claim the prize at the office party? Call me later lol' },
 ];

@@ -1,32 +1,18 @@
 ---
-import Lab from '../../_shared/sequence-lab/Lab.astro';
-import '../../_shared/optimization-lab/plots.css';
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
 ---
-<Lab id="mini-batch-sgd" title="Batch, Mini-batch và SGD · mỗi bước dùng bao nhiêu dữ liệu?" label="Đường đi của thuật toán trên bản đồ loss và các mẫu dữ liệu được dùng ở bước đang chọn"
-  steps={['Batch GD', 'SGD (B = 1)', 'Mini-batch', 'So sánh ba cách']}
-  scope="Mô phỏng giáo dục: hồi quy tuyến tính ŷ = w·x + b trên 64 điểm dữ liệu tổng hợp (không phải giá nhà thật), loss MSE, learning rate cố định, không momentum. Thứ tự xáo trộn và các lô được sinh bằng hạt giống cố định nên mọi người đọc thấy cùng một kết quả; bấm Xáo trộn lại để xem lần chạy khác. Khi huấn luyện mạng nơ-ron thật, lô thường có 32–4096 mẫu trên tập hàng triệu mẫu.">
-  <div class="strip" slot="strip">
-    <div class="player">
-      <button type="button" data-prev aria-label="Bước trước">◀</button>
-      <button type="button" data-play aria-pressed="false">▶ Chạy</button>
-      <button type="button" data-next aria-label="Bước sau">▶▶</button>
-      <output data-position></output>
-    </div>
-  </div>
+<GlassLab id="mini-batch-sgd" title="Batch, Mini-batch và SGD · huấn luyện trên 20 640 khu dân cư thật" label="Hoạt cảnh so sánh batch gradient descent, mini-batch và SGD trên dữ liệu California Housing"
+  chapters={['Batch GD', 'SGD', 'Mini-batch', 'Cuộc đua']}
+  data="California Housing (StatLib; Pace & Barry 1997), lấy từ điều tra dân số Mỹ năm 1990: 20 640 khu dân cư với thu nhập trung vị và giá nhà trung vị. Giá nhà trong dữ liệu gốc bị chặn ở 500 001 $ (4,8% số khu)."
+  scope="Hồi quy tuyến tính một biến trên toàn bộ 20 640 khu, gradient tính chính xác trong trình duyệt. Thứ tự xáo trộn dùng hạt giống cố định; learning rate cố định, không momentum. Một epoch luôn tốn 20 640 lần tính gradient mẫu dù chia lô thế nào.">
   <Fragment slot="controls">
-    <label class="field"><span class="field-row"><span>Learning rate η</span><output data-value="lr"></output></span><input type="range" name="lr" min="0.01" max="0.37" step="0.01" value="0.1" /></label>
-    <label class="field"><span class="field-row"><span>Số epoch</span><output data-value="epochs"></output></span><input type="range" name="epochs" min="1" max="10" step="1" value="5" /></label>
-    <label class="field" data-batch-field hidden><span class="field-row"><span>Kích thước lô</span><output data-value="batch"></output></span><input type="range" name="batch" min="0" max="6" step="1" value="4" /></label>
-    <div class="actions"><button type="button" data-shuffle>Xáo trộn lại</button><button type="button" data-reset>Đặt lại</button></div>
-    <p class="hint">Thử: ở bước 2, bấm ▶▶ vài lần và nhìn góc lệch; có bước đi gần như ngược dốc. Ở bước 3, kéo kích thước lô từ 1 lên 64 và xem đám mũi tên mờ co lại.</p>
+    <p class="hint" data-chapters="0">Mỗi chấm mờ là một khu dân cư. Batch GD dùng tất cả các chấm cho mỗi bước nên đường đi trên bản đồ loss thẳng và đều.</p>
+    <p class="hint" data-chapters="1">Kéo thanh thời gian về đầu để xem từng khu được bốc ra và kéo đường thẳng về phía nó. Từ giây thứ 7 hoạt cảnh tua nhanh qua cả epoch.</p>
+    <label class="field" data-chapters="2"><span class="field-row"><span>Kích thước lô B</span><output data-value="batch"></output></span><input type="range" name="batch" min="0" max="5" step="1" value="2" /></label>
+    <p class="hint" data-chapters="2">Kéo B từ 1 lên 20 640: quạt mũi tên cam co lại về mũi tên xanh lá (gradient thật), thanh nhiễu tương ứng ngắn dần theo √B.</p>
+    <p class="hint" data-chapters="3">Ba thuật toán nhận cùng ngân sách tính toán. Mỗi cách dùng learning rate gần mức ổn định của riêng nó; bảng bên dưới ghi MSE tại các mốc epoch.</p>
   </Fragment>
-  <section class="inspector" aria-labelledby="sgd-chart-heading">
-    <div class="section-head"><h3 id="sgd-chart-heading">Loss trên toàn bộ dữ liệu sau mỗi epoch</h3><p data-chart-note></p></div>
-    <div class="chart"><svg data-chart role="img" aria-labelledby="sgd-chart-heading" aria-describedby="sgd-chart-caption"></svg></div>
-    <p id="sgd-chart-caption" class="caption">Mỗi epoch, cả ba cách đều tính đúng 64 gradient mẫu, tức chi phí tính toán như nhau. Khác biệt là số lần cập nhật: 1 với batch GD, 64/B với mini-batch, 64 với SGD. Nhấp vào biểu đồ để nhảy tới cuối epoch đó.</p>
-    <details class="table-view"><summary>Xem dạng bảng</summary><div class="table-scroll"><table class="data" data-table></table></div></details>
-  </section>
-</Lab>
+</GlassLab>
 <script>
   import { initMiniBatchSgdLab } from './render';
   initMiniBatchSgdLab();

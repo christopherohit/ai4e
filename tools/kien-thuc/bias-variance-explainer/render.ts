@@ -1,111 +1,211 @@
-// Bias–variance lab view: one polynomial fit (underfit / overfit) → many fits from fresh training sets → the error
-// decomposition → how more data moves the sweet spot. All fits run in the browser.
-import { $, $$, bars, boot, el, fillTable, fmt, lineChart, onResize, setCard, slider, wireSteps, type Root, type StepText } from '../../_shared/sequence-lab/ui';
-import { band, curve as plotCurve, frame, marker, polyline, type Frame } from '../../_shared/optimization-lab/plots';
-import { DEGREES, GRID, NOISE, curve, dataset, decompose, fit, predict, testError, trainError, truth, type Decomposition } from './model';
+// Bias–variance lab on Auto MPG: fit polynomials to 30 random cars, redo it on many random subsets (curves and a
+// dartboard of predictions), decompose the error, then watch variance fall as the training set grows.
+import { glassLab, type Frame, type Scene } from '../../_shared/glass-lab/engine';
+import { C, Plot, alpha, clamp, seg, split, vn, type Point, type Rect } from '../../_shared/glass-lab/gfx';
+import { categoryChart } from '../../_shared/glass-lab/views';
+import { DEGREES, HP, MPG, N, NOISE, SIZES, decompose, fit, mse, predict, reference, subset, type Decomposition } from './model';
 
 export const explainerKind = 'educational-simulation';
 
-const texts: StepText[] = [
-  ['Một tập dữ liệu: underfit và overfit', 'Dữ liệu sinh từ đường cong thật (nét đứt xanh) cộng nhiễu. Bậc thấp không đủ linh hoạt: sai cả trên tập huấn luyện (underfit). Bậc cao uốn theo từng điểm nhiễu: lỗi huấn luyện gần 0 nhưng lỗi trên dữ liệu mới tăng vọt (overfit).', 'ŷ(x) = w₀ + w₁x + … + w_d x^d,  học bằng bình phương tối thiểu'],
-  ['Nhiều tập huấn luyện khác nhau', 'Lấy 20 tập huấn luyện mới từ cùng phân phối và huấn luyện lại. Đường trung bình (đen) lệch khỏi đường thật là bias. Độ tản của các đường quanh trung bình là variance. Bậc thấp: các đường giống nhau nhưng cùng sai. Bậc cao: trung bình đúng nhưng mỗi đường một kiểu.', 'bias(x) = E[ŷ(x)] − f(x),  variance(x) = E[(ŷ(x) − E[ŷ(x)])²]'],
-  ['Phân rã lỗi kỳ vọng', 'Lỗi trên dữ liệu mới, lấy trung bình qua mọi tập huấn luyện có thể, tách đúng thành ba phần: bias², variance và nhiễu không thể giảm σ². Tăng độ phức tạp giảm bias² nhưng tăng variance. Điểm tốt nhất là nơi tổng nhỏ nhất, không phải nơi một phần bằng 0.', 'E[(y − ŷ)²] = bias² + variance + σ²'],
-  ['Thêm dữ liệu', 'Nhiều dữ liệu hơn hầu như không đổi bias (mô hình vẫn là đa thức bậc d) nhưng giảm mạnh variance, vì mỗi điểm nhiễu ảnh hưởng ít hơn. Vì vậy điểm tối ưu dịch về phía mô hình phức tạp hơn khi dữ liệu tăng.', 'variance ≈ σ² · (d + 1) / n  (hồi quy tuyến tính, x phân bố đều)'],
-];
+const state = { degree: null as number | null, run: 0, nIndex: null as number | null };
+let currentT = 0;
+const cache = new Map<string, Decomposition>();
+const row = (degree: number, n: number) => { const key = `${degree}:${n}`; if (!cache.has(key)) cache.set(key, decompose(degree, n)); return cache.get(key)!; };
+const rows = (n: number) => DEGREES.map(d => row(d, n));
+const fits = new Map<string, number[]>();
+/** Fitted coefficients for subset `run` of size n, memoised because every frame redraws the same models. */
+const model = (n: number, run: number, degree: number) => { const key = `${n}:${run}:${degree}`; let c = fits.get(key); if (!c) { c = fit(subset(n, run).train, degree); fits.set(key, c); } return c; };
+const GRID = Array.from({ length: 161 }, (_, i) => 40 + i * 1.25);
+const log10 = (v: number) => Math.log10(Math.max(v, 1e-9));
+const sup = (n: number) => String(n).replace('-', '⁻').replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(d)]);
+const big = (v: number) => (v >= 1e4 ? `${vn(v / 10 ** Math.floor(Math.log10(v)), 1)} × 10${sup(Math.floor(Math.log10(v)))}` : vn(v, v >= 100 ? 0 : 1));
+const logTick = (v: number) => (Number.isInteger(v) ? (v <= 2 ? vn(10 ** v, v < 0 ? -v : 0) : `10${sup(v)}`) : '');
 
-const N_OPTIONS = [12, 15, 20, 30, 50, 100] as const;
-const RUNS = 150;
-const VIEW = { x: [0, 1] as [number, number], y: [-2, 2] as [number, number], xTicks: [0, 0.25, 0.5, 0.75, 1], yTicks: [-2, -1, 0, 1, 2] };
+function carsPlot(f: Frame, rect: Rect, title: string) {
+  f.g.panel(rect.x, rect.y, rect.w, rect.h, title, C.cyan);
+  const plot = new Plot(f.g, rect, [40, 240], [5, 48], { l: 42, r: 14, t: 40, b: 34 });
+  plot.axes({ xTicks: [50, 100, 150, 200], yTicks: [10, 20, 30, 40], xLabel: 'mã lực', yLabel: 'mpg', fx: v => vn(v, 0), fy: v => vn(v, 0) });
+  return plot;
+}
+function allCars(plot: Plot, highlight: readonly number[] = []) {
+  const { ctx } = plot.g;
+  ctx.save(); ctx.fillStyle = alpha(C.cyan, 0.2);
+  for (let i = 0; i < N; i++) ctx.fillRect(plot.px(HP[i]) - 1.4, plot.py(MPG[i]) - 1.4, 2.8, 2.8);
+  ctx.restore();
+  for (const i of highlight) plot.g.circle(plot.px(HP[i]), plot.py(MPG[i]), 4.2, C.amber, { glow: 12 });
+}
+const curve = (coef: number[]) => GRID.map(h => [h, predict(coef, h)] as Point);
+const refCurve = GRID.map(h => [h, reference(h)] as Point);
 
-function start(root: Root) {
-  const view = $(root, '[data-stage-view]');
-  const chartSvg = $(root, '[data-chart]') as unknown as SVGSVGElement;
-  const state = { stage: 0, run: 0 };
-  const cache = new Map<number, Decomposition[]>();
-  const table = (n: number) => { if (!cache.has(n)) cache.set(n, DEGREES.map(degree => decompose(degree, n, RUNS))); return cache.get(n)!; };
-  const degree = slider(root, 'degree', value => `${value}`, () => draw());
-  const nIndex = slider(root, 'n', value => `${N_OPTIONS[value]} điểm`, () => draw());
-  wireSteps(root, stage => { state.stage = stage; $(root, '[data-n-field]').hidden = stage !== 3; draw(); });
-  $(root, '[data-resample]').addEventListener('click', () => { state.run = (state.run + 1) % RUNS; draw(); });
-  $$<HTMLButtonElement>(root, '[data-degree]').forEach(button => button.addEventListener('click', () => { degree.set(Number(button.dataset.degree)); draw(); }));
-  $(root, '[data-reset]').addEventListener('click', () => { degree.set(3); nIndex.set(0); state.run = 0; draw(); });
+// ---------- Chapter 1 ----------
+const timelineDegree = (t: number) => (t < 3.5 ? 1 : t < 7 ? 2 : 8);
+const degree1 = () => state.degree ?? timelineDegree(currentT);
+const chapter1: Scene = {
+  title: 'Underfit và overfit trên 30 xe',
+  duration: 11,
+  beats: () => [
+    { at: 0, text: 'Chỉ có 30 xe huấn luyện (chấm cam) lấy ngẫu nhiên từ 392 xe. 362 xe còn lại dùng để kiểm tra.' },
+    { at: 1.5, text: 'Đường thẳng (bậc 1) không theo được độ cong: sai nhiều cả trên xe huấn luyện. Đây là underfitting.' },
+    { at: 3.5, text: 'Bậc 2 bám theo hình dạng chung và cho lỗi kiểm tra thấp nhất.' },
+    { at: 7, text: 'Bậc 8 uốn qua sát từng xe huấn luyện, lỗi huấn luyện giảm thêm, nhưng vọt lên ở hai đầu nơi ít xe: lỗi kiểm tra tăng gấp nhiều lần. Đây là overfitting.' },
+  ],
+  formula: () => `mpg ≈ w₀ + w₁·hp + … + w_d·hp^d,  d = ${degree1()}\nlỗi kiểm tra đo trên ${N - 30} xe không dùng để huấn luyện`,
+  render(f) {
+    const { g, t, narrow } = f; currentT = t;
+    const [left, right] = split(f.safe, narrow ? [1.3, 1] : [1.45, 1], narrow);
+    const d = degree1(), { train, test } = subset(30, state.run), coef = fit(train, d);
+    const plot = carsPlot(f, left, `Đa thức bậc ${d} học từ 30 xe`);
+    plot.clip(() => {
+      allCars(plot, train);
+      for (const i of train) plot.line([[HP[i], MPG[i]], [HP[i], predict(coef, HP[i])]], alpha(C.magenta, 0.6), { width: 1.2 });
+      plot.line(curve(coef), C.amber, { width: 3, glow: 16 });
+    });
+    const tr = mse(coef, train), te = mse(coef, test);
+    g.tag(`lỗi huấn luyện ${big(tr)}`, plot.box.x + plot.box.w - 8, plot.box.y + 14, C.amber, 'right');
+    g.tag(`lỗi kiểm tra ${big(te)}`, plot.box.x + plot.box.w - 8, plot.box.y + 40, te > 2 * tr ? C.red : C.lime, 'right');
+    const data = rows(30);
+    categoryChart(f, right, 'Trung bình 150 lần lấy mẫu (thang log)', DEGREES.map(String), [
+      { label: 'lỗi kiểm tra', values: data.map(r => log10(r.test)), color: C.red, format: v => big(10 ** v) },
+      { label: 'lỗi huấn luyện', values: data.map(r => log10(r.train)), color: C.amber, format: v => big(10 ** v) },
+    ], [1, 7], d - 1, 1, logTick, 'bậc đa thức');
+  },
+  metrics() { const { train, test } = subset(30, state.run), coef = fit(train, degree1()); return [{ label: 'Bậc', value: String(degree1()), tone: 'violet' }, { label: 'Lỗi huấn luyện', value: big(mse(coef, train)), tone: 'amber' }, { label: 'Lỗi kiểm tra', value: big(mse(coef, test)), tone: 'red' }]; },
+  table: () => ({ headers: ['Bậc', 'Lỗi huấn luyện TB', 'Lỗi kiểm tra TB'], rows: rows(30).map(r => [r.degree, vn(r.train, 2), big(r.test)]), caption: 'Trung bình trên 150 tập 30 xe lấy ngẫu nhiên; kiểm tra trên 362 xe còn lại.' }),
+};
 
-  const n = () => (state.stage === 3 ? N_OPTIONS[nIndex.value] : N_OPTIONS[0]);
+// ---------- Chapter 2 ----------
+const PROBES = [95, 180] as const;
+const chapter2: Scene = {
+  title: 'Nhiều tập huấn luyện: bias và variance',
+  duration: 12,
+  beats: () => [
+    { at: 0, text: 'Lặp lại: mỗi lần lấy 30 xe khác nhau rồi khớp lại cùng bậc đa thức. Mỗi đường mờ là một lần.' },
+    { at: 3.5, text: 'Đường đen là trung bình các mô hình. Nét đứt xanh lá là đường làm mượt trên cả 392 xe, ta coi như “sự thật”.' },
+    { at: 6.5, text: `Bảng bắn bia bên phải: mỗi chấm là sai số của một mô hình tại ${PROBES[0]} và ${PROBES[1]} mã lực. Tâm cụm lệch khỏi hồng tâm là bias, độ tản của cụm là variance.` },
+    { at: 9.5, text: 'Bậc thấp: cụm chụm nhưng lệch tâm. Bậc cao: cụm quanh tâm nhưng tản tung tóe. Kéo thanh bậc đa thức để so sánh.' },
+  ],
+  formula: 'bias(x) = E[ŷ(x)] − f(x)    variance(x) = E[(ŷ(x) − E[ŷ(x)])²]\nE lấy trên các tập huấn luyện 30 xe có thể có',
+  render(f) {
+    const { g, t, narrow } = f; currentT = t;
+    const [left, right] = split(f.safe, narrow ? [1.2, 1] : [1.4, 1], narrow);
+    const d = state.degree ?? 2;
+    const plot = carsPlot(f, left, `25 mô hình bậc ${d}, mỗi mô hình từ 30 xe khác nhau`);
+    const shown = Math.floor(seg(t, 0.3, 3.5) * 25);
+    const mean = GRID.map(() => 0);
+    const models = Array.from({ length: 25 }, (_, r) => model(30, r, d));
+    plot.clip(() => {
+      allCars(plot);
+      models.forEach((coef, r) => { if (r < shown) plot.line(curve(coef), alpha(C.amber, 0.38), { width: 1.2 }); });
+      models.forEach(coef => GRID.forEach((h, i) => { mean[i] += predict(coef, h) / models.length; }));
+      if (t > 3.5) {
+        plot.line(refCurve, C.lime, { width: 2.6, dash: [7, 5], glow: 8 });
+        plot.line(GRID.map((h, i) => [h, mean[i]] as Point), C.white, { width: 3, glow: 10 });
+      }
+      for (const h of PROBES) plot.line([[h, 5], [h, 48]], alpha(C.violet, 0.5), { width: 1, dash: [3, 4] });
+    });
+    dartboard(f, right, d, seg(t, 6.5, 9));
+  },
+  metrics() { const r = row(state.degree ?? 2, 30); return [{ label: 'Bậc', value: String(state.degree ?? 2), tone: 'violet' }, { label: 'bias²', value: big(r.bias2), tone: 'lime' }, { label: 'variance', value: big(r.variance), tone: 'amber' }]; },
+  table: () => ({ headers: ['Bậc', 'bias²', 'variance'], rows: rows(30).map(r => [r.degree, big(r.bias2), big(r.variance)]) }),
+};
 
-  function draw() {
-    const stage = state.stage, d = degree.value, size = n();
-    setCard(root, stage, 4, texts[stage]);
-    const rows = table(size), row = rows[d];
-    const best = rows.reduce((top, item) => (item.expected < top.expected ? item : top));
-    view.replaceChildren();
-    if (stage === 0) drawSingle(d, size, best.degree);
-    else drawMany(stage, row, size, best);
-
-    const clamp = (value: number) => Math.min(value, 0.8);
-    const series = stage === 0
-      ? [{ label: 'lỗi kiểm tra', values: rows.map(item => clamp(item.test)), tone: 2 as const }, { label: 'lỗi huấn luyện', values: rows.map(item => clamp(item.train)), tone: 1 as const }]
-      : [{ label: 'lỗi kỳ vọng', values: rows.map(item => clamp(item.expected)), tone: 2 as const }, { label: 'bias²', values: rows.map(item => clamp(item.bias2)), tone: 1 as const }, { label: 'variance', values: rows.map(item => clamp(item.variance)), tone: 3 as const }];
-    lineChart(chartSvg, { series, xLabels: DEGREES.map(String), yMax: 0.8, yTicks: [0, 0.2, 0.4, 0.6, 0.8], yFormat: value => fmt(value, 1), cursor: d, onPick: index => { degree.set(index); draw(); } });
-    $(root, '[data-chart-title]').textContent = stage === 0 ? 'Lỗi huấn luyện và lỗi kiểm tra theo bậc đa thức' : 'Bias², variance và lỗi kỳ vọng theo bậc đa thức';
-    $(root, '[data-chart-note]').textContent = `n = ${size} điểm · trung bình ${RUNS} tập huấn luyện · giá trị trên 0.8 bị cắt`;
-    fillTable($<HTMLTableElement>(root, '[data-table]'), ['Bậc', 'Lỗi huấn luyện', 'Lỗi kiểm tra', 'bias²', 'variance', 'σ²', 'bias² + var + σ²'], rows.map(item => [item.degree, num(item.train), num(item.test), num(item.bias2), num(item.variance), num(item.noise), num(item.expected)]));
+function dartboard(f: Frame, rect: Rect, degree: number, reveal: number) {
+  const { g } = f;
+  g.panel(rect.x, rect.y, rect.w, rect.h, 'Bắn bia: sai số tại hai mức mã lực', C.magenta);
+  const size = Math.min(rect.w - 40, rect.h - 70), cx = rect.x + rect.w / 2, cy = rect.y + 40 + size / 2, R = size / 2, scale = R / 12;
+  [1, 2 / 3, 1 / 3].forEach((k, i) => g.circle(cx, cy, R * k, i === 2 ? alpha(C.magenta, 0.12) : null, { stroke: alpha(C.white, 0.18), width: 1 }));
+  g.line([[cx - R, cy], [cx + R, cy]], alpha(C.white, 0.15), { width: 1 }); g.line([[cx, cy - R], [cx, cy + R]], alpha(C.white, 0.15), { width: 1 });
+  const ref = PROBES.map(reference);
+  let sx = 0, sy = 0;
+  const count = 150, shown = Math.floor(count * reveal);
+  for (let r = 0; r < count; r++) {
+    const coef = model(30, r, degree);
+    const ex = predict(coef, PROBES[0]) - ref[0], ey = predict(coef, PROBES[1]) - ref[1];
+    sx += ex / count; sy += ey / count;
+    if (r < shown) g.circle(cx + clamp(ex * scale, -R, R), cy - clamp(ey * scale, -R, R), 2.6, C.amber, { alpha: 0.75 });
   }
-
-  function drawSingle(d: number, size: number, bestDegree: number) {
-    const data = dataset(size, state.run), coef = fit(data, d);
-    const f = plot(`Một tập ${size} điểm và đa thức bậc ${d}`);
-    plotCurve(f, truth, 0, 1, 'truth');
-    plotCurve(f, x => clip(predict(coef, x)), 0, 1, 'model');
-    data.x.forEach((x, i) => marker(f, [x, data.y[i]], 'cls-0', false, 4));
-    const train = trainError(coef, data), test = testError(coef);
-    const kind = d < bestDegree && train > 0.15 ? 'underfit' : test > 1.5 * (NOISE ** 2 + 0.03) && train < test / 2 ? 'overfit' : 'vừa';
-    view.append(legend(false), el('div', { class: 'duo' }, figure(f, 'Chấm xanh: tập huấn luyện. Đường cam: mô hình học được. Nét đứt xanh lá: hàm thật f(x) = sin 2πx.'),
-      el('div', {}, el('dl', { class: 'answer stack' },
-        el('div', {}, el('dt', {}, 'Lỗi huấn luyện (MSE)'), el('dd', {}, num(train))),
-        el('div', {}, el('dt', {}, 'Lỗi kiểm tra trên 3000 điểm mới'), el('dd', {}, num(test))),
-        el('div', {}, el('dt', {}, 'Chẩn đoán'), el('dd', {}, kind, ' ', el('span', { class: `badge ${kind === 'vừa' ? 'ok' : 'bad'}` }, kind === 'underfit' ? 'cả hai lỗi đều cao' : kind === 'overfit' ? 'lỗi kiểm tra ≫ lỗi huấn luyện' : 'hai lỗi gần nhau')))),
-      el('p', { class: 'note' }, `Mức nhiễu σ² = ${fmt(NOISE ** 2, 2)} là giới hạn dưới: không mô hình nào có lỗi kiểm tra thấp hơn. ${d + 1 >= size ? `Với ${d + 1} hệ số và ${size} điểm, đa thức đi qua (gần như) mọi điểm: lỗi huấn luyện ≈ 0.` : ''}`),
-      el('p', { class: 'hint' }, 'Bấm “Lấy mẫu lại” để xem cùng bậc đa thức trên một tập huấn luyện khác. Bậc cao đổi hình dạng mạnh mỗi lần: đó là variance.'))));
+  if (reveal > 0.95) {
+    g.line([[cx, cy], [cx + clamp(sx * scale, -R, R), cy - clamp(sy * scale, -R, R)]], C.lime, { width: 2, glow: 10 });
+    g.circle(cx + clamp(sx * scale, -R, R), cy - clamp(sy * scale, -R, R), 6, null, { stroke: C.lime, width: 2.5 });
   }
-
-  function drawMany(stage: number, row: Decomposition, size: number, best: Decomposition) {
-    const d = row.degree;
-    const f = plot(`${stage === 2 ? 'Dải trung bình ± độ lệch chuẩn' : '20 mô hình'} của đa thức bậc ${d} với ${size} điểm`);
-    if (stage === 2) band(f, GRID, row.mean.map((m, g) => clip(m - row.spread[g])), row.mean.map((m, g) => clip(m + row.spread[g])));
-    else for (let run = 0; run < 20; run++) { const values = curve(d, size, run); polyline(f, GRID.map((x, g) => [x, clip(values[g])]), 'ensemble'); }
-    plotCurve(f, truth, 0, 1, 'truth');
-    polyline(f, GRID.map((x, g) => [x, clip(row.mean[g])]), 'mean-fit');
-    const side = el('div', {});
-    if (stage === 2) {
-      const max = Math.max(row.expected, 0.3);
-      side.append(el('h4', {}, `Phân rã lỗi, bậc ${d}`), bars([
-        { label: 'bias²', value: row.bias2, text: num(row.bias2), tone: 1 },
-        { label: 'variance', value: row.variance, text: num(row.variance), tone: 3 },
-        { label: 'nhiễu σ²', value: row.noise, text: num(row.noise), tone: 0 },
-        { label: 'tổng (kỳ vọng)', value: row.expected, text: num(row.expected), tone: 2, on: true },
-      ], max, 'Các thành phần của lỗi kỳ vọng'), el('p', { class: 'note' }, `Đo trực tiếp trên dữ liệu mới: ${num(row.test)}, khớp với tổng ba thành phần. Lỗi kỳ vọng nhỏ nhất ở bậc ${best.degree} (${num(best.expected)}).`));
-    } else {
-      side.append(el('dl', { class: 'answer stack' },
-        el('div', {}, el('dt', {}, 'bias² (trung bình theo x)'), el('dd', {}, num(row.bias2))),
-        el('div', {}, el('dt', {}, 'variance (trung bình theo x)'), el('dd', {}, num(row.variance))),
-        el('div', {}, el('dt', {}, 'Bậc tốt nhất với n này'), el('dd', {}, `${best.degree} (lỗi ${num(best.expected)})`))));
-    }
-    side.append(el('p', { class: 'note' }, d <= 2 ? 'Bias cao: đường trung bình không theo kịp hình sin, dù các mô hình khá giống nhau.' : row.variance > 3 * row.bias2 && row.variance > 0.05 ? 'Variance cao: trung bình gần đúng nhưng từng mô hình dao động mạnh, nhất là gần hai đầu khoảng nơi ít dữ liệu.' : 'Cân bằng: bias nhỏ và các mô hình chưa tản nhiều.'));
-    if (stage === 3) side.append(el('p', { class: 'hint' }, `Với n = ${size}, bậc tốt nhất là ${best.degree}. Kéo n lên 100 rồi đặt bậc 9: variance giảm mạnh, bias gần như không đổi.`));
-    view.append(legend(true), el('div', { class: 'duo' }, figure(f, stage === 2 ? 'Dải cam: E[ŷ(x)] ± độ lệch chuẩn qua 150 tập huấn luyện. Đường đen: trung bình. Nét đứt xanh lá: hàm thật.' : 'Mỗi đường cam mờ là mô hình học từ một tập huấn luyện khác. Đường đen: trung bình của 150 mô hình.'), side));
-  }
-
-  onResize(chartSvg.parentElement!, () => draw());
-  draw();
+  g.text(`ngang: sai số tại ${PROBES[0]} hp · dọc: tại ${PROBES[1]} hp · vòng ngoài = ±12 mpg`, rect.x + rect.w / 2, rect.y + rect.h - 16, { size: 11, color: C.muted, align: 'center' });
 }
 
-const plot = (label: string) => frame({ width: 460, height: 340, ...VIEW, xLabel: 'x', yLabel: 'y', label });
-const clip = (value: number) => Math.max(-3, Math.min(3, value));
-const num = (value: number) => (value > 99 ? '> 99' : fmt(value, 3));
-const legend = (many: boolean) => el('div', { class: 'legend' },
-  el('span', {}, el('span', { class: 'key-line tone-3 dashed' }), 'hàm thật f(x)'),
-  many ? el('span', {}, el('span', { class: 'key-line', style: 'border-color: var(--color-text)' }), 'trung bình các mô hình') : el('span', {}, el('span', { class: 'key-line' }), 'mô hình học được'),
-  many ? el('span', {}, el('span', { class: 'key-line', style: 'opacity:.4' }), 'từng mô hình') : null);
-const figure = (f: Frame, caption: string) => el('figure', { class: 'opt-figure' }, f.root as unknown as Node, el('figcaption', { class: 'hint' }, caption));
+// ---------- Chapter 3 ----------
+const chapter3: Scene = {
+  title: 'Phân rã lỗi',
+  duration: 11,
+  beats: () => {
+    const r = rows(30), best = r.reduce((a, b) => (b.test < a.test ? b : a));
+    return [
+      { at: 0, text: 'Lỗi trên xe mới = bias² + variance + nhiễu. Nhiễu (khoảng 18 mpg²) là phần không mô hình nào giảm được.' },
+      { at: 3, text: `Bậc 1: bias² ≈ ${vn(r[0].bias2, 1)} vì đường thẳng không cong được. Từ bậc 2, bias² gần như bằng 0.` },
+      { at: 6, text: `Variance tăng theo bậc: ${vn(r[1].variance, 1)} ở bậc 2, ${big(r[4].variance)} ở bậc 5. Với 30 xe, mô hình linh hoạt dao động dữ dội ở vùng ít xe.` },
+      { at: 8.5, text: `Tổng nhỏ nhất ở bậc ${best.degree}. Đường lỗi ước lượng (bias² + variance + nhiễu) khớp với lỗi đo trực tiếp trên xe kiểm tra.` },
+    ];
+  },
+  formula: () => `E[(y − ŷ)²] = bias² + variance + σ²,  σ² ≈ ${vn(NOISE, 1)} (phần dư của đường làm mượt)`,
+  render(f) {
+    const { g, t, narrow } = f; currentT = t;
+    const [left, right] = split(f.safe, narrow ? [1.1, 1] : [1.2, 1], narrow);
+    const d = state.degree ?? 3, n = 30;
+    const plot = carsPlot(f, left, `Trung bình ± độ lệch chuẩn của 150 mô hình bậc ${d}`);
+    const models = Array.from({ length: 150 }, (_, r) => model(n, r, d));
+    const preds = GRID.map(h => models.map(c => predict(c, h)));
+    const mean = preds.map(p => p.reduce((a, b) => a + b, 0) / p.length), sd = preds.map((p, i) => Math.sqrt(p.reduce((a, b) => a + (b - mean[i]) ** 2, 0) / p.length));
+    plot.clip(() => {
+      allCars(plot);
+      const k = seg(t, 0.3, 2.5);
+      g.polygon([...GRID.map((h, i) => plot.p([h, mean[i] + sd[i] * k])), ...GRID.map((h, i) => plot.p([h, mean[i] - sd[i] * k])).reverse()], alpha(C.amber, 0.22));
+      plot.line(refCurve, C.lime, { width: 2.6, dash: [7, 5], glow: 8 });
+      plot.line(GRID.map((h, i) => [h, mean[i]] as Point), C.white, { width: 3, glow: 10 });
+    });
+    const r = rows(30), reveal = seg(t, 2.5, 9);
+    categoryChart(f, right, 'Theo bậc: thành phần của lỗi (thang log)', DEGREES.map(String), [
+      { label: 'lỗi đo trên xe kiểm tra', values: r.map(x => log10(x.test)), color: C.red, format: v => big(10 ** v) },
+      { label: 'bias² + variance + σ²', values: r.map(x => log10(x.expected)), color: C.white, format: v => big(10 ** v) },
+      { label: 'variance', values: r.map(x => log10(x.variance)), color: C.amber, format: v => big(10 ** v) },
+      { label: 'bias²', values: r.map(x => log10(x.bias2)), color: C.lime, format: v => big(10 ** v) },
+    ], [-1, 7], d - 1, reveal, logTick, 'bậc đa thức');
+  },
+  metrics() { const r = row(state.degree ?? 3, 30); return [{ label: 'bias²', value: big(r.bias2), tone: 'lime' }, { label: 'variance', value: big(r.variance), tone: 'amber' }, { label: 'σ²', value: vn(NOISE, 1), tone: 'violet' }, { label: 'Lỗi kiểm tra', value: big(r.test), tone: 'red' }]; },
+  table: () => ({ headers: ['Bậc', 'bias²', 'variance', 'σ²', 'Tổng ước lượng', 'Lỗi kiểm tra đo được'], rows: rows(30).map(r => [r.degree, big(r.bias2), big(r.variance), vn(NOISE, 2), big(r.expected), big(r.test)]), caption: 'n = 30 xe, trung bình 150 lần lấy mẫu.' }),
+};
 
-export const initBiasVarianceLab = () => boot('bias-variance', start);
+// ---------- Chapter 4 ----------
+const nNow = () => SIZES[state.nIndex ?? Math.min(SIZES.length - 1, Math.floor(seg(currentT, 0.8, 9.5) * SIZES.length))];
+const chapter4: Scene = {
+  title: 'Thêm dữ liệu',
+  duration: 11.5,
+  beats: () => [
+    { at: 0, text: 'Giữ nguyên bậc đa thức, tăng số xe huấn luyện từ 15 lên 300.' },
+    { at: 3, text: 'Dải dao động co lại rất nhanh: mỗi xe nhiễu ảnh hưởng ít hơn tới đường cong. Bias gần như không đổi.' },
+    { at: 6.5, text: 'Biểu đồ bên phải: variance của mọi bậc đều giảm khi n tăng, bậc càng cao giảm càng mạnh.' },
+    { at: 9, text: 'Vì thế “phức tạp” là khái niệm tương đối với lượng dữ liệu: bậc 5 overfit với 30 xe nhưng ổn với 300 xe.' },
+  ],
+  formula: () => `n = ${nNow()} xe, bậc ${state.degree ?? 5}\nvariance ≈ σ² · (số tham số) / n  khi n đủ lớn`,
+  render(f) {
+    const { g, t, narrow } = f; currentT = t;
+    const [left, right] = split(f.safe, narrow ? [1.1, 1] : [1.25, 1], narrow);
+    const d = state.degree ?? 5, n = nNow();
+    const plot = carsPlot(f, left, `25 mô hình bậc ${d}, mỗi mô hình từ ${n} xe`);
+    plot.clip(() => {
+      allCars(plot);
+      for (let r = 0; r < 25; r++) plot.line(curve(model(n, r, d)), alpha(C.amber, 0.35), { width: 1.2 });
+      plot.line(refCurve, C.lime, { width: 2.6, dash: [7, 5], glow: 8 });
+    });
+    g.tag(`variance ${big(row(d, n).variance)}`, plot.box.x + plot.box.w - 8, plot.box.y + 14, C.amber, 'right');
+    const show = [1, 2, 5, 8];
+    const colors = [C.lime, C.cyan, C.amber, C.magenta];
+    categoryChart(f, right, 'Variance theo số xe huấn luyện (thang log)', SIZES.map(String), show.map((deg, k) => ({ label: `bậc ${deg}`, values: SIZES.map(s => log10(row(deg, s).variance)), color: colors[k], format: v => big(10 ** v) })), [-2, 7], SIZES.indexOf(n as typeof SIZES[number]), 1, logTick, 'số xe huấn luyện n');
+  },
+  metrics() { const r = row(state.degree ?? 5, nNow()); return [{ label: 'n', value: String(nNow()), tone: 'violet' }, { label: 'bias²', value: big(r.bias2), tone: 'lime' }, { label: 'variance', value: big(r.variance), tone: 'amber' }, { label: 'Lỗi kiểm tra', value: big(r.test), tone: 'red' }]; },
+  table: () => ({ headers: ['n', 'bậc 1', 'bậc 2', 'bậc 5', 'bậc 8'], rows: SIZES.map(s => [s, ...[1, 2, 5, 8].map(d => big(row(d, s).test))]), caption: 'Lỗi kiểm tra trung bình (mpg²) theo số xe huấn luyện.' }),
+};
+
+export const initBiasVarianceLab = () => glassLab('bias-variance', [chapter1, chapter2, chapter3, chapter4], lab => {
+  lab.range('degree', value => String(value), value => { state.degree = value; });
+  lab.range('n', value => `${SIZES[value]} xe`, value => { state.nIndex = value; });
+  lab.on('[data-resample]', 'click', () => { state.run = (state.run + 1) % 150; });
+  lab.on('[data-autoplay]', 'click', () => { state.degree = null; state.nIndex = null; lab.replay(); });
+});

@@ -1,6 +1,6 @@
 ---
 title: 'Naive Bayes: Phân loại bằng xác suất và một giả định “ngây thơ”'
-description: 'Naive Bayes hoạt động thế nào: định lý Bayes, prior, likelihood, làm trơn Laplace, cộng log để phân loại, các biến thể và cái giá của giả định độc lập.'
+description: 'Naive Bayes hoạt động thế nào, qua bộ lọc spam học từ 4 457 tin nhắn thật: định lý Bayes, đếm từ, làm trơn Laplace, cộng log, kết quả thật và cái giá của giả định độc lập.'
 category: kien-thuc
 topic: nen-tang
 tags: ['Naive Bayes', 'Phân loại', 'Xác suất', 'Học máy']
@@ -12,15 +12,17 @@ date: 2026-10-26
 
 import Callout from '../../../../components/Callout.astro';
 
-## Bài toán: email này có phải spam không?
+## Bài toán: tin nhắn này có phải spam không?
 
-Một bộ lọc spam nhận vào nội dung email và trả về một trong hai nhãn: **spam** hoặc **thường**. Thay vì viết luật bằng tay ("có chữ *trúng thưởng* thì chặn"), ta muốn mô hình tự học từ các email đã gán nhãn.
+Một bộ lọc spam nhận vào nội dung tin nhắn và trả về một trong hai nhãn: **spam** hoặc **thường**. Thay vì viết luật bằng tay ("có chữ *prize* thì chặn"), ta muốn mô hình tự học từ các tin nhắn đã gán nhãn.
 
-Naive Bayes là một trong những cách đơn giản nhất để làm việc này, và vẫn được dùng rộng rãi: huấn luyện chỉ là **đếm**, dự đoán chỉ là **cộng**, chạy được trên dữ liệu lớn và cho kết quả tốt bất ngờ với văn bản. Lab phía trên dùng 16 email tiếng Việt tự viết (6 spam, 10 thường) và bộ từ vựng 10 từ để mọi con số đều kiểm tra được bằng tay.
+Naive Bayes là một trong những cách đơn giản nhất để làm việc này, và vẫn được dùng rộng rãi: huấn luyện chỉ là **đếm**, dự đoán chỉ là **cộng**, chạy được trên dữ liệu lớn và cho kết quả tốt bất ngờ với văn bản.
+
+Lab phía trên dùng dữ liệu thật: **SMS Spam Collection** (Almeida và Gómez Hidalgo, 2011), gồm 5 572 tin nhắn tiếng Anh đã gán nhãn, 747 trong số đó là spam. Ta giữ riêng 20% (1 115 tin) để kiểm tra và huấn luyện trên 4 457 tin còn lại. Trang chỉ lưu số đếm từ, không lưu nội dung tin nhắn.
 
 ## Định lý Bayes: lật ngược câu hỏi
 
-Ta muốn biết $P(\text{spam} \mid \text{email})$: đã đọc email, xác suất nó là spam là bao nhiêu? Đại lượng này khó ước lượng trực tiếp vì mỗi email gần như là duy nhất. **Định lý Bayes** lật ngược câu hỏi:
+Ta muốn biết $P(\text{spam} \mid \text{tin})$: đã đọc tin nhắn, xác suất nó là spam là bao nhiêu? Đại lượng này khó ước lượng trực tiếp vì mỗi tin nhắn gần như là duy nhất. **Định lý Bayes** lật ngược câu hỏi:
 
 $$
 P(c \mid \mathbf{x}) = \frac{P(\mathbf{x} \mid c)\,P(c)}{P(\mathbf{x})}.
@@ -29,7 +31,7 @@ $$
 Bốn thành phần có tên riêng:
 
 - $P(c)$: **prior**, xác suất của lớp $c$ trước khi nhìn dữ liệu.
-- $P(\mathbf{x} \mid c)$: **likelihood**, nếu email thuộc lớp $c$ thì khả năng thấy nội dung $\mathbf{x}$ là bao nhiêu.
+- $P(\mathbf{x} \mid c)$: **likelihood**, nếu tin nhắn thuộc lớp $c$ thì khả năng thấy nội dung $\mathbf{x}$ là bao nhiêu.
 - $P(c \mid \mathbf{x})$: **posterior**, xác suất của lớp sau khi đã thấy dữ liệu.
 - $P(\mathbf{x})$: hằng số chuẩn hóa, giống nhau cho mọi lớp nên khi so sánh có thể bỏ qua.
 
@@ -41,22 +43,22 @@ $$
 
 ## Giả định "ngây thơ"
 
-Vấn đề còn lại là $P(\mathbf{x} \mid c)$. Một email có thể chứa hàng trăm từ; số tổ hợp từ là khổng lồ, không thể đếm từng tổ hợp. Naive Bayes đưa ra giả định đơn giản hóa mạnh: **khi đã biết lớp, các từ xuất hiện độc lập với nhau**.
+Vấn đề còn lại là $P(\mathbf{x} \mid c)$. Một tin nhắn có thể chứa vài chục từ trong từ vựng hàng nghìn từ; số tổ hợp là khổng lồ, không thể đếm từng tổ hợp. Naive Bayes đưa ra giả định đơn giản hóa mạnh: **khi đã biết lớp, các từ xuất hiện độc lập với nhau**.
 
 $$
 P(x_1, x_2, \dots, x_n \mid c) = \prod_{i=1}^{n} P(x_i \mid c).
 $$
 
-Giả định này gần như luôn sai. "Trúng" và "thưởng" thường đi cùng nhau; "báo cáo" và "dự án" cũng vậy. Nhưng nhờ nó, thay vì ước lượng một phân phối trên mọi tổ hợp từ, ta chỉ cần ước lượng $P(\text{từ} \mid \text{lớp})$ cho từng từ riêng lẻ: một bảng đếm nhỏ.
+Giả định này gần như luôn sai. "claim" và "prize" thường đi cùng nhau trong spam; "ok" và "lor" trong tin nhắn bạn bè cũng vậy. Nhưng nhờ nó, thay vì ước lượng một phân phối trên mọi tổ hợp từ, ta chỉ cần ước lượng $P(\text{từ} \mid \text{lớp})$ cho từng từ riêng lẻ: một bảng đếm.
 
 ## Huấn luyện là đếm
 
 ### Prior
 
-$P(c)$ là tỉ lệ email của lớp $c$ trong dữ liệu huấn luyện. Trong lab:
+$P(c)$ là tỉ lệ tin nhắn của lớp $c$ trong dữ liệu huấn luyện:
 
 $$
-P(\text{spam}) = \frac{6}{16} = 0{,}375, \qquad P(\text{thường}) = \frac{10}{16} = 0{,}625.
+P(\text{spam}) = \frac{598}{4\,457} \approx 13{,}4\%, \qquad P(\text{thường}) = \frac{3\,859}{4\,457} \approx 86{,}6\%.
 $$
 
 ### Likelihood và làm trơn Laplace
@@ -67,76 +69,100 @@ $$
 P(w \mid c) = \frac{\text{đếm}(w, c) + \alpha}{\sum_{w'} \text{đếm}(w', c) + \alpha\,|V|}.
 $$
 
-$|V|$ là kích thước bộ từ vựng. Trong lab, các email spam có tổng cộng 17 từ thuộc bộ từ vựng, email thường có 23 từ, $|V| = 10$. Với $\alpha = 1$:
+Trong tập huấn luyện, các tin spam có tổng cộng 14 263 từ thuộc từ vựng, tin thường có 53 133 từ, và từ vựng có $|V| = 3\,672$ từ (những từ xuất hiện ít nhất hai lần). Với $\alpha = 1$:
 
-| Từ | đếm trong spam | $P(w \mid \text{spam})$ | đếm trong thường | $P(w \mid \text{thường})$ |
-| --- | --- | --- | --- | --- |
-| trúng | 3 | 4/27 ≈ 0,148 | 0 | 1/33 ≈ 0,030 |
-| click | 3 | 4/27 ≈ 0,148 | 1 | 2/33 ≈ 0,061 |
-| họp | 0 | 1/27 ≈ 0,037 | 4 | 5/33 ≈ 0,152 |
-| dự án | 0 | 1/27 ≈ 0,037 | 6 | 7/33 ≈ 0,212 |
+| Từ | trong spam | trong tin thường | $P(w \mid \text{spam})$ | $P(w \mid \text{thường})$ | Tỉ số |
+| --- | --- | --- | --- | --- | --- |
+| claim | 94 | 0 | 0,53% | 0,0018% | 301 lần |
+| prize | 67 | 0 | 0,38% | 0,0018% | 215 lần |
+| txt | 133 | 13 | 0,75% | 0,025% | 30 lần |
+| free | 180 | 47 | 1,01% | 0,085% | 12 lần |
+| call | 281 | 202 | 1,57% | 0,36% | 4,4 lần |
+| you | 243 | 1 517 | 1,36% | 2,67% | 0,51 lần |
+| lor | 0 | 132 | 0,0056% | 0,23% | 1/42 |
+| later | 0 | 109 | 0,0056% | 0,19% | 1/35 |
 
-### Vì sao cần làm trơn?
-
-Không làm trơn ($\alpha = 0$), "trúng" chưa từng xuất hiện trong email thường nên $P(\text{trúng} \mid \text{thường}) = 0$. Vì likelihood là một **tích**, chỉ một thừa số bằng 0 là cả tích bằng 0. Một email công việc lỡ có chữ "trúng" sẽ bị coi là spam chắc chắn 100%, bất kể các từ còn lại.
-
-Tệ hơn, email "trúng thưởng… mời họp" có "trúng" (chưa gặp trong thư thường) và "họp" (chưa gặp trong spam). Cả hai lớp đều có likelihood bằng 0, posterior thành $0/0$: mô hình không quyết định được. Cộng thêm $\alpha$ vào mọi ô đếm loại bỏ vấn đề này. $\alpha = 1$ là lựa chọn kinh điển; $\alpha$ lớn hơn kéo mọi xác suất về gần $1/|V|$, làm từ kém phân biệt hơn.
+Đáng chú ý: "call" xuất hiện nhiều ở cả hai lớp, nhưng vẫn nghiêng về spam ("call now to claim…"). "you" là từ phổ biến nhất nhì ở cả hai lớp nên gần như không giúp phân loại.
 
 <Callout type="try">
 
-Ở bước **Likelihood P(từ | lớp)**, kéo $\alpha$ về 0 và xem các ô xác suất bằng 0 cùng tỉ số "∞". Sang bước **Phân loại email**, chọn ví dụ **Trúng thưởng… mời họp**: với $\alpha = 0$, cả hai điểm log đều là $-\infty$.
+Chương **Đếm từ** cho thấy toàn bộ "mô hình" chỉ là bảng đếm này. Chương **Bản đồ từ** đặt cả 3 672 từ lên một mặt phẳng: trục ngang là xác suất trong tin thường, trục dọc là xác suất trong spam. Từ trên đường chéo không giúp phân loại; càng xa đường chéo, từ càng có sức nặng. Rê chuột lên một chấm để xem từ đó.
+
+</Callout>
+
+### Vì sao cần làm trơn?
+
+Không làm trơn ($\alpha = 0$), "claim" chưa từng xuất hiện trong tin thường nên $P(\text{claim} \mid \text{thường}) = 0$. Vì likelihood là một **tích**, chỉ một thừa số bằng 0 là cả tích bằng 0. Một tin nhắn bình thường lỡ có chữ "claim" ("did you claim your bag?") sẽ bị coi là spam chắc chắn 100%, bất kể các từ còn lại.
+
+Tệ hơn, một tin chứa vừa "claim" (chưa gặp trong tin thường) vừa "lor" (chưa gặp trong spam) khiến cả hai lớp đều có likelihood bằng 0: posterior thành $0/0$ và mô hình không quyết định được.
+
+Cộng $\alpha$ vào mọi ô đếm loại bỏ vấn đề này. Với $\alpha$ rất nhỏ (0,01), từ có số đếm 0 vẫn bị đẩy ra rất xa: tỉ số của "claim" lên tới khoảng 35 000 lần, thay vì 301 lần với $\alpha = 1$. $\alpha$ lớn kéo mọi xác suất về gần $1/|V|$, làm từ kém phân biệt hơn.
+
+<Callout type="try">
+
+Ở chương **Bản đồ từ**, kéo $\alpha$ về 0,01: các từ có số đếm 0 ở một lớp bị dồn ra rìa của bản đồ, cách đường chéo hàng chục nghìn lần. Thẻ chi tiết bên phải tính lại $P(\text{claim} \mid \text{spam})$ và $P(\text{claim} \mid \text{thường})$ theo $\alpha$.
 
 </Callout>
 
 ## Dự đoán là cộng log
 
-Nhân nhiều xác suất nhỏ dễ gây tràn số dưới (underflow): với email dài, tích có thể nhỏ hơn số thực nhỏ nhất máy tính biểu diễn được. Vì vậy người ta lấy log, biến tích thành tổng:
+Nhân nhiều xác suất nhỏ dễ gây tràn số dưới (underflow). Vì vậy người ta lấy log, biến tích thành tổng. Với hai lớp, cách đọc trực quan nhất là **log-odds**:
 
 $$
-\text{điểm}(c) = \log P(c) + \sum_{w} n_w \log P(w \mid c),
+\log\frac{P(\text{spam} \mid \mathbf{x})}{P(\text{thường} \mid \mathbf{x})} = \underbrace{\log\frac{P(\text{spam})}{P(\text{thường})}}_{\text{prior}} + \sum_{w} n_w \underbrace{\left[\log P(w \mid \text{spam}) - \log P(w \mid \text{thường})\right]}_{\text{bằng chứng của từ } w}.
 $$
 
-với $n_w$ là số lần từ $w$ xuất hiện trong email. Lớp có điểm cao hơn thắng. Posterior thu được bằng cách chuẩn hóa: $P(c \mid \mathbf{x}) = e^{\text{điểm}(c)} / \sum_{c'} e^{\text{điểm}(c')}$.
+$n_w$ là số lần từ $w$ xuất hiện. Prior là điểm xuất phát: $\log(0{,}134/0{,}866) \approx -1{,}86$. Mỗi từ cộng thêm bằng chứng của nó: dương đẩy về spam, âm kéo về tin thường. Tổng dương thì kết luận spam. Muốn có xác suất, chỉ cần đưa log-odds qua hàm sigmoid: $P(\text{spam} \mid \mathbf{x}) = 1/(1 + e^{-\text{log-odds}})$.
 
-### Ví dụ: "trúng · thưởng · click"
+### Ba tin nhắn, ba kết luận
 
-$$
-P(\text{spam}) \cdot P(\text{trúng}\mid\text{spam})\,P(\text{thưởng}\mid\text{spam})\,P(\text{click}\mid\text{spam}) = 0{,}375 \times \left(\tfrac{4}{27}\right)^3 \approx 1{,}22 \times 10^{-3},
-$$
+Với $\alpha = 1$, lab chấm điểm ba tin nhắn tự viết theo phong cách SMS:
 
-$$
-P(\text{thường}) \cdot \tfrac{1}{33}\cdot\tfrac{1}{33}\cdot\tfrac{2}{33} = 0{,}625 \times 5{,}57 \times 10^{-5} \approx 3{,}48 \times 10^{-5}.
-$$
+- **"WINNER! You have won a guaranteed £1000 cash prize. To claim call now"**. Gần như từ nào cũng là bằng chứng spam: claim +5,71, prize +5,37, guaranteed +4,79, £1000 +4,55, winner +3,79. Tổng log-odds là +29,7, tức $P(\text{spam}) \approx 1 - 1{,}3 \times 10^{-13}$.
+- **"Ok lor, I will call you later when I get home"**. lor −3,74, later −3,55, home −3,07, i −2,74 (hai lần), ok −2,63. Chỉ "call" (+1,48) kéo ngược lại. Tổng là −22,4, $P(\text{spam}) \approx 1{,}8 \times 10^{-10}$.
+- **"Did you claim the prize at the office party? Call me later lol"**. Có "claim" và "prize", hai từ spam mạnh nhất, nhưng các từ mang giọng bạn bè (later −3,55, lol −2,87, did −2,40, me −2,10) thắng. Tổng là −6,5, $P(\text{spam}) \approx 0{,}15\%$: tin thường.
 
-Chuẩn hóa: $P(\text{spam} \mid \text{email}) = 1{,}22 / (1{,}22 + 0{,}0348) \approx 97{,}2\%$. Dạng log cho cùng kết quả: điểm spam $-6{,}71$, điểm thường $-10{,}27$.
-
-Có thể đọc mỗi từ như một **bằng chứng** cộng vào log-odds $\log \frac{P(\text{spam}\mid\mathbf{x})}{P(\text{thường}\mid\mathbf{x})}$: từ có $\log \frac{P(w\mid\text{spam})}{P(w\mid\text{thường})} > 0$ đẩy về spam, ngược lại đẩy về thường. Prior là điểm xuất phát. Biểu đồ dưới lab vẽ đúng quá trình tích lũy này.
+Thứ tự từ không ảnh hưởng gì: chỉ có tổng. Từ không có trong từ vựng huấn luyện bị bỏ qua.
 
 <Callout type="try">
 
-Ở bước **Phân loại email**, nhấp các từ phía trên lab để soạn email. Bảng bên trái cho thấy từng từ đóng góp bao nhiêu vào chênh lệch điểm. Thử thêm "dự án" vào email "trúng · thưởng · click" rồi thêm lần nữa: mỗi lần xuất hiện được cộng riêng.
+Ở chương **Phân loại**, gõ một tin nhắn tiếng Anh bất kỳ hoặc chọn một ví dụ. Biểu đồ thác nước vẽ log-odds sau từng từ: cột hồng đẩy lên phía spam, cột xanh kéo xuống, cột xám là từ không có trong từ vựng. Đồng hồ bên phải là xác suất hậu nghiệm.
 
 </Callout>
 
-## Cái giá của giả định độc lập
+## Kết quả thật trên 1 115 tin chưa từng thấy
 
-Trong 16 email huấn luyện, "trúng" xuất hiện ở đâu thì "thưởng" cũng có mặt. Thực chất đây là **một** bằng chứng. Nhưng Naive Bayes nhân hai xác suất như thể chúng độc lập, nên bằng chứng bị cộng hai lần.
+Chạy mô hình ($\alpha = 1$) trên tập kiểm tra gồm 149 spam và 966 tin thường:
 
-Lab so sánh với việc gộp hai từ thành một đặc trưng "trúng thưởng":
-
-| Email | Tách hai từ | Gộp "trúng thưởng" |
+| | Dự đoán: thường | Dự đoán: spam |
 | --- | --- | --- |
-| trúng · thưởng · click | 97% spam | 90% spam |
-| trúng · thưởng · họp | 78% spam | 48% spam |
+| **Thật: thường** | 963 | 3 |
+| **Thật: spam** | 13 | 136 |
 
-Ở ví dụ thứ hai, kết luận **đổi chiều**. Đây là hai hệ quả quen thuộc của giả định "ngây thơ":
+- **Độ chính xác** 98,6%: đúng 1 099 trên 1 115 tin.
+- **Precision** 97,8%: trong 139 tin bị chặn, 136 thật sự là spam. Chỉ 3 tin thường bị chặn nhầm.
+- **Recall** 91,3%: bắt được 136 trên 149 tin spam; 13 tin lọt qua.
 
-- **Xác suất bị phóng đại.** Posterior của Naive Bayes thường sát 0 hoặc 1 hơn thực tế. Nếu cần xác suất đáng tin (ví dụ để đặt ngưỡng chi phí), nên hiệu chỉnh lại (calibration) bằng Platt scaling hoặc isotonic regression.
-- **Thứ tự lớp thường vẫn đúng.** Dù xác suất sai, lớp có điểm cao nhất thường vẫn là lớp đúng, nên độ chính xác phân loại khá tốt. Domingos và Pazzani (1997) đã phân tích vì sao Naive Bayes vẫn tối ưu cho phân loại trong nhiều trường hợp giả định độc lập bị vi phạm.
+Với một mô hình chỉ là bảng đếm, đây là kết quả rất tốt. $\alpha$ cũng ảnh hưởng: $\alpha = 0{,}1$ cho độ chính xác 98,9% (recall 93,3%), còn $\alpha = 10$ làm recall tụt xuống 76,5% vì làm trơn quá mạnh làm mờ các từ đặc trưng của spam. Các số liệu này được tính bằng chính công thức ở trên và khớp hoàn toàn với `MultinomialNB` của scikit-learn.
+
+## Cái giá của giả định độc lập: quá tự tin
+
+Độ chính xác cao, nhưng **xác suất** mà mô hình đưa ra thì không đáng tin. Trên tập kiểm tra:
+
+- **82%** số tin nhắn nhận $P(\text{spam})$ dưới 0,1% hoặc trên 99,9%.
+- 105 tin spam được chấm trên $1 - 10^{-6}$, và 432 tin thường dưới $10^{-6}$.
+- Nhưng có **2 tin spam** bị chấm $P(\text{spam}) < 10^{-6}$: mô hình sai, và sai với độ tự tin cực đoan.
+
+Nguyên nhân chính là giả định độc lập. Các từ trong cùng một tin không độc lập: "claim", "prize", "call", "now" thường đi thành cụm, là các mặt của cùng một ý "mời nhận thưởng". Naive Bayes cộng bằng chứng của từng từ như thể chúng là những quan sát riêng rẽ, nên cùng một ý bị đếm nhiều lần và log-odds bị đẩy ra rất xa. Khi một tin spam viết theo giọng tin nhắn thường, cùng cơ chế đó đẩy nó cực đoan về phía sai.
+
+Hai hệ quả thực tế:
+
+- **Thứ tự lớp thường vẫn đúng.** Dù xác suất sai, lớp có điểm cao nhất thường vẫn là lớp đúng, nên độ chính xác phân loại tốt. Domingos và Pazzani (1997) phân tích vì sao Naive Bayes vẫn tối ưu cho phân loại trong nhiều trường hợp giả định độc lập bị vi phạm.
+- **Đừng đọc xác suất như độ tin cậy.** Nếu cần xác suất đáng tin (ví dụ để đặt ngưỡng theo chi phí của việc chặn nhầm), nên hiệu chỉnh lại bằng Platt scaling hoặc isotonic regression.
 
 <Callout type="try">
 
-Mở bước **Giả định "ngây thơ"** và chọn ví dụ **Trúng thưởng… mời họp**. So sánh P(spam) khi tách và khi gộp hai từ, cùng lượng bằng chứng log-odds của cặp từ trong hai cách.
+Chương **Kết quả thật** vẽ ma trận nhầm lẫn và phân bố $P(\text{spam})$ trên 1 115 tin kiểm tra. Hai cột ngoài cùng (dưới $10^{-6}$ và trên $1 - 10^{-6}$) chiếm phần lớn; tag cam chỉ ra 2 tin spam bị chấm gần như chắc chắn là tin thường. Kéo $\alpha$ để xem độ chính xác, precision và recall thay đổi.
 
 </Callout>
 
@@ -154,20 +180,22 @@ Công thức Bayes và giả định độc lập giữ nguyên; chỉ cách mô
 ## Trong code
 
 ```python
+import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.pipeline import make_pipeline
+from sklearn.metrics import classification_report
 
-emails = ["Miễn phí! Click nhận quà khuyến mãi", "Mời họp dự án lúc 9h", ...]
-labels = ["spam", "thường", ...]
+sms = pd.read_csv("sms.tsv", sep="\t", names=["label", "text"])
+X_train, X_test, y_train, y_test = train_test_split(
+    sms.text, sms.label, test_size=0.2, stratify=sms.label, random_state=42)
 
-model = make_pipeline(CountVectorizer(), MultinomialNB(alpha=1.0))
-model.fit(emails, labels)
-model.predict(["Bạn đã trúng thưởng, click để nhận"])        # ['spam']
-model.predict_proba(["Báo cáo dự án tuần này"])             # xác suất từng lớp
+vectorizer = CountVectorizer(token_pattern=r"[a-z0-9£]+", min_df=2)   # chữ thường, như lab
+model = MultinomialNB(alpha=1.0).fit(vectorizer.fit_transform(X_train), y_train)
+print(classification_report(y_test, model.predict(vectorizer.transform(X_test))))
 ```
 
-`CountVectorizer` biến văn bản thành vector đếm từ; `MultinomialNB` học bảng $P(w \mid c)$ và prior. Với tiếng Việt, bước tách từ (ví dụ ghép "dự án" thành một token) ảnh hưởng nhiều tới chất lượng.
+Đây đúng là cấu hình của lab: cùng cách chia, cùng cách tách từ, cùng $\alpha$. Với tiếng Việt, bước tách từ (ví dụ ghép "khuyến mãi" thành một token) ảnh hưởng nhiều tới chất lượng.
 
 ## Ưu và nhược điểm
 
@@ -175,14 +203,14 @@ model.predict_proba(["Báo cáo dự án tuần này"])             # xác suấ
 
 - Huấn luyện một lượt qua dữ liệu, độ phức tạp tuyến tính theo số mẫu và số đặc trưng.
 - Cần ít dữ liệu để có kết quả dùng được; ít bị overfitting vì số tham số nhỏ.
-- Học tăng dần dễ dàng: có email mới thì cộng thêm vào bảng đếm.
-- Dễ giải thích: có thể chỉ ra từ nào đẩy kết luận về lớp nào.
+- Học tăng dần dễ dàng: có tin nhắn mới thì cộng thêm vào bảng đếm.
+- Dễ giải thích: có thể chỉ ra từ nào đẩy kết luận về lớp nào, như biểu đồ thác nước.
 
 **Nhược điểm**
 
 - Giả định độc lập làm xác suất kém hiệu chỉnh và bỏ qua tương tác giữa các đặc trưng.
-- Bỏ qua thứ tự từ ("không tốt" và "tốt không" giống nhau với túi từ).
-- Với đặc trưng liên tục, Gaussian NB giả định phân phối chuẩn có thể không đúng.
+- Bỏ qua thứ tự từ ("not good" và "good, not" giống nhau với túi từ).
+- Từ không có trong từ vựng huấn luyện bị bỏ qua hoàn toàn.
 - Khi dữ liệu nhiều, các mô hình phân biệt (logistic regression, SVM, mạng nơ-ron) thường chính xác hơn. Ng và Jordan (2001) cho thấy Naive Bayes tiến tới sai số tiệm cận nhanh hơn với ít dữ liệu, còn logistic regression đạt sai số tiệm cận thấp hơn khi dữ liệu đủ lớn.
 
 ## Ghi nhớ
@@ -190,9 +218,9 @@ model.predict_proba(["Báo cáo dự án tuần này"])             # xác suấ
 <Callout type="key">
 
 - Naive Bayes chọn lớp có $P(c)\prod_i P(x_i \mid c)$ lớn nhất, dựa trên định lý Bayes và giả định các đặc trưng độc lập khi biết lớp.
-- Huấn luyện là đếm; dự đoán là cộng log prior và log likelihood.
+- Huấn luyện là đếm; dự đoán là cộng log-odds của prior và của từng từ.
 - Làm trơn Laplace ($\alpha > 0$) tránh xác suất bằng 0 cho từ chưa gặp.
-- Giả định độc lập làm xác suất bị phóng đại, nhưng thứ tự lớp thường vẫn đúng.
+- Trên SMS thật: 98,6% chính xác, nhưng 82% xác suất nằm ở hai cực. Phân loại tốt không có nghĩa là xác suất đáng tin.
 
 </Callout>
 
@@ -200,6 +228,7 @@ model.predict_proba(["Báo cáo dự án tuần này"])             # xác suấ
 
 - [SVM](/kien-thuc/svm/): một bộ phân loại phân biệt, tìm đường biên có lề rộng nhất thay vì mô hình hóa xác suất.
 - [Bias–Variance Tradeoff](/kien-thuc/bias-variance/): vì sao một mô hình đơn giản như Naive Bayes có thể thắng mô hình phức tạp khi dữ liệu ít.
+- Tiago A. Almeida, José María Gómez Hidalgo, Akebo Yamakami, *Contributions to the Study of SMS Spam Filtering: New Collection and Results*, ACM DocEng 2011: bài báo giới thiệu SMS Spam Collection ([UCI](https://archive.ics.uci.edu/dataset/228/sms+spam+collection)).
 - Pedro Domingos, Michael Pazzani, [On the Optimality of the Simple Bayesian Classifier under Zero-One Loss](https://doi.org/10.1023/A:1007413511361), Machine Learning, 1997.
 - Andrew Ng, Michael Jordan, *On Discriminative vs. Generative Classifiers: A comparison of logistic regression and naive Bayes*, NeurIPS 2001.
 - Christopher Manning, Prabhakar Raghavan, Hinrich Schütze, [Introduction to Information Retrieval](https://nlp.stanford.edu/IR-book/), chương 13: phân loại văn bản bằng Naive Bayes.

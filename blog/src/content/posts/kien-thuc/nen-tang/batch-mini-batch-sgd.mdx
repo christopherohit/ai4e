@@ -1,6 +1,6 @@
 ---
 title: 'Batch, Mini-batch và SGD: Mỗi bước nên nhìn bao nhiêu dữ liệu?'
-description: 'Phân biệt Batch Gradient Descent, Mini-batch và Stochastic Gradient Descent: cách ước lượng gradient, số bước mỗi epoch, độ nhiễu, chi phí và cách chọn batch size.'
+description: 'Phân biệt Batch GD, Mini-batch và SGD qua thí nghiệm trên 20 640 khu dân cư California: số bước mỗi epoch, độ nhiễu gradient, chi phí và cách chọn batch size.'
 category: kien-thuc
 topic: nen-tang
 tags: ['Gradient Descent', 'SGD', 'Mini-batch', 'Tối ưu hóa', 'Học máy']
@@ -22,7 +22,7 @@ L(\theta) = \frac{1}{N}\sum_{i=1}^{N} \ell_i(\theta),
 \nabla L(\theta) = \frac{1}{N}\sum_{i=1}^{N} \nabla \ell_i(\theta).
 $$
 
-Với hồi quy tuyến tính, $\ell_i = (w\,x_i + b - y_i)^2$ là sai số bình phương của mẫu $i$. Gradient chính xác cần duyệt **toàn bộ** $N$ mẫu. Lab phía trên có $N = 64$ nên việc này dễ dàng. Nhưng ImageNet có khoảng 1,28 triệu ảnh, còn dữ liệu huấn luyện mô hình ngôn ngữ lên tới hàng nghìn tỉ token. Duyệt hết dữ liệu chỉ để đi một bước là quá đắt.
+Với hồi quy tuyến tính, $\ell_i = (w\,x_i + b - y_i)^2$ là sai số bình phương của mẫu $i$. Gradient chính xác cần duyệt **toàn bộ** $N$ mẫu. Lab phía trên dùng dữ liệu thật **California Housing** (điều tra dân số Mỹ 1990): $N = 20\,640$ khu dân cư, dự đoán giá nhà trung vị (trăm nghìn đô la) từ thu nhập trung vị (chục nghìn đô la). Mỗi bước batch GD phải tính 20 640 gradient mẫu. ImageNet có khoảng 1,28 triệu ảnh, còn dữ liệu huấn luyện mô hình ngôn ngữ lên tới hàng nghìn tỉ token. Duyệt hết dữ liệu chỉ để đi một bước là quá đắt.
 
 Ý tưởng chung của cả ba phương pháp: thay trung bình trên $N$ mẫu bằng trung bình trên một **lô** (batch) $\mathcal{B}$ gồm $B$ mẫu:
 
@@ -65,11 +65,11 @@ Batch GD tính gradient trên toàn bộ dữ liệu ở mỗi bước. Đây đ
 - Không học trực tuyến được: dữ liệu mới tới thì phải tính lại trên cả tập.
 - Trên loss không lồi, không có nhiễu để giúp thoát khỏi điểm yên ngựa.
 
-Trong lab, với $\eta = 0{,}1$ và 5 epoch, Batch GD chỉ đi được 5 bước. Loss giảm từ 1,818 xuống 0,850, vẫn còn xa mức nhỏ nhất 0,226.
+Trong lab, với $\eta = 0{,}05$ (gần ngưỡng ổn định 0,0515 của bài toán này), sau 12 epoch, tức 247 680 lần tính gradient mẫu, batch GD mới đi được 12 bước: MSE giảm từ 2,39 xuống 1,78. Muốn vào trong 1% của mức tối thiểu 0,701 cần khoảng **147 epoch**.
 
 <Callout type="try">
 
-Ở bước **Batch GD**, bấm **▶ Chạy**. Mũi tên cam (bước thực tế) trùng với mũi tên xanh nét đứt (bước theo gradient thật), vì ở đây $\hat g$ chính là $\nabla L$. Bên phải, đường thẳng dịch dần về phía đám điểm. Tăng số epoch lên 10 để thấy batch GD vẫn tiến chậm.
+Ở chương **Batch GD**, mỗi chấm mờ bên trái là một khu dân cư. Đường đi bên phải thẳng và đều, nhưng mỗi đoạn tương ứng với một lượt xem hết 20 640 khu. Ô **Gradient mẫu đã tính** tăng 20 640 mỗi bước.
 
 </Callout>
 
@@ -93,7 +93,7 @@ Nói cách khác, $\nabla \ell_i$ là một **ước lượng không chệch**. 
 
 ### Nhiễu lớn đến mức nào?
 
-Trong lab, tại điểm xuất phát, độ lệch chuẩn của gradient một mẫu quanh gradient thật là 4,36, trong khi độ lớn của gradient thật chỉ khoảng 2,96. Nhiễu lớn hơn cả tín hiệu, nên khá nhiều gradient một mẫu chỉ *lên* dốc của loss toàn cục. Gần đáy, gradient thật tiến về 0 nhưng gradient từng mẫu thì không: khoảng một nửa số gradient một mẫu chỉ ngược dốc, và bước theo chúng làm loss toàn cục tăng.
+Trên dữ liệu California, tại điểm xuất phát, độ lệch chuẩn của gradient một mẫu quanh gradient thật là **17,3**, trong khi độ lớn của gradient thật chỉ **1,12**. Nhiễu lớn gấp khoảng 15 lần tín hiệu: rất nhiều bước SGD đi lệch, thậm chí ngược dốc của loss toàn cục. Gần đáy, gradient thật tiến về 0 nhưng gradient từng mẫu thì không, nên SGD không bao giờ đứng yên.
 
 **Ưu điểm**
 
@@ -108,7 +108,7 @@ Trong lab, tại điểm xuất phát, độ lệch chuẩn của gradient một
 - Không tận dụng được tính toán song song: GPU xử lý một mẫu gần như cũng mất thời gian bằng xử lý vài chục mẫu.
 - Nhạy với learning rate hơn: giá trị chạy tốt cho Batch GD có thể làm SGD văng xa.
 
-Trong lab với $\eta = 0{,}1$, SGD đưa loss từ 1,818 xuống 0,295 chỉ sau **một** epoch, tốt hơn Batch GD sau 10 epoch (0,710). Sau đó loss dao động trong khoảng 0,235–0,335 thay vì giảm đều. Tăng lên $\eta = 0{,}3$ thì sau epoch đầu loss của SGD lên tới 5,06, cao hơn cả lúc bắt đầu.
+Trong lab với $\eta = 0{,}002$, SGD đưa MSE từ 2,39 xuống 1,07 chỉ sau **1 000 khu**, chưa tới 5% của một epoch, và xuống 0,73 sau 5 000 khu. Batch GD sau 12 epoch vẫn ở 1,78. Nhưng từ đó SGD không giảm đều nữa: loss đo sau các mốc rung lên xuống quanh 0,70–0,79, vì mỗi bước vẫn do một khu duy nhất quyết định. Learning rate của SGD cũng phải nhỏ hơn nhiều: với $\eta$ gấp 10 lần, từng bước một mẫu đủ lớn để văng khỏi thung lũng.
 
 ### Giảm learning rate theo thời gian
 
@@ -122,7 +122,7 @@ ví dụ $\eta_t \propto 1/t$. Vế đầu đảm bảo đi được quãng đư
 
 <Callout type="try">
 
-Ở bước **SGD (B = 1)**, bấm **▶▶** từng bước. Bên phải, chỉ một điểm được tô cam: đó là mẫu duy nhất quyết định bước đi. Trên bản đồ, đám mũi tên mờ là các bước mà những mẫu khác có thể cho. Ô **Lệch hướng so với ∇L** có lúc vượt 90°, tức bước đó đi ngược dốc.
+Ở chương **SGD**, vài giây đầu hoạt cảnh đi chậm: mỗi lần một khu (chấm cam) được bốc ra và kéo đường thẳng về phía mình, nên đường thẳng giật liên tục. Từ giây thứ 7, hoạt cảnh tua nhanh qua cả 20 640 khu: đường đi trên bản đồ rung mạnh nhưng vẫn lao về đáy.
 
 </Callout>
 
@@ -140,13 +140,13 @@ $$
 
 với $\sigma^2$ là phương sai của gradient từng mẫu. Khi $N$ lớn hơn $B$ nhiều, phương sai gần bằng $\sigma^2/B$, nên độ lệch chuẩn giảm theo $1/\sqrt{B}$. Tăng $B$ gấp 4 lần thì nhiễu giảm một nửa. Khi $B = N$, nhiễu bằng 0: đó là Batch GD.
 
-Bảng dưới là độ lệch chuẩn của $\hat g$ tại điểm xuất phát trong lab:
+Bảng dưới là độ lệch chuẩn của $\hat g$ tại điểm xuất phát, tính chính xác trên 20 640 khu:
 
-| $B$ | 1 | 4 | 16 | 32 | 64 |
-| --- | --- | --- | --- | --- | --- |
-| Độ lệch chuẩn của $\hat g$ | 4,36 | 2,13 | 0,95 | 0,55 | 0 |
+| $B$ | 1 | 8 | 64 | 512 | 4 096 | 20 640 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Độ lệch chuẩn của $\hat g$ | 17,3 | 6,13 | 2,16 | 0,76 | 0,24 | 0 |
 
-Với $B = 16$, nhiễu đã nhỏ hơn độ lớn gradient thật (2,96). Hầu hết các bước đi đúng hướng xuống dốc, và mỗi epoch vẫn có 4 lần cập nhật.
+Tăng $B$ gấp 8 lần làm nhiễu giảm khoảng $\sqrt 8 \approx 2{,}8$ lần, đúng như công thức. Với $B = 512$, nhiễu đã nhỏ hơn độ lớn gradient thật (1,12): hầu hết các bước đi đúng hướng, và mỗi epoch vẫn có 41 lần cập nhật.
 
 ### Vì sao mini-batch là mặc định
 
@@ -155,7 +155,7 @@ Với $B = 16$, nhiễu đã nhỏ hơn độ lớn gradient thật (2,96). Hầ
 - **Nhiễu vừa phải.** Đủ ít để learning rate lớn vẫn ổn định, đủ nhiều để không mắc kẹt ở điểm yên ngựa.
 - **Vừa bộ nhớ.** Batch size là núm điều chỉnh trực tiếp lượng bộ nhớ GPU cần dùng.
 
-Trong lab với $\eta = 0{,}1$ và $B = 16$, loss sau 5 epoch là 0,515: tốt hơn Batch GD (0,850) và giảm đều hơn SGD.
+Trong lab với $B = 64$ và $\eta = 0{,}02$, MSE sau 1 epoch là 0,746 và sau 2 epoch là 0,704, rất sát mức tối thiểu 0,701, với đường đi mượt hơn hẳn SGD.
 
 <Callout type="note">
 
@@ -165,7 +165,7 @@ Trong thư viện học sâu, tên "SGD" gần như luôn chỉ **mini-batch SGD
 
 <Callout type="try">
 
-Ở bước **Mini-batch**, kéo **Kích thước lô** từ 1 lên 64. Đám mũi tên mờ co lại, và các thanh phía dưới cho thấy độ nhiễu giảm khoảng một nửa mỗi khi $B$ tăng 4 lần. Bấm **Xáo trộn lại** để xem cùng $B$ nhưng thứ tự lô khác cho đường đi khác thế nào.
+Ở chương **Mini-batch**, kéo **Kích thước lô** từ 1 lên 20 640. Quạt mũi tên cam (các lô ngẫu nhiên khác nhau) co dần về mũi tên xanh lá (gradient thật), và các thanh bên phải ngắn dần theo $\sqrt B$.
 
 </Callout>
 
@@ -186,7 +186,7 @@ Một điểm hay bị bỏ qua: **mỗi epoch, cả ba cách đều tính đún
 
 <Callout type="try">
 
-Mở bước **So sánh ba cách** và bấm **▶ Chạy** để xem ba đường đi lớn dần theo epoch trên cùng một bản đồ. Biểu đồ phía dưới là loss trên toàn bộ dữ liệu sau mỗi epoch. Thử $\eta = 0{,}3$: Batch GD và mini-batch nhanh hơn, còn SGD trở nên bất ổn.
+Mở chương **Cuộc đua**: ba thuật toán nhận cùng ngân sách, trục ngang là số epoch đã tiêu. Sau 2 epoch, batch GD mới ở MSE 2,268, mini-batch 64 ở 0,704, SGD ở 0,703. Batch GD là đường bậc thang vì loss của nó chỉ đổi sau mỗi lượt trọn vẹn.
 
 </Callout>
 
@@ -202,7 +202,7 @@ Không có giá trị đúng cho mọi trường hợp, nhưng có vài nguyên 
 
 ## Xáo trộn dữ liệu quan trọng thế nào?
 
-Tính không chệch của $\hat g$ dựa trên giả định mỗi lô là một mẫu ngẫu nhiên của dữ liệu. Nếu dữ liệu được sắp theo nhãn, ví dụ toàn bộ ảnh mèo rồi mới tới ảnh chó, các lô đầu epoch sẽ kéo mô hình về một phía, các lô sau lại kéo về phía khác. Vì vậy cần **xáo trộn lại mỗi epoch**, như lab đang làm. Trong PyTorch, đó là `shuffle=True` trong `DataLoader`.
+Tính không chệch của $\hat g$ dựa trên giả định mỗi lô là một mẫu ngẫu nhiên của dữ liệu. Nếu dữ liệu được sắp theo nhãn, ví dụ toàn bộ ảnh mèo rồi mới tới ảnh chó, các lô đầu epoch sẽ kéo mô hình về một phía, các lô sau lại kéo về phía khác. Vì vậy cần **xáo trộn lại mỗi epoch**, như lab đang làm với một hoán vị mới (hạt giống cố định) cho từng epoch. Trong PyTorch, đó là `shuffle=True` trong `DataLoader`.
 
 ## Trong code
 
@@ -268,3 +268,4 @@ for epoch in range(epochs):
 - Léon Bottou, Frank E. Curtis, Jorge Nocedal, [Optimization Methods for Large-Scale Machine Learning](https://arxiv.org/abs/1606.04838): phân tích SGD và mini-batch cho học máy quy mô lớn.
 - Priya Goyal và cộng sự, [Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour](https://arxiv.org/abs/1706.02677): quy tắc tỉ lệ tuyến tính và warmup.
 - Nitish Shirish Keskar và cộng sự, [On Large-Batch Training for Deep Learning: Generalization Gap and Sharp Minima](https://arxiv.org/abs/1609.04836).
+- Dữ liệu: California Housing, R. Kelley Pace và Ronald Barry, *Sparse Spatial Autoregressions*, Statistics & Probability Letters, 1997 (bản StatLib, cũng có trong `sklearn.datasets.fetch_california_housing`).

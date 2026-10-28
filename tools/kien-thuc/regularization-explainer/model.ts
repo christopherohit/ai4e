@@ -1,125 +1,101 @@
-// L1 (Lasso) vs L2 (Ridge) lab model. Two problems: a 2D quadratic loss where the geometry of the penalty is visible,
-// and a linear regression with 8 features (two of them nearly identical, three irrelevant) for coefficient paths.
-import { seeded } from '../../_shared/sequence-lab/math';
+// L1 / L2 regularization lab model on the Diabetes data (Efron et al. 2004): 442 patients, 10 baseline measurements,
+// target = disease progression one year later. Features are standardized, the target centred; Lasso uses
+// scikit-learn's objective (1/2n)‖y − Xβ‖² + λ‖β‖₁ and Ridge (1/2n)‖y − Xβ‖² + (λ/2)‖β‖².
+import data from './data/diabetes.json';
 
-export type Point = readonly [number, number];
+export const SOURCE = data.source;
+export const NAMES = ['tuổi', 'giới tính', 'BMI', 'huyết áp', 's1 · cholesterol TP', 's2 · LDL', 's3 · HDL', 's4 · TC/HDL', 's5 · triglyceride', 's6 · đường huyết'];
+export const SHORT = ['tuổi', 'giới', 'BMI', 'HA', 's1', 's2', 's3', 's4', 's5', 's6'];
+export const P = 10;
+export const REFERENCE = data.reference;
+const RAW = data.X, Y = data.y;
+export const N = Y.length;
 
-// ---------- 2D geometry: L(w) = (w − w*)ᵀ A (w − w*) ----------
-export const A2 = [[1, 0.45], [0.45, 0.6]] as const;
-export const W_STAR: Point = [2.2, 0.7];
-export const quad = (w: Point) => { const d = [w[0] - W_STAR[0], w[1] - W_STAR[1]]; return A2[0][0] * d[0] ** 2 + 2 * A2[0][1] * d[0] * d[1] + A2[1][1] * d[1] ** 2; };
-
-/** argmin L(w) + λ‖w‖²: (A + λI) w = A w*. */
-export function ridge2D(lambda: number): Point {
-  const [a, b, c] = [A2[0][0] + lambda, A2[0][1], A2[1][1] + lambda];
-  const r = [A2[0][0] * W_STAR[0] + A2[0][1] * W_STAR[1], A2[0][1] * W_STAR[0] + A2[1][1] * W_STAR[1]];
-  const det = a * c - b * b;
-  return [(c * r[0] - b * r[1]) / det, (a * r[1] - b * r[0]) / det];
+export interface Design { X: number[][]; y: number[]; gram: number[][]; xty: number[]; mean: number[]; sd: number[]; yMean: number }
+/** Standardize the given rows with their own means and standard deviations; centre y. */
+export function design(rows: readonly number[], columns: readonly number[] = [...Array(P).keys()]): Design {
+  const n = rows.length, mean = columns.map(j => rows.reduce((s, i) => s + RAW[i][j], 0) / n);
+  const sd = columns.map((j, k) => Math.sqrt(rows.reduce((s, i) => s + (RAW[i][j] - mean[k]) ** 2, 0) / n));
+  const yMean = rows.reduce((s, i) => s + Y[i], 0) / n;
+  const X = rows.map(i => columns.map((j, k) => (RAW[i][j] - mean[k]) / sd[k])), y = rows.map(i => Y[i] - yMean);
+  const gram = columns.map((_, a) => columns.map((__, b) => X.reduce((s, row) => s + row[a] * row[b], 0) / n));
+  const xty = columns.map((_, a) => X.reduce((s, row, r) => s + row[a] * y[r], 0) / n);
+  return { X, y, gram, xty, mean, sd, yMean };
 }
-
-/** argmin L(w) + λ‖w‖₁ by exact coordinate minimisation (each 1D problem is a soft-threshold). */
-export function lasso2D(lambda: number): Point {
-  const w = [0, 0];
-  const r = [A2[0][0] * W_STAR[0] + A2[0][1] * W_STAR[1], A2[0][1] * W_STAR[0] + A2[1][1] * W_STAR[1]];
-  for (let sweep = 0; sweep < 500; sweep++) {
-    let change = 0;
-    for (let j = 0; j < 2; j++) {
-      const k = 1 - j;
-      // d/dw_j: 2A_jj w_j + 2A_jk w_k − 2r_j + λ·sign(w_j) = 0
-      const next = softThreshold(r[j] - A2[j][k] * w[k], lambda / 2) / A2[j][j];
-      change = Math.max(change, Math.abs(next - w[j]));
-      w[j] = next;
-    }
-    if (change < 1e-12) break;
-  }
-  return [w[0], w[1]];
-}
-
-export const softThreshold = (value: number, threshold: number) => (Math.abs(value) <= threshold ? 0 : Math.sign(value) * (Math.abs(value) - threshold));
-/** Orthonormal design: Ridge divides the least-squares coefficient, Lasso subtracts and clips at zero. */
-export const ridgeShrink = (beta: number, lambda: number) => beta / (1 + lambda);
-export const lassoShrink = (beta: number, lambda: number) => softThreshold(beta, lambda);
-
-/** Points of the ellipse L(w) = c around w*. */
-export function ellipse(c: number, count = 96): Point[] {
-  const tr = A2[0][0] + A2[1][1], det = A2[0][0] * A2[1][1] - A2[0][1] ** 2, s = Math.sqrt(tr * tr / 4 - det);
-  const lambdas = [tr / 2 + s, tr / 2 - s];
-  const vectors = lambdas.map(l => { const v = [A2[0][1], l - A2[0][0]]; const n = Math.hypot(v[0], v[1]); return [v[0] / n, v[1] / n]; });
-  return Array.from({ length: count + 1 }, (_, i) => {
-    const t = i / count * 2 * Math.PI, a = Math.sqrt(c / lambdas[0]) * Math.cos(t), b = Math.sqrt(c / lambdas[1]) * Math.sin(t);
-    return [W_STAR[0] + a * vectors[0][0] + b * vectors[1][0], W_STAR[1] + a * vectors[0][1] + b * vectors[1][1]] as Point;
-  });
-}
-
-// ---------- 8-feature regression ----------
-export const FEATURES = ['x₁', 'x₂ ≈ x₁', 'x₃', 'x₄', 'x₅', 'x₆', 'x₇', 'x₈'];
-export const TRUE_BETA = [1.5, 1.5, -2, 0, 0, 1, 0, 0];
-export const SIGNAL = TRUE_BETA.map(value => value !== 0);
-export const N_TRAIN = 25, N_TEST = 500, NOISE = 1.5;
-
-export interface Data { X: number[][]; y: number[] }
-function generate(n: number, seed: number): Data {
-  const random = seeded(seed);
-  const gaussian = () => Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random());
-  const X = Array.from({ length: n }, () => {
-    const row = Array.from({ length: 8 }, gaussian);
-    row[1] = row[0] + 0.25 * gaussian();
-    return row;
-  });
-  return { X, y: X.map(row => row.reduce((sum, value, j) => sum + value * TRUE_BETA[j], 0) + NOISE * gaussian()) };
-}
-const rawTrain = generate(N_TRAIN, 11), rawTest = generate(N_TEST, 78);
-// Centre with training means so the intercept drops out (equivalent to fitting an unpenalised intercept).
-const means = Array.from({ length: 8 }, (_, j) => rawTrain.X.reduce((sum, row) => sum + row[j], 0) / N_TRAIN);
-const yMean = rawTrain.y.reduce((sum, value) => sum + value, 0) / N_TRAIN;
-const centre = (data: Data): Data => ({ X: data.X.map(row => row.map((value, j) => value - means[j])), y: data.y.map(value => value - yMean) });
-export const TRAIN = centre(rawTrain), TEST = centre(rawTest);
-
-const gram = TRAIN.X[0].map((_, j) => TRAIN.X[0].map((__, k) => TRAIN.X.reduce((sum, row) => sum + row[j] * row[k], 0) / N_TRAIN));
-const xty = TRAIN.X[0].map((_, j) => TRAIN.X.reduce((sum, row, i) => sum + row[j] * TRAIN.y[i], 0) / N_TRAIN);
-export const correlation12 = gram[0][1] / Math.sqrt(gram[0][0] * gram[1][1]);
+export const ALL = [...Array(N).keys()];
+export const FULL = design(ALL);
 
 function solve(M: number[][], b: number[]) {
   const n = b.length, A = M.map((row, i) => [...row, b[i]]);
-  for (let col = 0; col < n; col++) {
-    let p = col; for (let r = col + 1; r < n; r++) if (Math.abs(A[r][col]) > Math.abs(A[p][col])) p = r;
-    [A[col], A[p]] = [A[p], A[col]];
-    for (let r = col + 1; r < n; r++) { const f = A[r][col] / A[col][col]; for (let k = col; k <= n; k++) A[r][k] -= f * A[col][k]; }
+  for (let c = 0; c < n; c++) {
+    let m = c; for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[m][c])) m = r;
+    [A[c], A[m]] = [A[m], A[c]];
+    for (let r = c + 1; r < n; r++) { const f = A[r][c] / A[c][c]; for (let k = c; k <= n; k++) A[r][k] -= f * A[c][k]; }
   }
-  const x = Array(n).fill(0);
+  const x = new Array<number>(n).fill(0);
   for (let r = n - 1; r >= 0; r--) { let s = A[r][n]; for (let k = r + 1; k < n; k++) s -= A[r][k] * x[k]; x[r] = s / A[r][r]; }
   return x;
 }
+export const ols = (d: Design) => solve(d.gram, d.xty);
+export const ridge = (d: Design, lambda: number) => solve(d.gram.map((row, j) => row.map((v, k) => v + (j === k ? lambda : 0))), d.xty);
 
-/** Ridge: min (1/2n)‖y − Xβ‖² + (λ/2)‖β‖²  ⇒  (XᵀX/n + λI) β = Xᵀy/n. λ = 0 is ordinary least squares. */
-export const ridge = (lambda: number) => solve(gram.map((row, j) => row.map((value, k) => value + (j === k ? lambda : 0))), xty);
-
-/** Lasso: min (1/2n)‖y − Xβ‖² + λ‖β‖₁ by cyclic coordinate descent (warm start optional). */
-export function lasso(lambda: number, warm?: number[]) {
-  const beta = warm ? warm.slice() : Array(8).fill(0);
-  for (let sweep = 0; sweep < 5000; sweep++) {
+export const softThreshold = (value: number, threshold: number) => (Math.abs(value) <= threshold ? 0 : Math.sign(value) * (Math.abs(value) - threshold));
+export function lasso(d: Design, lambda: number, warm?: number[]) {
+  const p = d.xty.length, beta = warm ? warm.slice() : new Array<number>(p).fill(0);
+  for (let sweep = 0; sweep < 10000; sweep++) {
     let change = 0;
-    for (let j = 0; j < 8; j++) {
-      const rho = xty[j] - gram[j].reduce((sum, value, k) => (k === j ? sum : sum + value * beta[k]), 0);
-      const next = softThreshold(rho, lambda) / gram[j][j];
-      change = Math.max(change, Math.abs(next - beta[j]));
-      beta[j] = next;
+    for (let j = 0; j < p; j++) {
+      let rho = d.xty[j];
+      for (let k = 0; k < p; k++) if (k !== j) rho -= d.gram[j][k] * beta[k];
+      const next = softThreshold(rho, lambda) / d.gram[j][j];
+      change = Math.max(change, Math.abs(next - beta[j])); beta[j] = next;
     }
-    if (change < 1e-10) break;
+    if (change < 1e-9) break;
   }
   return beta;
 }
 
-export const mse = (beta: number[], data: Data) => data.X.reduce((sum, row, i) => sum + (row.reduce((s, value, j) => s + value * beta[j], 0) - data.y[i]) ** 2, 0) / data.y.length;
-
-/** λ grid shared by both methods, log-spaced from 10⁻³ to 10. */
-export const LAMBDAS = Array.from({ length: 25 }, (_, i) => 10 ** (-3 + 4 * i / 24));
-export function paths() {
-  const ridgePath = LAMBDAS.map(ridge);
-  const lassoPath: number[][] = [];
-  // Warm start from large λ (all zero) downwards, as glmnet does.
-  let warm = Array(8).fill(0);
-  for (let i = LAMBDAS.length - 1; i >= 0; i--) { warm = lasso(LAMBDAS[i], warm); lassoPath[i] = warm; }
-  return { ridgePath, lassoPath, ols: ridge(0) };
+/** λ grid shared by both penalties, ascending, the same as scikit-learn's reference path (10⁻² … 10²). */
+export const LAMBDAS = REFERENCE.lassoAlphas.slice().sort((a, b) => a - b);
+export function lassoPath(d: Design) {
+  const path: number[][] = new Array(LAMBDAS.length);
+  let warm = new Array<number>(d.xty.length).fill(0);
+  for (let i = LAMBDAS.length - 1; i >= 0; i--) { warm = lasso(d, LAMBDAS[i], warm); path[i] = warm; }
+  return path;
 }
-export const nonZero = (beta: number[]) => beta.filter(value => Math.abs(value) > 1e-8).length;
+export const ridgePath = (d: Design) => LAMBDAS.map(l => ridge(d, l));
+
+export const mse = (d: Design, beta: number[]) => d.X.reduce((s, row, i) => s + (row.reduce((a, v, j) => a + v * beta[j], 0) - d.y[i]) ** 2, 0) / d.y.length;
+/** Prediction error on rows `test` for a model fitted on design `train` (test rows standardized with train statistics). */
+function testError(train: Design, beta: number[], test: readonly number[], columns: readonly number[]) {
+  return test.reduce((s, i) => { const pred = columns.reduce((a, j, k) => a + beta[k] * (RAW[i][j] - train.mean[k]) / train.sd[k], 0) + train.yMean; return s + (pred - Y[i]) ** 2; }, 0) / test.length;
+}
+
+/** 10-fold cross-validated MSE along the λ grid (fold = row index mod 10, standardization inside each fold). */
+export function crossValidate(folds = 10) {
+  const ridgeErr = new Array<number>(LAMBDAS.length).fill(0), lassoErr = new Array<number>(LAMBDAS.length).fill(0);
+  let olsErr = 0;
+  const columns = [...Array(P).keys()];
+  for (let f = 0; f < folds; f++) {
+    const train = ALL.filter(i => i % folds !== f), test = ALL.filter(i => i % folds === f), d = design(train);
+    const share = test.length / N;
+    olsErr += testError(d, ols(d), test, columns) * share;
+    lassoPath(d).forEach((beta, i) => { lassoErr[i] += testError(d, beta, test, columns) * share; });
+    ridgePath(d).forEach((beta, i) => { ridgeErr[i] += testError(d, beta, test, columns) * share; });
+  }
+  return { ridge: ridgeErr, lasso: lassoErr, ols: olsErr };
+}
+
+/** Bootstrap resamples (seeded): how much the s1 / s2 coefficients move from one sample of patients to another. */
+export function bootstrap(count: number, lambda: { ridge: number; lasso: number }) {
+  let s = 99;
+  const next = () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  return Array.from({ length: count }, () => {
+    const rows = Array.from({ length: N }, () => Math.floor(next() * N)), d = design(rows);
+    return { ols: ols(d), ridge: ridge(d, lambda.ridge), lasso: lasso(d, lambda.lasso) };
+  });
+}
+
+/** The 2D problem of chapter 1: only BMI and s5, the two strongest predictors. */
+export const PAIR = [2, 8] as const;
+export const PAIR_DESIGN = design(ALL, PAIR);

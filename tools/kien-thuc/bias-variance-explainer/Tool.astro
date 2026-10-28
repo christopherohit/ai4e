@@ -1,24 +1,21 @@
 ---
-import Lab from '../../_shared/sequence-lab/Lab.astro';
-import '../../_shared/optimization-lab/plots.css';
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
 ---
-<Lab id="bias-variance" title="Bias–Variance · vì sao mô hình quá đơn giản hay quá phức tạp đều sai" label="Dữ liệu, đường cong thật và các mô hình đa thức học được"
-  steps={['Underfit & overfit', 'Nhiều tập huấn luyện', 'Phân rã lỗi', 'Thêm dữ liệu']}
-  scope="Mô phỏng giáo dục: dữ liệu sinh từ f(x) = sin 2πx cộng nhiễu Gauss σ = 0,3; hồi quy đa thức bậc 0–12 bằng bình phương tối thiểu, lặp lại trên 150 tập huấn luyện độc lập để đo bias² và variance trực tiếp. Mọi phép tính chạy trong trình duyệt; với dữ liệu thật ta không biết f(x), nên chỉ ước lượng được lỗi tổng bằng tập kiểm tra hoặc cross-validation.">
+<GlassLab id="bias-variance" title="Bias–Variance · dự đoán mức tiêu thụ xăng của 392 xe thật" label="Hoạt cảnh bias và variance trên dữ liệu Auto MPG"
+  chapters={['Underfit & overfit', 'Bắn bia', 'Phân rã lỗi', 'Thêm dữ liệu']}
+  data="Auto MPG (UCI Machine Learning Repository, Quinlan 1993): 392 xe đời 1970–1982, dùng mã lực để dự đoán số dặm mỗi gallon."
+  scope="Hồi quy đa thức bậc 1–10 trên các tập huấn luyện lấy ngẫu nhiên (150 lần, hạt giống cố định), lỗi kiểm tra đo trên các xe không được chọn. Vì không biết đường cong thật, bias² và variance được ước lượng so với đường làm mượt cục bộ (local linear, băng thông 14 mã lực) trên cả 392 xe; nhiễu σ² ≈ 18,2 là phần dư của đường đó.">
   <Fragment slot="controls">
-    <label class="field"><span class="field-row"><span>Bậc đa thức d</span><output data-value="degree"></output></span><input type="range" name="degree" min="0" max="12" step="1" value="3" /></label>
-    <div class="field">Thử nhanh<div class="chips"><button type="button" data-degree="1">1 · underfit</button><button type="button" data-degree="3">3 · vừa</button><button type="button" data-degree="9">9 · overfit</button></div></div>
-    <label class="field" data-n-field hidden><span class="field-row"><span>Số điểm huấn luyện n</span><output data-value="n"></output></span><input type="range" name="n" min="0" max="5" step="1" value="0" /></label>
-    <div class="actions"><button type="button" data-resample>Lấy mẫu lại</button><button type="button" data-reset>Đặt lại</button></div>
-    <p class="hint">Thử: ở bước 1, so sánh bậc 1, 3 và 9 rồi bấm “Lấy mẫu lại” vài lần. Ở bước 4, giữ bậc 9 và tăng n.</p>
+    <label class="field" data-chapters="0 1 2 3"><span class="field-row"><span>Bậc đa thức</span><output data-value="degree"></output></span><input type="range" name="degree" min="1" max="10" step="1" value="2" /></label>
+    <label class="field" data-chapters="3"><span class="field-row"><span>Số xe huấn luyện</span><output data-value="n"></output></span><input type="range" name="n" min="0" max="6" step="1" value="2" /></label>
+    <div class="actions" data-chapters="0"><button type="button" data-resample>Lấy 30 xe khác</button></div>
+    <div class="actions"><button type="button" data-autoplay>Xem lại hoạt cảnh tự động</button></div>
+    <p class="hint" data-chapters="0">Hoạt cảnh lần lượt cho bậc 1, 2 và 8. Kéo thanh bậc đa thức để tự chọn; “Lấy 30 xe khác” cho thấy bậc cao đổi hình dạng mạnh thế nào.</p>
+    <p class="hint" data-chapters="1">So sánh bậc 1 và bậc 6 trên bảng bắn bia: cụm chấm lệch tâm (bias) hay tản rộng (variance)?</p>
+    <p class="hint" data-chapters="2">Biểu đồ dùng thang log vì variance của bậc cao lớn gấp hàng nghìn lần bậc thấp.</p>
+    <p class="hint" data-chapters="3">Giữ bậc 5 hoặc 8 và kéo số xe lên 300: dải mô hình co lại quanh đường thật.</p>
   </Fragment>
-  <section class="inspector" aria-labelledby="bv-chart-heading">
-    <div class="section-head"><h3 id="bv-chart-heading" data-chart-title>Lỗi theo bậc đa thức</h3><p data-chart-note></p></div>
-    <div class="chart"><svg data-chart role="img" aria-labelledby="bv-chart-heading" aria-describedby="bv-chart-caption"></svg></div>
-    <p id="bv-chart-caption" class="caption">Lỗi huấn luyện giảm đều khi mô hình phức tạp hơn; lỗi kiểm tra giảm rồi tăng lại, tạo hình chữ U. Bias² giảm, variance tăng, và lỗi kỳ vọng bằng tổng của chúng cộng σ² = 0,09. Nhấp vào biểu đồ để chọn bậc.</p>
-    <details class="table-view"><summary>Xem dạng bảng</summary><div class="table-scroll"><table class="data" data-table></table></div></details>
-  </section>
-</Lab>
+</GlassLab>
 <script>
   import { initBiasVarianceLab } from './render';
   initBiasVarianceLab();
