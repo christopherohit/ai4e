@@ -13,6 +13,7 @@ The schema validates that each topic belongs to the selected category.
 | kien-thuc | thi-giac-may-tinh | cnn-explainer, nerf-explainer, gaussian-splatting-explainer |
 | kien-thuc | xu-ly-ngon-ngu | transformer-explainer |
 | kien-thuc | mo-hinh-sinh | diffusion-explainer, ganlab |
+| kien-thuc | toi-uu-llm | inference-engineering-explainer, paged-attention-explainer, jev-explainer |
 | du-an | giai-thich-mo-hinh | dodrio |
 | du-an | danh-gia-thien-lech | FairVis, VisCUIT |
 | du-an | nang-luong-ai | EnergyVis |

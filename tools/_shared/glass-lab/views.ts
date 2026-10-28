@@ -64,15 +64,17 @@ export function trail(plot: Plot, path: readonly Theta[], k: number, color: stri
 
 export interface Series { values: readonly number[]; color: string; x?: readonly number[] }
 /** Loss chart with a cursor; values above yMax are clipped (divergence). x defaults to the step index. */
-export function lossChart(f: Frame, rect: Rect, series: Series[], cursor: number, yMax: number, minLoss: number, title = 'MSE theo từng bước', xLabel = 'bước', xMax?: number, xFormat?: (v: number) => string) {
+export function lossChart(f: Frame, rect: Rect, series: Series[], cursor: number, yMax: number, minLoss: number | null, title = 'MSE theo từng bước', xLabel = 'bước', xMax?: number, xFormat?: (v: number) => string) {
   const { g } = f;
   g.panel(rect.x, rect.y, rect.w, rect.h, title, C.amber);
   const steps = xMax ?? Math.max(...series.map(s => (s.x ? s.x.at(-1)! : s.values.length - 1)));
   const plot = new Plot(g, rect, [0, steps], [0, yMax], { l: 42, r: 14, t: 40, b: 30 });
   const xt = ticks([0, steps]), yt = ticks([0, yMax], 4);
   plot.axes({ xTicks: xt, yTicks: yt, xLabel, fx: xFormat ?? tickText(xt[1] - xt[0]), fy: tickText(yt[1] - yt[0]) });
-  plot.line([[0, minLoss], [steps, minLoss]], alpha(C.white, 0.35), { width: 1, dash: [4, 4] });
-  g.text(`tối thiểu ${vn(minLoss, minLoss < 10 ? 3 : 1)}`, plot.box.x + plot.box.w - 4, plot.py(minLoss) - 9, { size: 10.5, color: C.muted, align: 'right' });
+  if (minLoss !== null) {
+    plot.line([[0, minLoss], [steps, minLoss]], alpha(C.white, 0.35), { width: 1, dash: [4, 4] });
+    g.text(`tối thiểu ${vn(minLoss, minLoss < 10 ? 3 : 1)}`, plot.box.x + plot.box.w - 4, plot.py(minLoss) - 9, { size: 10.5, color: C.muted, align: 'right' });
+  }
   plot.clip(() => {
     for (const s of series) {
       const xs = s.x ?? s.values.map((_, i) => i);
@@ -107,4 +109,22 @@ export function categoryChart(f: Frame, rect: Rect, title: string, categories: r
     void last;
   });
   return plot;
+}
+
+/** Vertical bars for a few categories, with value labels, an optional highlighted bar and a reveal factor. */
+export function barChart(f: Frame, rect: Rect, title: string, labels: readonly string[], values: readonly number[], options: { max?: number; color?: string; highlight?: number; reveal?: number; format?: (v: number) => string; colors?: readonly string[]; accent?: string } = {}) {
+  const { g } = f;
+  g.panel(rect.x, rect.y, rect.w, rect.h, title, options.accent ?? C.amber);
+  const max = options.max ?? Math.max(...values) * 1.15, reveal = options.reveal ?? 1, format = options.format ?? (v => vn(v, 0));
+  const box = { x: rect.x + 16, y: rect.y + 52, w: rect.w - 32, h: rect.h - 96 };
+  const slot = box.w / labels.length, bw = Math.min(64, slot * 0.62);
+  g.line([[box.x, box.y + box.h], [box.x + box.w, box.y + box.h]], C.faint, { width: 1 });
+  labels.forEach((label, i) => {
+    const v = values[i], h = box.h * Math.max(0, v) / max * reveal, x = box.x + slot * i + (slot - bw) / 2, y = box.y + box.h - h;
+    const color = options.colors?.[i] ?? (i === options.highlight ? C.amber : options.color ?? C.cyan);
+    g.ctx.save(); g.ctx.fillStyle = alpha(color, i === options.highlight || options.colors ? 0.9 : 0.6); g.ctx.shadowColor = color; g.ctx.shadowBlur = i === options.highlight ? 14 : 6;
+    g.ctx.fillRect(x, y, bw, h); g.ctx.restore();
+    if (reveal > 0.05) g.text(format(v), x + bw / 2, y - 10, { size: 11.5, color: C.ink, align: 'center', weight: 650, alpha: Math.min(1, reveal * 1.5) });
+    g.text(label, x + bw / 2, box.y + box.h + 16, { size: 10.5, color: i === options.highlight ? C.ink : C.muted, align: 'center', weight: i === options.highlight ? 650 : 500 });
+  });
 }

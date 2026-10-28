@@ -1,6 +1,6 @@
 import type { CategorySlug } from './site';
 
-export const TOPIC_SLUGS = ['nen-tang', 'thi-giac-may-tinh', 'xu-ly-ngon-ngu', 'mo-hinh-sinh', 'giai-thich-mo-hinh', 'danh-gia-thien-lech', 'nang-luong-ai', 'nhan-vat-so', 'agent-ky-thuat', 'medlab'] as const;
+export const TOPIC_SLUGS = ['nen-tang', 'thi-giac-may-tinh', 'xu-ly-ngon-ngu', 'mo-hinh-sinh', 'toi-uu-llm', 'giai-thich-mo-hinh', 'danh-gia-thien-lech', 'nang-luong-ai', 'nhan-vat-so', 'agent-ky-thuat', 'medlab'] as const;
 export type TopicSlug = typeof TOPIC_SLUGS[number];
 
 export const TOPICS: Record<TopicSlug, { label: string; category: CategorySlug; description: string }> = {
@@ -9,6 +9,7 @@ export const TOPICS: Record<TopicSlug, { label: string; category: CategorySlug; 
   'thi-giac-may-tinh': { label: 'Thị giác máy tính', category: 'kien-thuc', description: 'Cách mô hình nhận biết và xử lý hình ảnh.' },
   'xu-ly-ngon-ngu': { label: 'Xử lý ngôn ngữ', category: 'kien-thuc', description: 'Token, Attention và các mô hình ngôn ngữ.' },
   'mo-hinh-sinh': { label: 'Mô hình sinh', category: 'kien-thuc', description: 'GAN, Diffusion và quá trình tạo dữ liệu mới.' },
+  'toi-uu-llm': { label: 'Tối ưu LLM', category: 'kien-thuc', description: 'Suy luận, nén và tinh chỉnh mô hình ngôn ngữ lớn hiệu quả.' },
   'giai-thich-mo-hinh': { label: 'Giải thích mô hình', category: 'du-an', description: 'Phân tích hành vi và cơ chế bên trong mô hình.' },
   'danh-gia-thien-lech': { label: 'Đánh giá thiên lệch', category: 'du-an', description: 'Kiểm tra sai lệch và hiệu suất giữa các nhóm dữ liệu.' },
   'nang-luong-ai': { label: 'Năng lượng AI', category: 'du-an', description: 'Theo dõi điện năng và phát thải của hệ thống AI.' },

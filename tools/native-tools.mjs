@@ -17,6 +17,9 @@ export const nativeTools = {
   'medlab-body-atlas': { category: 'du-an', source: 'tools/du-an/medlab-body-atlas', article: 'ban-do-co-the-nguoi' },
   'activation-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/activation-explainer', article: 'ham-kich-hoat' },
   'pca-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/pca-explainer', article: 'pca' },
+  'jev-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/jev-explainer', article: 'jev' },
+  'paged-attention-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/paged-attention-explainer', article: 'paged-attention' },
+  'inference-engineering-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/inference-engineering-explainer', article: 'inference-engineering' },
 };
 
 export function validToolName(category, slug) {

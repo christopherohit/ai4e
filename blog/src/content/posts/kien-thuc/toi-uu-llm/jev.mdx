@@ -1,0 +1,164 @@
+---
+title: 'Jev: trả về JSON bằng một lần prefill thay vì sinh từng token'
+description: 'Giải mã ràng buộc song song: prefill ngữ cảnh và schema một lần vào KV cache, rồi chấm điểm các giá trị hợp lệ của mọi trường. Đo thật với Qwen2.5-1.5B.'
+category: kien-thuc
+topic: toi-uu-llm
+tags: ['LLM', 'Structured output', 'KV cache', 'Constrained decoding', 'Suy luận']
+viz: jev-explainer
+cover: ../../../../assets/covers/jev-explainer.webp
+order: 3
+date: 2026-10-28
+---
+
+import Callout from '../../../../components/Callout.astro';
+
+## Bài toán: trích xuất vài trường có tập giá trị cố định
+
+Rất nhiều ứng dụng LLM không cần viết văn. Chúng cần **điền một biểu mẫu**: đọc một tài liệu (đã OCR, một email, một báo cáo sự cố) rồi trả về JSON đúng schema, ví dụ
+
+```text
+{"risk_level": HIGH | MEDIUM | LOW | NONE,
+ "requires_review": true | false,
+ "action_tier": TIER_1 | TIER_2 | TIER_3}
+```
+
+Mỗi trường chỉ có vài giá trị hợp lệ. Cách thường gặp là đưa tài liệu và schema vào prompt rồi để mô hình **sinh câu trả lời từng token**. **Jev** (theo các bài giới thiệu, một phương pháp suy luận của Autoloops) làm khác: đọc thẳng xác suất của các giá trị hợp lệ từ đầu ra của Transformer, không sinh tự do. Bài này giải thích kỹ thuật đó, thường gọi là **giải mã ràng buộc song song** (parallel constrained decoding), và đo nó với một mô hình thật.
+
+<Callout type="note">
+
+Mọi con số trong bài và trong lab là **đo thật** bằng Qwen2.5-1.5B-Instruct (28 lớp, hidden size 1 536, từ vựng 151 936 token), chạy float32 trên CPU 4 luồng, với ba báo cáo sự cố ngắn viết riêng cho lab. Thời gian chỉ dùng để so sánh hai cách trên cùng máy. Script: `scripts/llm-bake/jev.py`.
+
+</Callout>
+
+## Cách 1: sinh tự hồi quy, từng token
+
+Mô hình ngôn ngữ chỉ làm được một việc: cho một chuỗi token, dự đoán phân phối của **token tiếp theo**. Để viết `{"risk_level": "HIGH", ...}`, nó phải sinh dấu ngoặc, dấu nháy, tên trường, dấu hai chấm, giá trị… mỗi thứ một lượt forward qua cả 28 lớp, và lượt sau phải chờ lượt trước.
+
+Trên báo cáo “Rò rỉ dữ liệu”, mô hình sinh **22 token, tức 22 lượt forward**, mất 3,58 giây: 1,17 giây cho lượt đầu (xử lý prompt) và trung bình 114 ms cho mỗi token sau. Chỉ có ba giá trị thật sự mang thông tin; phần còn lại là cú pháp.
+
+Vấn đề thứ hai là độ tin cậy. Cả ba lần chạy đều cho ra:
+
+```text
+{ "risk_level": HIGH, "requires_review": true, "action_tier": TIER_3 }
+```
+
+Đây **không phải JSON hợp lệ**: `HIGH` thiếu dấu ngoặc kép. Mô hình chép lại cách viết enum không ngoặc của schema. Có thể sửa prompt, nhưng không có gì **bảo đảm** đầu ra luôn đúng cú pháp và luôn nằm trong tập giá trị cho phép.
+
+<Callout type="try">
+
+Chương **Từng token** phát lại đúng chuỗi token mô hình đã sinh: ô xám là token cú pháp, ô vàng là token mang giá trị. Cuối chương là kết quả `JSON.parse` thật. Đổi tài liệu bằng các nút ở bảng điều khiển.
+
+</Callout>
+
+## Cách 2: prefill một lần, chấm điểm các lựa chọn
+
+### Prefill vào KV cache
+
+Khi xử lý prompt, Transformer tính **cùng lúc** cho mọi token (giai đoạn **prefill**). Ở mỗi lớp attention, nó lưu key và value của từng token vào **KV cache** để các bước sau dùng lại mà không tính lại. Với prompt 196 token của tài liệu đầu, prefill mất 1,05 giây trên CPU và KV cache có kích thước
+
+$$
+2 \times 28 \text{ lớp} \times 2 \text{ đầu KV} \times 128 \text{ chiều} \times 196 \text{ token} \times 2 \text{ byte} \approx 5{,}6 \text{ MB (fp16)}
+$$
+
+Qwen2.5 dùng grouped-query attention với chỉ 2 đầu KV (so với 12 đầu query), nên cache khá nhỏ.
+
+### Chấm điểm một trường
+
+Với trường `risk_level`, ta nối vào sau cache **hậu tố** `"risk_level": "` rồi chạy tiếp:
+
+1. Token cuối của hậu tố cho ra **hidden state** cuối cùng, một vector 1 536 chiều.
+2. Vector đó đi qua **LM head**, một lớp tuyến tính dùng chung, cho ra **151 936 logit**, một điểm cho mỗi token trong từ vựng.
+3. Chỉ giữ các logit của **giá trị hợp lệ**: `HIGH`, `MEDIUM`, `LOW`, `NONE`.
+4. **Softmax** trên riêng các giá trị đó cho ra phân phối xác suất. Giá trị có xác suất cao nhất là đáp án.
+
+$$
+p(c) = \frac{\exp(s_c)}{\sum_{c' \in \text{hợp lệ}} \exp(s_{c'})}
+$$
+
+Với tài liệu “Rò rỉ dữ liệu”: HIGH 93,8%, MEDIUM 6,1%, LOW 0,1%, NONE dưới 0,01%. Logit lớn nhất trong cả từ vựng (31,3) chính là của token `HIGH`, trong khi trung bình các logit là −3,7.
+
+### Giá trị nhiều token và ranh giới token
+
+Hình minh họa phổ biến của Jev chỉ nhìn **token đầu tiên** của mỗi giá trị. Với tokenizer thật, điều đó không đủ:
+
+| Giá trị | Token (Qwen2.5) |
+| --- | --- |
+| `HIGH`, `LOW`, `NONE` | 1 token |
+| `MEDIUM` | `M` · `EDIUM` |
+| `TIER_1`, `TIER_2`, `TIER_3` | `T` · `IER` · `_` · `1/2/3` |
+| `true`, `false` sau dấu hai chấm | ` true`, ` false` (có dấu cách) |
+
+Ba giá trị `TIER_x` có **chung** ba token đầu và chỉ khác ở token cuối, nên token đầu không phân biệt được chúng. Lab chấm mỗi giá trị bằng **tổng log-xác suất của mọi token** của nó:
+
+$$
+s_c = \sum_{j} \log p(t_j \mid \text{cache}, \text{hậu tố}, t_{<j})
+$$
+
+Chi tiết thứ hai là ranh giới token: sau `"requires_review":` mô hình gần như luôn dự đoán ` true` **có dấu cách** đứng trước (một token riêng). Lần chạy đầu của script quên điều này, chấm `true` không dấu cách và nhận log-xác suất −11,8 thay vì −0,01. Đáp án vẫn đúng nhờ softmax so sánh tương đối, nhưng xác suất bị méo. Khi tự cài kỹ thuật này, phải tokenize **hậu tố + giá trị** đúng như mô hình sẽ thấy.
+
+<Callout type="try">
+
+Chương **Chấm một trường** vẽ hidden state thật (lưới 1 536 ô, vàng dương, xanh âm), vị trí các token hợp lệ trên dải 151 936 logit, rồi xác suất sau softmax. Chọn trường `action_tier` để thấy giá trị bốn token, và dòng cuối cho biết nếu để tự do mô hình sẽ sinh gì.
+
+</Callout>
+
+### Mọi trường trong một lượt
+
+Các trường không phụ thuộc nhau về cú pháp, nên có thể chấm **cùng lúc**: nhân bản KV cache cho 9 hàng (3 trường × số giá trị), mỗi hàng là hậu tố + giá trị, đệm phải cho bằng độ dài, rồi chạy **một** lượt forward theo batch. Đệm phải không ảnh hưởng kết quả vì attention là nhân quả: token thật không bao giờ nhìn thấy token đệm phía sau nó.
+
+JSON cuối cùng được **ghép bằng code** từ các giá trị đã chọn, nên luôn đúng cú pháp và luôn thuộc schema:
+
+```text
+{"risk_level": "HIGH", "requires_review": true, "action_tier": "TIER_3"}
+```
+
+## Kết quả đo
+
+| Tài liệu | Tự hồi quy | Song song | Nhanh hơn | JSON tự hồi quy |
+| --- | --- | --- | --- | --- |
+| Rò rỉ dữ liệu | 22 lượt, 3,58 s | 2 lượt, 1,79 s | ×2,0 | không hợp lệ |
+| Máy in hỏng | 22 lượt, 3,38 s | 2 lượt, 1,69 s | ×2,0 | không hợp lệ |
+| Đăng nhập lạ | 23 lượt, 3,62 s | 2 lượt, 1,69 s | ×2,15 | không hợp lệ |
+
+Trên CPU, prefill chiếm phần lớn thời gian của cách song song (khoảng 1,05 s), và lượt chấm theo batch 9 hàng mất thêm 0,6 tới 0,7 s. Trên GPU, lượt chấm 9 hàng ngắn gần như miễn phí so với 20 lượt decode tuần tự, nên chênh lệch thường lớn hơn: MindStudio báo cáo nhanh hơn 5,6 tới 7 lần cho trích xuất có cấu trúc trên Apple Silicon.
+
+## Giới hạn: các trường được chấm độc lập
+
+Ở tài liệu “Đăng nhập lạ”, hai cách cho **khác nhau** ở `action_tier`: sinh tự hồi quy chọn `TIER_2`, cách song song chọn `TIER_1` (55,6% so với TIER_3 26,4% và TIER_2 18,0%). Lý do: khi sinh tuần tự, `action_tier` được dự đoán **sau khi** mô hình đã viết `"risk_level": MEDIUM, "requires_review": true`, và nó điều chỉnh theo. Cách song song chấm mỗi trường chỉ từ ngữ cảnh gốc, giả định các trường **độc lập có điều kiện**.
+
+Các hướng xử lý:
+
+- Chấm theo nhóm các trường phụ thuộc nhau, hoặc chấm tổ hợp giá trị khi số tổ hợp nhỏ.
+- Chấm tuần tự theo thứ tự (vẫn dùng chung cache, vẫn không sinh cú pháp), đánh đổi một ít tốc độ.
+- Đưa quy tắc vào prompt rõ hơn, hoặc tinh chỉnh mô hình cho bài toán.
+
+Những giới hạn khác:
+
+- Chỉ hợp với trường **có tập giá trị đóng** (enum, boolean, số trong khoảng nhỏ). Trường văn bản tự do vẫn phải sinh.
+- Xác suất trả về là của mô hình, không phải xác suất đã hiệu chỉnh: 94% không có nghĩa đúng 94% số lần. Tuy vậy nó vẫn hữu ích để chuyển các ca không chắc (như `action_tier` 43% / 36%) cho người duyệt.
+
+## Liên hệ với các kỹ thuật khác
+
+- **Constrained / grammar-guided decoding** (Outlines, XGrammar, chế độ JSON của vLLM, SGLang) vẫn sinh từng token nhưng **che** các token không hợp lệ ở mỗi bước. Bảo đảm cú pháp nhưng vẫn tốn một lượt cho mỗi token. SGLang còn “nhảy cóc” qua các đoạn cú pháp cố định (compressed FSM).
+- **Prompt caching / prefix caching** dùng lại KV cache của phần prompt chung giữa nhiều yêu cầu, cùng ý tưởng “prefill một lần” mà Jev dùng giữa các trường.
+- **Classification head**: với một trường duy nhất, chấm logit các giá trị hợp lệ chính là dùng LLM như một bộ phân loại zero-shot.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- Sinh JSON từng token tốn một lượt forward cho mỗi token, kể cả dấu ngoặc, và không bảo đảm hợp lệ (đo thật: 22 lượt, JSON lỗi cả 3 lần).
+- Jev: prefill ngữ cảnh + schema một lần vào KV cache, nối hậu tố từng trường, đọc logit của các giá trị hợp lệ, softmax trên riêng chúng.
+- Giá trị nhiều token phải chấm bằng tổng log-xác suất mọi token; chú ý ranh giới token (` true` có dấu cách).
+- Mọi trường chấm trong một lượt batch; JSON ghép bằng code nên luôn hợp lệ. Đo được nhanh hơn ×2 trên CPU.
+- Đánh đổi: các trường được chấm độc lập và chỉ áp dụng cho tập giá trị đóng.
+
+</Callout>
+
+## Nguồn
+
+- Hình “How Jev works” do bạn đọc cung cấp; bài viết và lab dựng lại kỹ thuật bằng mã và mô hình riêng.
+- MindStudio, *Parallel constrained decoding* (MLX, Apple Silicon): prefill một lần, phát KV cache cho mọi trường, chấm ứng viên hợp lệ.
+- Willard, B. & Louf, R. (2023). *Efficient Guided Generation for Large Language Models* (Outlines). arXiv:2307.09702.
+- LMSYS (2024). [*Fast JSON Decoding for Local LLMs with Compressed Finite State Machine*](https://lmsys.org/blog/2024-02-05-compressed-fsm).
+- Qwen Team (2024). *Qwen2.5 Technical Report*. arXiv:2412.15115.

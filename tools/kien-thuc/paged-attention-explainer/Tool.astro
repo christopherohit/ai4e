@@ -1,0 +1,17 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="paged-attention" title="PagedAttention · chia KV cache thành trang để phục vụ nhiều người hơn" label="Hoạt cảnh cấp phát bộ nhớ KV cache: đặt trước liền mạch so với các khối 16 token và bảng khối"
+  chapters={['KV cache', 'Liền mạch', 'Chia trang', 'Thông lượng', 'Chia sẻ tiền tố']}
+  data="Độ dài câu hỏi/câu trả lời của 600 mẫu ngẫu nhiên từ databricks-dolly-15k (CC BY-SA 3.0), đếm bằng tokenizer Qwen2.5. KV cache mỗi token đo thật trên Qwen2.5-0.5B; các mô hình khác tính từ cấu hình công bố."
+  scope="Bộ nhớ (960 khối × 16 token), tốc độ đến (1,2 yêu cầu/bước) và quy tắc ưu tiên lại là mô phỏng giáo dục, không phải số đo trên GPU. Ba cách cấp phát chạy trên cùng luồng yêu cầu và cùng vòng giải mã nên so sánh được với nhau.">
+  <Fragment slot="controls">
+    <label class="field" data-chapters="1 2"><span class="field-row"><span>Bước giải mã</span><output data-value="step"></output></span><input type="range" name="step" min="0" max="479" step="1" value="240" /></label>
+    <label class="field" data-chapters="4"><span class="field-row"><span>Số mẫu song song</span><output data-value="samples"></output></span><input type="range" name="samples" min="2" max="8" step="1" value="4" /></label>
+    <div class="actions" data-chapters="1 2"><button type="button" data-autoplay>Xem lại hoạt cảnh tự động</button></div>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initPagedAttentionLab } from './render';
+  initPagedAttentionLab();
+</script>

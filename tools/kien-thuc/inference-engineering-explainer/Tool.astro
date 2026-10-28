@@ -1,0 +1,17 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="inference" title="Inference Engineering · điều gì xảy ra khi bạn gọi một LLM" label="Hoạt cảnh prefill và decode, KV cache, roofline memory-bound/compute-bound, batching và lộ trình học suy luận LLM"
+  chapters={['Prefill & decode', 'Song song vs tuần tự', 'KV cache', 'Roofline & batch', 'Continuous batching', 'Lộ trình']}
+  data="Thời gian đo thật với Qwen2.5-0.5B-Instruct (494 triệu tham số, float32, CPU 4 luồng) trong scripts/llm-bake/inference.py. Độ dài câu trả lời lấy từ databricks-dolly-15k. Đỉnh FLOP/s và băng thông GPU theo datasheet NVIDIA (BF16 dense)."
+  scope="Thời gian tuyệt đối chỉ đúng cho CPU này, dùng để thấy hình dạng (prefill so với decode, có và không có cache, batch). Roofline là mô hình xấp xỉ bậc nhất cho mô hình dense 7,6B; batching ở chương 5 là mô phỏng đếm bước, không phải đo.">
+  <Fragment slot="controls">
+    <label class="field" data-chapters="3"><span class="field-row"><span>Batch</span><output data-value="batch"></output></span><input type="range" name="batch" min="0" max="9" step="1" value="2" /></label>
+    <div class="field" data-chapters="3">GPU<div class="chips"><button type="button" data-gpu="0" aria-pressed="false">A100</button><button type="button" data-gpu="1" aria-pressed="true">H100</button></div></div>
+    <label class="field" data-chapters="4"><span class="field-row"><span>Số chỗ trong batch</span><output data-value="slots"></output></span><input type="range" name="slots" min="2" max="12" step="1" value="6" /></label>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initInferenceLab } from './render';
+  initInferenceLab();
+</script>

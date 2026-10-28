@@ -222,7 +222,7 @@ const chapter4: Scene = {
     const input = plane(f, top, 'Ranh giới tương ứng ở đầu vào', C.amber, [-1.8, 1.8], [-1.1, 1.1]);
     field(input, p => logit(net, p), 70);
     dots(input, p => p, { r: 2 });
-    lossChart(f, bottom, [{ values: SNAPS.map(x => x.loss), color: C.amber, x: SNAPS.map(x => Math.log10(x.epoch)) }], Math.log10(s.epoch), 0.8, 0, 'Loss theo epoch (trục log)', 'log₁₀ epoch', Math.log10(SNAPS.at(-1)!.epoch), v => vn(v, 1));
+    lossChart(f, bottom, [{ values: SNAPS.map(x => x.loss), color: C.amber, x: SNAPS.map(x => Math.log10(x.epoch)) }], Math.log10(s.epoch), 0.8, null, 'Loss theo epoch (trục log)', 'log₁₀ epoch', Math.log10(SNAPS.at(-1)!.epoch), v => vn(v, 1));
   },
   metrics: () => { const s = SNAPS[snapNow()], net = { ...s, act: 'tanh' as const }; return [{ label: 'Epoch', value: String(s.epoch), tone: 'violet' }, { label: 'Loss', value: vn(s.loss, 3), tone: 'amber' }, { label: 'Đúng (huấn luyện)', value: `${vn(accuracy(p => logit(net, p)) * 100, 1)}%`, tone: 'lime' }]; },
   pointer(e) {

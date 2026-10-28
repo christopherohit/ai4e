@@ -18,6 +18,9 @@ import RegularizationExplainer from '../../../tools/kien-thuc/regularization-exp
 
 import ActivationExplainer from '../../../tools/kien-thuc/activation-explainer/Tool.astro';
 import PcaExplainer from '../../../tools/kien-thuc/pca-explainer/Tool.astro';
+import JevExplainer from '../../../tools/kien-thuc/jev-explainer/Tool.astro';
+import PagedAttentionExplainer from '../../../tools/kien-thuc/paged-attention-explainer/Tool.astro';
+import InferenceEngineeringExplainer from '../../../tools/kien-thuc/inference-engineering-explainer/Tool.astro';
 const components = {
   'qwen3-8-flash-next-explainer': QwenExplainer,
   'gated-delta-net-explainer': GatedDeltaNetExplainer,
@@ -37,6 +40,9 @@ const components = {
   'medlab-body-atlas': MedlabBodyAtlas,
   'activation-explainer': ActivationExplainer,
   'pca-explainer': PcaExplainer,
+  'jev-explainer': JevExplainer,
+  'paged-attention-explainer': PagedAttentionExplainer,
+  'inference-engineering-explainer': InferenceEngineeringExplainer,
 };
 interface Props { slug: string }
 const { slug } = Astro.props;

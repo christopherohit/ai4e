@@ -1,0 +1,183 @@
+---
+title: 'Inference Engineering: điều gì xảy ra khi bạn gọi một LLM'
+description: 'Lộ trình học suy luận LLM qua số đo thật: prefill và decode, TTFT và TPOT, KV cache, memory-bound và roofline, batching, continuous batching và các engine phục vụ.'
+category: kien-thuc
+topic: toi-uu-llm
+tags: ['Suy luận', 'LLM serving', 'KV cache', 'GPU', 'vLLM']
+viz: inference-engineering-explainer
+cover: ../../../../assets/covers/inference-engineering-explainer.webp
+order: 1
+date: 2026-10-28
+---
+
+import Callout from '../../../../components/Callout.astro';
+import Figure from '../../../../components/Figure.astro';
+import Roadmap from '../../../../assets/figures/llm-inference-roadmap.webp';
+
+## Huấn luyện một lần, suy luận hàng tỷ lần
+
+Huấn luyện một LLM tốn kém nhưng chỉ làm một lần. **Suy luận** (inference) thì diễn ra mỗi khi ai đó gửi một câu hỏi, và chiếm phần lớn chi phí vận hành. **Inference engineering** là nghề làm cho việc đó nhanh hơn, rẻ hơn và phục vụ được nhiều người hơn, mà không đổi mô hình.
+
+Bài này đi theo lộ trình năm chặng trong hình dưới. Thay vì chỉ mô tả, lab đo thật trên một mô hình nhỏ: **Qwen2.5-0.5B-Instruct** (494 triệu tham số, 24 lớp), float32, CPU 4 luồng. Con số tuyệt đối chỉ đúng cho máy này, nhưng **hình dạng** của các đường cong là điều bạn sẽ gặp lại trên GPU.
+
+<Figure src={Roadmap} alt="LLM Inference Learning roadmap gồm 5 chặng: nền tảng suy luận (prefill, decode, KV cache, TTFT, ITL/TPOT, thông lượng và độ trễ), khái niệm Transformer, phần cứng GPU (SM, SRAM, HBM, compute-bound và memory-bound), kỹ thuật tối ưu (KV cache, PagedAttention, FlashAttention, continuous batching, chunked prefill, prompt caching, speculative decoding, quantization) và các engine (vLLM, SGLang, TensorRT-LLM, llama.cpp)." caption="Lộ trình học LLM inference: người mới tập trung chặng 1–4, kỹ sư nhiều kinh nghiệm đi tiếp sang song song hóa và suy luận phân tán." credit="Lan Chu (LinkedIn), hình do bạn đọc cung cấp" />
+
+## Chặng 1: một lần gọi LLM gồm prefill và decode
+
+Khi bạn gửi prompt, mô hình làm hai giai đoạn rất khác nhau:
+
+1. **Prefill**: toàn bộ token của prompt đi qua mô hình **cùng lúc**. Mỗi lớp attention ghi key và value của mọi token vào **KV cache**. Kết thúc prefill, mô hình có phân phối cho token đầu tiên của câu trả lời.
+2. **Decode**: sinh **từng token một**. Mỗi token mới cần một lượt forward riêng, đọc lại KV cache của mọi token trước, và ghi thêm K, V của chính nó.
+
+Hai chỉ số độ trễ quan trọng:
+
+- **TTFT** (time to first token): thời gian từ lúc gửi tới khi token đầu tiên xuất hiện, chủ yếu là prefill.
+- **TPOT** hay **ITL** (time per output token, inter-token latency): khoảng cách giữa hai token liên tiếp khi decode.
+
+$$
+\text{độ trễ} = \text{TTFT} + (n - 1) \times \text{TPOT}
+$$
+
+Đo thật với prompt 128 token: **TTFT 307 ms**, **TPOT trung bình 43 ms** (khoảng 23 token/giây). Câu trả lời 40 token mất khoảng 2 giây.
+
+<Callout type="try">
+
+Chương **Prefill & decode** vẽ dòng thời gian thật: một khối prefill, rồi chuỗi ô decode đều nhau. Đường xanh đánh dấu TTFT.
+
+</Callout>
+
+### Vì sao prefill nhanh theo token còn decode thì không?
+
+Prefill 2 048 token mất 4,33 giây, tức khoảng **473 token mỗi giây**, gấp khoảng 20 lần tốc độ decode. Lý do nằm ở hình dạng phép tính:
+
+- Prefill nhân ma trận trọng số với một **ma trận** token (nhiều token cùng lúc): mỗi trọng số đọc từ bộ nhớ được dùng cho rất nhiều phép nhân.
+- Decode nhân ma trận trọng số với một **vector** (một token): mỗi trọng số đọc lên chỉ được dùng cho 2 phép tính rồi bỏ. Thời gian chủ yếu là **chờ đọc trọng số từ bộ nhớ**.
+
+<Callout type="try">
+
+Chương **Song song vs tuần tự** vẽ thời gian prefill theo độ dài prompt (16 tới 2 048 token, gần như tuyến tính) và so sánh số token xử lý mỗi giây.
+
+</Callout>
+
+### KV cache
+
+Nếu không có KV cache, mỗi bước decode phải chạy lại cả chuỗi từ đầu. Đo thật sau prompt 128 token: không cache, bước đầu 243 ms, bước thứ 96 đã 381 ms và còn tăng; có cache, mọi bước gần như bằng nhau, khoảng 43 ms. Tổng chi phí tính toán từ $O(n^2)$ xuống $O(n)$; cái giá là bộ nhớ (với mô hình này 24,6 KB mỗi token ở float32). Quản lý bộ nhớ ấy là chủ đề của bài PagedAttention.
+
+<Callout type="try">
+
+Chương **KV cache** vẽ 96 bước decode thật: đường đỏ (không cache) đi lên, đường xanh (có cache) nằm ngang.
+
+</Callout>
+
+## Chặng 2: khái niệm Transformer cần nắm
+
+Để hiểu chi phí suy luận, chỉ cần một bức tranh gọn về khối Transformer:
+
+- **Embedding**: token thành vector $d$ chiều.
+- **Self-attention**: mỗi token tạo query $\mathbf{q}$, key $\mathbf{k}$, value $\mathbf{v}$; trọng số attention là $\text{softmax}(\mathbf{q}K^\top/\sqrt{d})$. Ở decode, $K$ và $V$ của quá khứ lấy từ cache.
+- **FFN / MLP**: hai hoặc ba phép nhân ma trận lớn, chiếm phần lớn tham số.
+
+Số phép tính mỗi token xấp xỉ $2P$ FLOP với $P$ là số tham số (mỗi tham số một phép nhân và một phép cộng), cộng phần attention tăng theo độ dài ngữ cảnh.
+
+## Chặng 3: GPU, băng thông và roofline
+
+GPU có hàng nghìn lõi tính toán (nhóm thành các **SM**), bộ nhớ trên chip rất nhanh nhưng nhỏ (**SRAM**, vài chục MB), và bộ nhớ chính lớn nhưng chậm hơn nhiều (**HBM**, hàng chục GB). Hai con số định nghĩa một GPU:
+
+| GPU (BF16 dense, theo datasheet NVIDIA) | Đỉnh tính toán | Băng thông HBM | Điểm gãy |
+| --- | --- | --- | --- |
+| A100 SXM 80GB | 312 TFLOP/s | 2,0 TB/s | ≈ 153 FLOP/byte |
+| H100 SXM | 989 TFLOP/s | 3,35 TB/s | ≈ 295 FLOP/byte |
+
+Mô hình **roofline**:
+
+$$
+\text{FLOP/s đạt được} = \min\big(\text{đỉnh tính toán},\ \text{băng thông} \times \text{cường độ số học}\big)
+$$
+
+với **cường độ số học** = số FLOP trên mỗi byte đọc từ bộ nhớ. Dưới điểm gãy là vùng **memory-bound** (chờ bộ nhớ), trên điểm gãy là **compute-bound** (chờ tính toán).
+
+Decode một chuỗi với mô hình dense 7,6B tham số ở 16 bit: mỗi bước đọc toàn bộ $2P$ byte trọng số để làm $2P$ FLOP, cường độ khoảng **1 FLOP/byte**, nhỏ hơn điểm gãy của H100 khoảng 300 lần. GPU dùng chưa tới 1% sức tính toán.
+
+### Batching: dùng một lần đọc cho nhiều token
+
+Gom $B$ chuỗi vào một batch: trọng số đọc **một lần** dùng cho $B$ token, cường độ tăng gần $B$ lần, thông lượng tăng theo cho tới khi chạm trần tính toán (hoặc khi phần đọc KV cache của từng chuỗi bắt đầu chiếm ưu thế).
+
+Đo thật trên CPU, mỗi bước decode với ngữ cảnh 256 token:
+
+| Batch | Thời gian mỗi bước | Token/giây |
+| --- | --- | --- |
+| 1 | 43 ms | 23 |
+| 8 | 94 ms | 85 |
+| 32 | 124 ms | 258 |
+| 64 | 189 ms | 338 |
+
+Batch 64 cho thông lượng gấp **14,5 lần** trong khi mỗi bước chỉ chậm hơn 4,4 lần. Đây chính là lý do mọi engine phục vụ đều cố gom càng nhiều yêu cầu càng tốt, và cũng là lý do bộ nhớ KV cache (quyết định gom được bao nhiêu) quan trọng đến vậy.
+
+<Callout type="try">
+
+Chương **Roofline & batch** vẽ roofline của H100 hoặc A100 (chọn ở bảng điều khiển) với các điểm decode theo batch và điểm prefill 2 048 token. Kéo **Batch** từ 1 tới 512 để xem điểm trượt từ vùng memory-bound sang compute-bound. Bên phải là số đo thật trên CPU.
+
+</Callout>
+
+## Chặng 4: các kỹ thuật tối ưu
+
+| Kỹ thuật | Giải quyết | Ý tưởng |
+| --- | --- | --- |
+| **KV cache** | tính lại quá khứ | lưu K, V của token đã xử lý |
+| **PagedAttention** | lãng phí bộ nhớ KV | chia cache thành khối nhỏ, cấp khi cần |
+| **FlashAttention** | attention đọc/ghi HBM nhiều | tính attention theo khối trong SRAM, không lưu ma trận $n \times n$ |
+| **Continuous batching** | batch chờ yêu cầu dài nhất | lấp chỗ trống sau mỗi bước decode |
+| **Chunked prefill** | prefill dài chặn decode | cắt prefill thành đoạn, xen với các bước decode |
+| **Prompt / prefix caching** | prefill lặp lại | dùng lại KV cache của phần prompt chung |
+| **Speculative decoding** | decode tuần tự | mô hình nhỏ đoán vài token, mô hình lớn kiểm tra một lượt |
+| **Quantization** | trọng số và cache quá nặng | lưu bằng 8 hoặc 4 bit, đọc ít byte hơn mỗi bước |
+
+### Continuous batching
+
+Với **static batching**, một batch chỉ nhận yêu cầu mới khi mọi yêu cầu trong nó đã xong, nên các chỗ đã xong ngồi chờ câu trả lời dài nhất. **Continuous batching** (Orca, OSDI 2022; vLLM) lên lịch ở mức từng bước decode: chỗ nào xong được lấp ngay.
+
+Với 48 độ dài câu trả lời thật từ Dolly-15k và batch 6 chỗ, mô phỏng đếm bước cho thấy continuous batching hoàn thành cùng khối công việc nhanh hơn đáng kể và giữ các chỗ bận gần như liên tục.
+
+<Callout type="try">
+
+Chương **Continuous batching** vẽ hai biểu đồ Gantt: mỗi hàng là một chỗ trong batch, mỗi thanh màu là một yêu cầu. Kéo **Số chỗ trong batch** để xem chênh lệch thay đổi thế nào.
+
+</Callout>
+
+## Chặng 5: engine phục vụ
+
+- **vLLM**: đa dụng, được kiểm chứng rộng rãi, xây trên PagedAttention và continuous batching, hợp cho phục vụ thông lượng cao.
+- **SGLang**: mạnh khi các yêu cầu chia sẻ ngữ cảnh (hội thoại nhiều lượt, agent gọi công cụ, RAG) nhờ RadixAttention cache tiền tố; giải mã JSON có ràng buộc nhanh.
+- **TensorRT-LLM**: tối ưu sâu cho GPU NVIDIA, kernel và lượng tử hóa chuyên biệt.
+- **llama.cpp**: chạy trên CPU, Apple Silicon và thiết bị biên, định dạng GGUF với nhiều mức lượng tử hóa.
+
+## Đo gì khi tối ưu?
+
+- **TTFT** (người dùng cảm nhận độ nhạy), **TPOT/ITL** (tốc độ chữ chạy), **độ trễ đầu-cuối**.
+- **Thông lượng**: token/giây của cả hệ thống, yêu cầu/giây.
+- **Goodput**: thông lượng của các yêu cầu đạt mục tiêu độ trễ (SLO).
+- **Chi phí trên một triệu token**.
+
+Hai mục tiêu thường kéo ngược nhau: batch lớn tăng thông lượng nhưng tăng độ trễ mỗi token; prefill dài chen vào làm giật TPOT của người khác. Inference engineering là nghệ thuật cân bằng chúng.
+
+## Ghi nhớ
+
+<Callout type="key">
+
+- Prefill xử lý prompt song song (tính toán nặng); decode sinh từng token (bị giới hạn bởi băng thông bộ nhớ).
+- Độ trễ = TTFT + (n − 1) × TPOT. Đo thật: TTFT 307 ms cho 128 token, TPOT 43 ms.
+- KV cache biến chi phí decode từ tăng dần thành gần như hằng số, đổi lại bằng bộ nhớ.
+- Decode batch 1 có cường độ khoảng 1 FLOP/byte, rất xa điểm gãy roofline; batching là đòn bẩy lớn nhất (đo: ×14,5 thông lượng ở batch 64).
+- PagedAttention, continuous batching, prefix caching, speculative decoding và quantization đều nhằm gom nhiều việc hơn vào mỗi lần đọc bộ nhớ.
+
+</Callout>
+
+## Nguồn
+
+- Lộ trình: Lan Chu, *LLM Inference Learning roadmap* (hình do bạn đọc cung cấp).
+- Kwon, W. và cộng sự (2023). *Efficient Memory Management for Large Language Model Serving with PagedAttention*. SOSP.
+- Yu, G.-I. và cộng sự (2022). *Orca: A Distributed Serving System for Transformer-Based Generative Models*. OSDI.
+- Dao, T. và cộng sự (2022). *FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness*. NeurIPS.
+- Leviathan, Y., Kalman, M. & Matias, Y. (2023). *Fast Inference from Transformers via Speculative Decoding*. ICML.
+- Williams, S., Waterman, A. & Patterson, D. (2009). *Roofline: An Insightful Visual Performance Model for Multicore Architectures*. CACM.
+- NVIDIA A100 và H100 datasheet. Số đo: `scripts/llm-bake/inference.py`.
