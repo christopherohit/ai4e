@@ -6,7 +6,7 @@
 Task: "Review: <sentence>\\nSentiment:" → " positive" / " negative" (GLUE SST-2, Socher et al. 2013). Every variant
 trains the same 160 steps (batch 8, same examples, same order) on the attention projections q, k, v, o of all 24
 layers, and is scored at steps 0, 40, 80 and 160 on 400 validation sentences by comparing the logits of " positive" and " negative".
-Variants: LoRA (r = 1, 8, 64), rsLoRA (r = 64), DoRA, PiSSA initialisation, VeRA, LoHa, and a QLoRA-style run whose
+Variants: LoRA (r = 1, 8, 64 with α = 2r; r = 64 with α = 16), rsLoRA (r = 64, α = 16), DoRA, PiSSA initialisation, VeRA, LoHa, and a QLoRA-style run whose
 frozen base weights are first rounded to 4-bit (RTN, group 64, simulated on CPU; real QLoRA uses NF4 + bitsandbytes).
 """
 import json, math, time, urllib.request
@@ -45,6 +45,8 @@ VARIANTS = [
     ('LoRA r=8', lambda: LoraConfig(r=8, lora_alpha=16, target_modules=TARGETS, lora_dropout=0.0), 2e-4, False),
     ('LoRA r=64', lambda: LoraConfig(r=64, lora_alpha=128, target_modules=TARGETS, lora_dropout=0.0), 2e-4, False),
     ('rsLoRA r=64', lambda: LoraConfig(r=64, lora_alpha=16, use_rslora=True, target_modules=TARGETS, lora_dropout=0.0), 2e-4, False),
+    # Same rank, α fixed at 16 without rsLoRA: scale α/r = 0.25 (rsLoRA keeps α/√r = 2, i.e. the α = 128 run above).
+    ('LoRA r=64 α=16', lambda: LoraConfig(r=64, lora_alpha=16, target_modules=TARGETS, lora_dropout=0.0), 2e-4, False),
     ('DoRA r=8', lambda: LoraConfig(r=8, lora_alpha=16, use_dora=True, target_modules=TARGETS, lora_dropout=0.0), 2e-4, False),
     ('PiSSA r=8', lambda: LoraConfig(r=8, lora_alpha=8, init_lora_weights='pissa', target_modules=TARGETS, lora_dropout=0.0), 2e-4, False),
     ('VeRA r=256', lambda: VeraConfig(r=256, target_modules=TARGETS, vera_dropout=0.0), 4e-3, False),
