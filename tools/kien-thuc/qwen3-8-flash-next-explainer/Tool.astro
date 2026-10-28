@@ -1,30 +1,17 @@
 ---
-import Lab from '../../_shared/sequence-lab/Lab.astro';
-const gates = [1.4, 0.6, 1, 0.3];
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+import { SAMPLE_TOKENS } from './model';
 ---
-<Lab id="qwen3-8-flash-next" title="Qwen3.8-Flash-Next · bản đồ kiến trúc" label="Kiến trúc Qwen3.8-Flash-Next ở bước đang chọn"
-  steps={['Lịch 48 layer', 'Bộ nhớ ngữ cảnh dài', 'MoE routing', 'Gated Residual']}
-  scope="Lịch layer, số head, budget QSA, số expert và kích thước bộ nhớ tính từ model card, config.json và technical report (KV cache tính bf16 cho một chuỗi, chưa gồm key của indexer, trạng thái convolution và activation). Expert được chọn, gate và vector residual là dữ liệu minh họa có seed cố định, không phải inference từ trọng số Qwen.">
+<GlassLab id="qwen3-8-flash-next" title="Qwen3.8-Flash-Next · giải phẫu kiến trúc hybrid" label="Hoạt cảnh kiến trúc Qwen3.8-Flash-Next: lịch 48 layer, tham số tổng và kích hoạt, bộ nhớ ngữ cảnh dài, MoE routing, Gated Residual, n-gram và MTP"
+  chapters={['48 layer', 'Tham số', 'Ngữ cảnh dài', 'MoE routing', 'Gated Residual', 'N-gram & MTP']}
+  data="Lịch layer, số head, ngân sách QSA, số expert, kích thước bộ nhớ và số tham số tính từ model card, config.json và báo cáo kỹ thuật của Qwen3.8-Flash-Next (KV cache bf16 cho một chuỗi, chưa gồm key của indexer, trạng thái convolution và activation)."
+  scope="Expert được chọn, trọng số router, vector residual và chuỗi token nháp của MTP là minh họa có seed cố định, không phải suy luận từ trọng số Qwen. Phần “khác ≈” trong chương Tham số là phần còn lại của 6B kích hoạt công bố.">
   <Fragment slot="controls">
-    <label class="field" data-for="1"><span class="field-row"><span>Độ dài ngữ cảnh</span><output data-value="context"></output></span><input type="range" name="context" min="0" max="6" step="1" value="4" /></label>
-    <p class="hint" data-for="1">262K là ngữ cảnh native; model card nói có thể mở rộng tới 1M.</p>
-    <label class="field" data-for="2">Token mẫu<select data-token></select></label>
-    <p class="hint" data-for="2">Đổi layer ở bước 1 cũng đổi router: mỗi layer có router riêng.</p>
-    <fieldset class="field gate-set" data-for="3"><legend>Nhân gate đọc của từng nhánh</legend>
-      {gates.map((_, index) => <label class="field-row"><span>R{index + 1}</span><input type="range" name={`read${index}`} min="0" max="1" step="0.05" value="1" aria-label={`Hệ số gate đọc nhánh ${index + 1}`} /><output data-gate={`read${index}`}></output></label>)}
-    </fieldset>
-    <fieldset class="field gate-set" data-for="3"><legend>Hệ số ghi s_i ∈ (0, 2)</legend>
-      {gates.map((value, index) => <label class="field-row"><span>s{index + 1}</span><input type="range" name={`write${index}`} min="0.05" max="1.95" step="0.05" value={value} aria-label={`Hệ số ghi nhánh ${index + 1}`} /><output data-gate={`write${index}`}></output></label>)}
-    </fieldset>
-    <div class="actions"><button type="button" data-reset>Đặt lại</button></div>
+    <label class="field" data-chapters="2"><span class="field-row"><span>Độ dài ngữ cảnh</span><output data-value="context"></output></span><input type="range" name="context" min="0" max="4" step="1" value="3" /></label>
+    <div class="field" data-chapters="3">Token<div class="chips">{SAMPLE_TOKENS.map(tok => <button type="button" data-token={tok} aria-pressed={tok === 'attention' ? 'true' : 'false'}>{tok}</button>)}</div></div>
+    <label class="field" data-chapters="3"><span class="field-row"><span>Layer</span><output data-value="layer"></output></span><input type="range" name="layer" min="1" max="48" step="1" value="6" /></label>
   </Fragment>
-  <section class="inspector" aria-labelledby="qwen-chart-heading">
-    <div class="section-head"><h3 id="qwen-chart-heading">Vì sao hybrid: bộ nhớ theo độ dài ngữ cảnh</h3><p>Nhấp để chọn độ dài</p></div>
-    <div class="chart"><svg data-chart role="img" aria-labelledby="qwen-chart-heading" aria-describedby="qwen-chart-caption"></svg></div>
-    <p id="qwen-chart-caption" class="caption">KV cache cho một chuỗi ở bf16. “Hybrid” là 36 GDN + 12 QSA như checkpoint; “48 attention” giả định cả 48 layer đều có KV cache với cùng cấu hình GQA, không phải một model có thật. Trục ngang dùng thang log.</p>
-    <details class="table-view"><summary>Xem dạng bảng</summary><div class="table-scroll"><table class="data" data-table></table></div></details>
-  </section>
-</Lab>
+</GlassLab>
 <script>
   import { initQwenLab } from './render';
   initQwenLab();

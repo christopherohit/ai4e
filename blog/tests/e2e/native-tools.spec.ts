@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 const tools = [
-  ['kien-thuc', 'qwen3-8-flash-next', '.layer-map'],
+  ['kien-thuc', 'qwen3-8-flash-next', '.glass-screen canvas'],
   ['kien-thuc', 'gated-delta-net', '.glass-screen canvas'],
   ['kien-thuc', 'sparse-attention', '.glass-screen canvas'],
   ['kien-thuc', 'gradient-descent', '.glass-screen canvas'],

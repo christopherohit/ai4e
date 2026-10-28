@@ -26,9 +26,20 @@ Bài viết dựa trên [model card](https://huggingface.co/Qwen/Qwen3.8-Flash-N
 
 <Callout type="note">
 
-Visualization phía trên là **mô phỏng giáo dục, không chạy trọng số Qwen**. Lịch layer, thông số kiến trúc và phép tính bộ nhớ lấy từ nguồn chính thức; expert được chọn, gate và vector residual là dữ liệu minh họa. Chúng giúp kiểm tra luồng tính toán, không thể dùng để kết luận model thật chú ý vào từ nào hoặc trả lời ra sao.
+Hoạt cảnh phía trên **không chạy trọng số Qwen**. Lịch layer, thông số kiến trúc, số tham số và bộ nhớ tính từ nguồn chính thức; expert được chọn, gate và vector residual là minh họa có seed cố định.
 
 </Callout>
+
+### Đọc nhanh: sáu ý của bài
+
+| Ý | Một câu | Chương hoạt cảnh |
+| --- | --- | --- |
+| Lịch layer | 48 layer = 12 lần [3 GDN + 1 QSA], layer nào cũng có MoE | **48 layer** |
+| Tham số | lưu ~180B (backbone 125B + n-gram 51B + MTP 4B), mỗi token tính ~6B | **Tham số** |
+| Ngữ cảnh dài | GDN giữ trạng thái cố định 1,5 MB/layer; QSA chỉ đọc 2 048 token/query | **Ngữ cảnh dài** |
+| MoE | router chọn 10 trong 512 expert, cộng 1 shared expert | **MoE routing** |
+| Gated Residual | residual stream là 4 nhánh: đọc bằng cổng theo kênh, ghi bằng hệ số theo nhánh | **Gated Residual** |
+| Quanh backbone | bảng n-gram 51B ở bộ nhớ host, MTP đề xuất token nháp | **N-gram & MTP** |
 
 ## Bản đồ kiến trúc: Theo một token từ đầu vào đến đầu ra
 
@@ -58,6 +69,12 @@ GDN là **[Gated DeltaNet](/kien-thuc/gated-delta-net/)**; QSA là **Qwen Sparse
 | Context native | 262.144 token | Model card nêu có thể mở rộng tới 1.000.000 |
 
 **6B active là thông số về lượng tính toán, không phải dung lượng model.** Expert chưa được chọn vẫn có trọng số cần lưu hoặc chuyển từ nơi khác tới. Chỉ cộng các phần công bố riêng đã được khoảng 180B tham số; đây không phải phép kiểm kê đầy đủ mọi tensor của model đa phương thức. Ở 2 byte/tham số, 180B tương ứng khoảng 360 GB trọng số trước KV cache, trạng thái GDN, activation và overhead. Quantization/offloading thay đổi yêu cầu bộ nhớ nhưng không biến checkpoint thành model 6B.
+
+<Callout type="try">
+
+Chương **48 layer** cho một token đi qua lưới 48 layer (xanh: GDN, hồng: QSA, xanh lá: MoE); chương **Tham số** tách 125B thành phần expert và phần còn lại, và chỉ ra vì sao mỗi token chỉ dùng ~6B.
+
+</Callout>
 
 ## Token embedding và n-gram embedding: Hai phép tra cứu khác nhau
 
@@ -170,7 +187,7 @@ Công thức mô tả một core head, lược bỏ phép chuẩn hóa Q/K và c
 
 <Callout type="try">
 
-Mở [lab Sparse Attention](/kien-thuc/sparse-attention/#cong-cu), chọn bước **QSA: chọn block** và đặt query ở vị trí 15: chỉ ba block hoàn chỉnh trước query được chấm điểm, còn token 13–15 là đuôi luôn giữ. Chuyển sang vị trí 16: block chứa token 13–16 đã hoàn chỉnh nên phải tham gia cạnh tranh top-k. Mở bước **Bộ nhớ ngữ cảnh dài** ở lab phía trên để thấy QSA giới hạn số token đọc chứ không làm KV cache ngừng tăng.
+Chương **Ngữ cảnh dài** ở lab phía trên: kéo **Độ dài ngữ cảnh** từ 8K tới 1M. KV cache của hybrid vẫn tăng (QSA phải giữ mọi token để có thể chọn), nhưng số token mỗi query đọc dừng ở ~2 048. Ba bước của QSA trên ví dụ nhỏ và độ phủ đo trên attention thật nằm ở [bài Sparse Attention](/kien-thuc/sparse-attention/).
 
 </Callout>
 
@@ -205,7 +222,15 @@ Các expert có intermediate size 640 và trả vector 2560 chiều. **Shared ex
 
 Expert không nhất thiết có nhãn sẵn “toán”, “code”, “tiếng Việt”. Sự chuyên biệt được học; một token có thể gọi nhiều expert và một expert có thể xử lý nhiều loại dữ liệu. Để train hiệu quả, router cần tránh dồn hầu hết token vào vài expert; config có `router_aux_loss_coef=0.001`. Triển khai nhiều GPU còn chịu chi phí chuyển token đến thiết bị giữ expert và gom kết quả.
 
-Bước **MoE routing** của visualization giữ đúng lưới 512 expert và chọn 10, kèm shared expert riêng. Đổi token mẫu hoặc layer ở bước 1 làm thay đổi tập được tô, vì mỗi layer có router riêng; đây là routing có seed cố định cho bài học, không phải expert ID đo từ model.
+### Tham số nằm ở đâu?
+
+Một expert có $3 \times 2560 \times 640 \approx 4{,}92$ triệu tham số. 512 expert × 48 layer ≈ **120,8 tỷ**: gần như toàn bộ backbone 125B là expert. Mỗi token chạy 11 expert mỗi layer (10 được chọn + 1 shared): 48 × 11 × 4,92M ≈ **2,6 tỷ**; cộng GDN, QSA, router, embedding mới thành khoảng 6B kích hoạt. Vì vậy MoE cho “mô hình 125B với chi phí tính của mô hình 6B”, nhưng vẫn phải **lưu** đủ 125B (xem [bài Mixture of Experts](/kien-thuc/mixture-of-experts/) để thấy router huấn luyện thật và vì sao batch lớn chạm tới gần hết expert).
+
+<Callout type="try">
+
+Chương **MoE routing**: lưới 32 × 16 là 512 expert; 10 ô sáng là expert được chọn cho token, khung vàng là shared expert. Bấm các token và kéo **Layer**: mỗi layer có router riêng nên tập expert đổi theo. Routing ở đây là minh họa có seed cố định, không phải expert ID đo từ model.
+
+</Callout>
 
 ## Gated Residual: Bốn nhánh nhớ, đọc theo kênh và ghi theo nhánh
 
@@ -241,7 +266,7 @@ GR bỏ toán tử trộn nhánh $H_{\mathrm{res}}$ của thiết kế Hyper-Con
 
 <Callout type="try">
 
-Mở bước **Gated Residual** và kéo hệ số đọc của R3 về 0: hàng $x$ thay đổi ở những channel mà R3 đang được gate đọc mạnh. Sau đó kéo $s_4$: chỉ hàng R4 trong bảng “Sau GR write” đổi, vì cùng output $y$ được ghi vào mỗi nhánh với một hệ số riêng. Hình dùng 8 channel thay cho 2560; trong model thật, read gate do mạng dự đoán, thanh trượt chỉ giúp thấy tác dụng của nó.
+Chương **Gated Residual** chạy ba bước trên 8 kênh thay cho 2 560: bốn nhánh $R_i$, các cổng đọc $G_i$ theo từng kênh và vector $x$ đưa vào sublayer; output $y$; rồi $y$ được ghi vào từng nhánh với hệ số $s_i$ riêng (1,4; 0,6; 1,0; 0,3), nên nhánh có $s$ lớn thay đổi nhiều nhất.
 
 </Callout>
 
@@ -253,7 +278,7 @@ Về luồng chức năng: processor chuẩn bị pixel/khung hình và các v�
 
 Ở mức khái niệm, merge 2×2 giảm số vị trí không gian sau mã hóa. Không nên lấy kích thước ảnh tùy ý rồi suy ra chính xác số visual token chỉ từ `patch_size`: preprocessing, resizing, padding và cách đóng gói video cũng tham gia. `temporal_patch_size=2` không nói rằng engine luôn lấy video ở 2 FPS. Config có `deepstack_visual_indexes=[]`; vì vậy bài không gán thêm đường DeepStack injection từ model Qwen khác.
 
-Visualization không có phần vision và không chạy nhận diện ảnh. Bài không đưa ảnh dataset hay video của người thật vào demo.
+Lab không có phần vision và không chạy nhận diện ảnh. Bài không đưa ảnh dataset hay video của người thật vào demo.
 
 ## Đầu dự đoán, sampling và Multi-Token Prediction
 
@@ -264,6 +289,12 @@ Sau backbone, phép đọc residual cuối tạo hidden state cho prediction hea
 Luồng speculative decoding là: MTP đề xuất một chuỗi draft → backbone kiểm tra → chấp nhận một prefix phù hợp → xử lý phần bị từ chối theo thuật toán của engine. Muốn bảo toàn phân phối target cần cơ chế acceptance/correction đúng; chọn token nháp trùng top-1 đơn thuần không thay thế thuật toán này.
 
 Báo cáo thay attention của MTP bằng QSA và tái sử dụng top-k index qua các bước draft. Chia sẻ này diễn ra **giữa các bước MTP**, không có nghĩa tất cả QSA layer backbone dùng chung index. Framework cần hỗ trợ và bật MTP thì mới tận dụng được; tốc độ tăng phụ thuộc acceptance rate và chi phí kiểm tra.
+
+<Callout type="try">
+
+Chương **N-gram & MTP**: cụm 2–3 token được băm thành địa chỉ tra bảng n-gram (prefetch từ bộ nhớ host) và cộng vào layer 2; MTP đề xuất 4 token nháp, backbone kiểm tra một lượt và chấp nhận 3 (chuỗi minh họa).
+
+</Callout>
 
 ## Khi ghép các component: Prefill và decode khác nhau
 
