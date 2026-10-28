@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 
 const tools = [
   ['kien-thuc', 'qwen3-8-flash-next', '.layer-map'],
-  ['kien-thuc', 'gated-delta-net', '.heat'],
-  ['kien-thuc', 'sparse-attention', '.attn'],
+  ['kien-thuc', 'gated-delta-net', '.glass-screen canvas'],
+  ['kien-thuc', 'sparse-attention', '.glass-screen canvas'],
   ['kien-thuc', 'gradient-descent', '.glass-screen canvas'],
   ['kien-thuc', 'batch-mini-batch-sgd', '.glass-screen canvas'],
   ['kien-thuc', 'naive-bayes', '.glass-screen canvas'],

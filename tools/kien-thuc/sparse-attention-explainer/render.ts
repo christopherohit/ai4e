@@ -1,141 +1,195 @@
-// Sparse attention lab view: a 32×32 causal attention matrix over a short Python snippet, under dense, fixed sparse
-// patterns and Qwen-style block selection.
-import { $, $$, bars, boot, el, fillTable, fmt, lineChart, onResize, percent, setCard, slider, svg, wireSteps, type Root, type StepText } from '../../_shared/sequence-lab/ui';
-import { BLOCK, BLOCKS, LENGTH, TOKENS, allowed, blockOf, completeBlocks, coverage, indexerScores, strongest, tailStart, topBlocks, topicName, weights, type Pattern } from './model';
+// Sparse attention lab: real attention maps and rows of Qwen2.5-0.5B (where the mass actually goes: attention sink,
+// recent tokens, a few far spikes), fixed patterns (local window, sink + local), QSA's block selection step by step on
+// a 32-token code example, and the measured coverage of each pattern by budget and by layer.
+import { glassLab, type Frame, type Scene } from '../../_shared/glass-lab/engine';
+import { C, Plot, alpha, seg, split, vn, type Rect } from '../../_shared/glass-lab/gfx';
+import { barChart, categoryChart } from '../../_shared/glass-lab/views';
+import { BLOCK, BLOCKS, REAL, TOKENS, allowed, completeBlocks, coverage, indexerScores, tokenText, topBlocks, weights } from './model';
 
 export const explainerKind = 'educational-simulation';
 
-const texts: StepText[] = [
-  ['Dense causal attention', 'Mỗi hàng là một query, mỗi cột là một key. Query chỉ đọc key ở phía trước (tam giác dưới). Ô càng đậm, trọng số softmax càng lớn. Dense đọc toàn bộ prefix nên chi phí tăng theo L².', 'a(i,j) = softmax_j( q_i · k_j / √d ),  j ≤ i'],
-  ['Mẫu thưa cố định', 'Local chỉ giữ cửa sổ gần; global giữ thêm block đầu chuỗi. Mẫu không phụ thuộc nội dung, nên nếu bằng chứng nằm ngoài mẫu thì query không thể đọc được nó trong layer này.', 'a(i,j) = softmax trên j ∈ S(i),  ô ngoài S(i) = 0'],
-  ['QSA: indexer chấm điểm block', 'Key được average-pool theo micro-block 4 token. Indexer (4 head, ReLU) chấm các block đã hoàn chỉnh trước query rồi giữ top-k. Block chưa đủ 4 token là phần đuôi, luôn được giữ.', 'I(i,b) = Σ_h ReLU(⟨q_ih, k̄_b⟩)   chỉ khi 4b + 3 ≤ i'],
-  ['QSA: core attention trên token được chọn', 'Block được chọn mở lại thành token gốc; softmax chỉ chạy trên các token đó cùng phần đuôi. Điểm indexer dùng để chọn vùng, còn trọng số core mới quyết định value nào được trộn.', 'S(i) = token của top-k block ∪ đuôi;  y_i = Σ_{j∈S(i)} a(i,j) v_j'],
-];
+const state = { pic: 2, window: 64, budget: 64, toyBudget: 2 };
+let currentT = 0;
+const pct = (v: number, d = 0) => `${vn(v * 100, d)}%`;
+const pic = () => REAL.pictures[state.pic];
+const O = REAL.overall;
 
-const LABEL = 62, TOP = 52, CELL = 16;
+// ---------- Chapter 1: a real attention map ----------
+function heat(f: Frame, rect: Rect, map: number[][], reveal: number) {
+  const { g } = f, n = map.length, s = Math.min(rect.w - 60, rect.h - 70), cell = s / n, ox = rect.x + (rect.w - s) / 2, oy = rect.y + 44;
+  const peak = Math.max(...map.flat().filter((_, i) => i % (n + 1) !== 0)) || 1;
+  const rows = Math.ceil(n * reveal);
+  for (let i = 0; i < rows; i++) for (let j = 0; j <= i; j++) {
+    const v = Math.min(1, Math.sqrt(map[i][j] / peak));
+    g.ctx.fillStyle = `rgba(${Math.round(80 + 175 * v)},${Math.round(60 + 150 * v)},${Math.round(255 - 120 * v)},${0.08 + 0.92 * v})`;
+    g.ctx.fillRect(ox + j * cell, oy + i * cell, cell + 0.4, cell + 0.4);
+  }
+  g.ctx.strokeStyle = 'rgba(255,255,255,0.18)'; g.ctx.strokeRect(ox, oy, s, s);
+  g.text('key (token được đọc) →', ox + s, oy + s + 16, { size: 11, color: C.muted, align: 'right' });
+  g.text('query ↓', ox - 6, oy + 8, { size: 11, color: C.muted, align: 'right' });
+  return { ox, oy, s };
+}
+const chapter1: Scene = {
+  title: 'Attention thật đọc những đâu?',
+  duration: 10,
+  beats: () => [
+    { at: 0, text: `Bản đồ attention thật của ${REAL.model} trên ${REAL.seq} token văn bản Wikipedia (layer ${pic().layer + 1}, head ${pic().head + 1}), gộp 16×16 token mỗi ô. Hàng là token đang hỏi, cột là token được đọc.` },
+    { at: 3, text: 'Dense attention tính đủ mọi ô dưới đường chéo: 1 024 token là ~525 nghìn cặp mỗi head, mỗi layer; 128K token là 8,6 tỷ cặp.' },
+    { at: 6, text: 'Nhưng khối lượng không trải đều: một cột sáng ở token đầu tiên (attention sink), một dải sáng sát đường chéo (token gần), vài điểm rải rác ở xa. Phần lớn các ô gần như bằng 0.' },
+    { at: 8.5, text: 'Sparse attention dựa vào điều đó: chỉ tính những ô có khả năng lớn. Câu hỏi là chọn ô nào mà không phải tính hết trước.' },
+  ],
+  formula: 'dense: T·(T+1)/2 tích vô hướng mỗi head     sparse: T·B (B = ngân sách token mỗi query)',
+  render(f) {
+    const { g, t, narrow } = f; currentT = t;
+    const [left, right] = split(f.safe, narrow ? [1.2, 1] : [1.3, 1], narrow);
+    g.panel(left.x, left.y, left.w, left.h, `Layer ${pic().layer + 1}, head ${pic().head + 1} · đo thật`, C.violet);
+    heat(f, left, pic().map, seg(t, 0, 3));
+    const lens = [1024, 8192, 32768, 131072];
+    barChart(f, right, 'Số cặp query–key mỗi head (log₁₀)', lens.map(n => (n >= 1024 ? `${n / 1024}K` : String(n))), lens.map(n => Math.log10(n * (n + 1) / 2)), { max: 11, reveal: seg(t, 3, 6), format: v => (10 ** v >= 1e9 ? `${vn(10 ** v / 1e9, 1)} tỷ` : `${vn(10 ** v / 1e6, 1)} tr`), color: C.red, accent: C.red });
+  },
+  metrics: () => [{ label: 'Token', value: String(REAL.seq), tone: 'violet' }, { label: 'Layer × head', value: `${REAL.layers} × ${REAL.heads}`, tone: 'cyan' }],
+};
 
-function start(root: Root) {
-  const view = $(root, '[data-stage-view]');
-  const chartSvg = $(root, '[data-chart]') as unknown as SVGSVGElement;
-  const state = { stage: 0, pattern: 'local' as Exclude<Pattern, 'dense' | 'qsa'> };
-  const query = slider(root, 'query', value => `${value + 1} · “${TOKENS[value].text}”`, () => draw());
-  const budget = slider(root, 'budget', value => `${value} block = ${value * BLOCK} token`, () => draw());
-  $$<HTMLInputElement>(root, 'input[name="pattern"]').forEach(input => input.addEventListener('change', () => { state.pattern = input.value as typeof state.pattern; draw(); }));
-  const setStage = wireSteps(root, stage => { state.stage = stage; draw(); });
-  $(root, '[data-reset]').addEventListener('click', () => { query.set(28); budget.set(2); state.stage = 2; setStage(2); draw(); });
-  $$<HTMLButtonElement>(root, '[data-example]').forEach(button => button.addEventListener('click', () => { query.set(Number(button.dataset.example)); draw(); }));
+// ---------- Chapter 2: one real query row ----------
+function rowView(f: Frame, rect: Rect, row: number[], keep: ((j: number) => boolean) | null, title: string, reveal = 1) {
+  const { g } = f;
+  g.panel(rect.x, rect.y, rect.w, rect.h, title, C.cyan);
+  const plot = new Plot(g, rect, [0, row.length], [0, 1], { l: 16, r: 14, t: 40, b: 30 });
+  plot.axes({ xTicks: [0, 256, 512, 768, 1023], yTicks: [], xLabel: 'vị trí token được đọc', fx: v => String(Math.round(v)) });
+  const peak = Math.max(...row), n = Math.floor(row.length * reveal), w = plot.box.w / row.length;
+  if (keep) for (let j = 0; j < row.length; j += REAL.block) if (keep(j)) { g.ctx.fillStyle = alpha(C.lime, 0.16); g.ctx.fillRect(plot.px(j), plot.box.y, w * REAL.block, plot.box.h); }
+  for (let j = 0; j < n; j++) {
+    const h = Math.sqrt(row[j] / peak) * plot.box.h;
+    g.ctx.fillStyle = keep && !keep(j) ? alpha(C.red, 0.85) : C.cyan;
+    g.ctx.fillRect(plot.px(j), plot.box.y + plot.box.h - h, Math.max(1, w), h);
+  }
+  return plot;
+}
+const chapter2: Scene = {
+  title: 'Một hàng attention: sink, gần, và vài điểm xa',
+  duration: 11,
+  beats: () => {
+    const row = pic().row, top = [...row.keys()].sort((a, b) => row[b] - row[a]).slice(0, 4);
+    return [
+      { at: 0, text: `Hàng attention thật của token cuối (vị trí 1023), layer ${pic().layer + 1}, head ${pic().head + 1}. Chiều cao là căn bậc hai của trọng số để thấy cả các giá trị nhỏ.` },
+      { at: 3, text: `Bốn token nhận nhiều nhất: ${top.map(j => `“${tokenText(j)}” (${j}, ${pct(row[j], 1)})`).join(', ')}.` },
+      { at: 6, text: `Token đầu tiên nhận ${pct(row[0], 1)} dù không liên quan nội dung: hiện tượng attention sink, softmax cần một chỗ “đổ” khối lượng thừa. Nhiều head ở layer giữa như vậy; layer đầu thì nhìn token gần, layer cuối trải rộng hơn.` },
+      { at: 9, text: 'Đổi head bằng các nút để so sánh. Không có một mẫu cố định nào đúng cho mọi head.' },
+    ];
+  },
+  formula: () => { const row = pic().row; return `token đầu (sink): ${pct(row[0], 1)}   ·   64 token gần nhất: ${pct(row.slice(-64).reduce((s, v) => s + v, 0), 1)}   ·   phần còn lại: ${pct(1 - row[0] - row.slice(-64).reduce((s, v) => s + v, 0), 1)}`; },
+  render(f) {
+    const { t } = f; currentT = t;
+    rowView(f, f.safe, pic().row, null, `Trọng số attention của token cuối · layer ${pic().layer + 1}, head ${pic().head + 1}`, seg(t, 0, 3));
+  },
+  metrics: () => { const row = pic().row; return [{ label: 'Sink (token 0)', value: pct(row[0], 1), tone: 'violet' }, { label: '64 token gần', value: pct(row.slice(-64).reduce((s, v) => s + v, 0), 1), tone: 'cyan' }]; },
+};
 
-  function draw() {
-    const i = query.value, k = budget.value;
-    setCard(root, state.stage, 4, texts[state.stage]);
-    const pattern: Pattern = state.stage === 0 ? 'dense' : state.stage === 1 ? state.pattern : 'qsa';
-    $(root, '[data-pattern-field]').hidden = state.stage !== 1;
-    view.replaceChildren();
-    const dense = weights(i, allowed('dense', i, k));
-    const target = strongest(dense);
-    const intro = el('p', { class: 'note' }, `Query “${TOKENS[i].text}” (vị trí ${i + 1}) đang tìm `, el('strong', {}, topicName(TOKENS[i].seeks)), `. Với dense attention, key mạnh nhất là “${TOKENS[target].text}” ở vị trí ${target + 1} (${percent(dense[target])}).`);
+// ---------- Chapter 3: fixed patterns ----------
+const chapter3: Scene = {
+  title: 'Mẫu cố định: cửa sổ gần và attention sink',
+  duration: 10,
+  beats: () => [
+    { at: 0, text: `Đo trên mọi layer, mọi head, 512 query ở nửa sau chuỗi: chỉ đọc ${state.window} token gần nhất (sliding window) giữ được ${pct(O[`local${state.window}`])} khối lượng attention.` },
+    { at: 3.5, text: `Giữ thêm 4 token đầu (attention sink, StreamingLLM) cùng ngân sách: ${pct(O[`sink${state.window}`])}. Bốn token rẻ nhất mang phần lớn khối lượng bị thiếu.` },
+    { at: 6.5, text: 'Phần còn thiếu là các token ở xa nhưng liên quan nội dung: một tên riêng nhắc lại, một định nghĩa phía trước. Mẫu cố định không biết chúng ở đâu; cần chọn theo nội dung.' },
+  ],
+  formula: () => `độ phủ = Σ_{j ∈ tập đọc} A[i, j]   (A: softmax dense)     cửa sổ ${state.window}: ${pct(O[`local${state.window}`], 1)}  ·  sink + cửa sổ: ${pct(O[`sink${state.window}`], 1)}`,
+  render(f) {
+    const { t, narrow } = f; currentT = t;
+    const [left, right] = split(f.safe, narrow ? [1, 1] : [1.5, 1], narrow);
+    const W = state.window, q = REAL.seq - 1;
+    const keep = t < 3.5 ? (j: number) => j > q - W : (j: number) => j > q - (W - REAL.sink) || j < REAL.sink;
+    rowView(f, left, pic().row, keep, `Cùng hàng attention, vùng xanh là token được đọc (${t < 3.5 ? `cửa sổ ${W}` : `4 sink + cửa sổ ${W - 4}`})`);
+    categoryChart(f, right, 'Độ phủ trung bình (mọi layer, head)', REAL.windows.map(String), [
+      { label: 'cửa sổ', values: REAL.windows.map(w => O[`local${w}`]), color: C.red, format: v => pct(v) },
+      { label: 'sink + cửa sổ', values: REAL.windows.map(w => O[`sink${w}`]), color: C.amber, format: v => pct(v) },
+    ], [0, 1], REAL.windows.indexOf(W), seg(t, 1, 6), v => pct(v), 'ngân sách token');
+  },
+  metrics: () => [{ label: `Cửa sổ ${state.window}`, value: pct(O[`local${state.window}`], 1), tone: 'red' }, { label: 'Sink + cửa sổ', value: pct(O[`sink${state.window}`], 1), tone: 'amber' }],
+};
 
-    if (state.stage === 2) {
-      view.append(intro, compressed(i, k, row => { query.set(row); draw(); }));
-      const scores = indexerScores(i);
-      const picked = topBlocks(i, k);
-      const max = Math.max(1e-9, ...scores.map(score => score ?? 0));
-      view.append(el('div', {}, el('h4', {}, `Điểm indexer của query ${i + 1}: giữ ${picked.length} block cao nhất`), bars(scores.map((score, block) => ({
-        label: `B${block} · ${TOKENS.slice(block * BLOCK, block * BLOCK + BLOCK).map(token => token.text).join(' ')}`,
-        value: score ?? 0, text: score === null ? (block === completeBlocks(i) && tailStart(i) <= i ? 'đuôi' : 'tương lai') : fmt(score, 1),
-        tone: score === null ? 0 : picked.includes(block) ? 2 : 1, on: picked.includes(block),
-      })), max, 'Điểm indexer theo block')));
-      const tail = TOKENS.slice(tailStart(i), i + 1).map(token => token.text).join(' ');
-      view.append(el('p', { class: 'note' }, `Block được chọn: ${picked.map(block => 'B' + block).join(', ') || 'chưa có block hoàn chỉnh'}. ${tail ? `Phần đuôi “${tail}” (${i + 1 - tailStart(i)} token) luôn được giữ vì block của nó chưa đủ 4 token.` : 'Query vừa đóng một block nên không có phần đuôi.'}`));
-    } else {
-      const keep = allowed(pattern, i, k);
-      const row = weights(i, keep);
-      view.append(intro, matrix(pattern, i, k, picked => { query.set(picked); draw(); }));
-      if (state.stage > 0) {
-        const kept = keep.includes(target);
-        view.append(el('dl', { class: 'answer' },
-          el('div', {}, el('dt', {}, 'Token được đọc'), el('dd', {}, `${keep.length} / ${i + 1}`)),
-          el('div', {}, el('dt', {}, `Giữ được “${TOKENS[target].text}” (vị trí ${target + 1})?`), el('dd', {}, kept ? 'Có ' : 'Không ', el('span', { class: `badge ${kept ? 'ok' : 'bad'}` }, kept ? 'đọc được' : 'bị mask'))),
-          el('div', {}, el('dt', {}, 'Phần khối lượng dense được giữ'), el('dd', {}, percent(coverage(pattern, i, k))))));
-      }
-      const order = [...dense.keys()].filter(j => j <= i).sort((a, b) => dense[b] - dense[a]).slice(0, 6);
-      const rowsFor = (values: number[], tone: 1 | 2) => order.map(j => ({ label: `${j + 1} · ${TOKENS[j].text}`, value: values[j], text: values[j] ? percent(values[j]) : 'mask', tone: values[j] ? tone : 0 as const, on: j === target }));
-      view.append(state.stage === 0
-        ? el('div', {}, el('h4', {}, `6 key mạnh nhất của query ${i + 1}`), bars(rowsFor(dense, 1), 1, 'Trọng số dense'))
-        : el('div', { class: 'duo' }, el('div', {}, el('h4', {}, 'Dense'), bars(rowsFor(dense, 1), 1, 'Trọng số dense')), el('div', {}, el('h4', {}, pattern === 'qsa' ? 'QSA (sau khi chọn block)' : pattern === 'local' ? 'Local window' : 'Global + local'), bars(rowsFor(row, 2), 1, 'Trọng số sau mask'))));
+// ---------- Chapter 4: QSA step by step on 32 code tokens ----------
+const Q = TOKENS.length - 1;
+function toyStrip(f: Frame, rect: Rect, t: number) {
+  const { g } = f, scores = indexerScores(Q), blocks = topBlocks(Q, state.toyBudget), keep = allowed('qsa', Q, state.toyBudget), w = weights(Q, keep);
+  const cw = (rect.w - 30) / TOKENS.length, y0 = rect.y + 50, ox = rect.x + 15;
+  const s1 = seg(t, 2, 4), s2 = seg(t, 4.5, 6.5), s3 = seg(t, 7, 9);
+  const maxScore = Math.max(...scores.map(s => s ?? 0)) || 1;
+  for (let b = 0; b < BLOCKS; b++) {
+    const x = ox + b * BLOCK * cw, picked = blocks.includes(b), complete = b < completeBlocks(Q);
+    g.ctx.strokeStyle = alpha(picked && s2 > 0 ? C.lime : C.white, 0.25 + 0.5 * (picked ? s2 : 0)); g.ctx.lineWidth = picked ? 2 : 1;
+    g.ctx.strokeRect(x + 1, y0 - 4, BLOCK * cw - 2, 40);
+    if (complete && scores[b] !== null) {
+      const h = 50 * (scores[b]! / maxScore) * s1;
+      g.ctx.fillStyle = alpha(picked ? C.lime : C.violet, 0.8); g.ctx.fillRect(x + BLOCK * cw * 0.25, y0 + 110 - h, BLOCK * cw * 0.5, h);
+      g.text(vn(scores[b]!, 1), x + BLOCK * cw / 2, y0 + 122, { size: 10, color: C.muted, align: 'center', alpha: s1 });
     }
-
-    const budgets = Array.from({ length: Math.max(1, completeBlocks(i)) }, (_, index) => index + 1);
-    lineChart(chartSvg, {
-      series: [{ label: 'QSA top-k', values: budgets.map(b => coverage('qsa', i, b)), tone: 2 }, { label: 'Local', values: budgets.map(b => coverage('local', i, b)), tone: 1 }, { label: 'Global + local', values: budgets.map(b => coverage('global', i, b)), tone: 3 }],
-      xLabels: budgets.map(b => `${b * BLOCK}`), yMax: 1, yTicks: [0, 0.5, 1], yFormat: percent, cursor: Math.min(k, budgets.length) - 1, onPick: index => { budget.set(index + 1); draw(); },
-    });
-    $(root, '[data-chart-note]').textContent = `Query ${i + 1} · “${TOKENS[i].text}”`;
-    fillTable($<HTMLTableElement>(root, '[data-table]'), ['Budget (token)', 'QSA', 'Local', 'Global + local'], budgets.map(b => [b * BLOCK, percent(coverage('qsa', i, b)), percent(coverage('local', i, b)), percent(coverage('global', i, b))]));
   }
-
-  onResize(chartSvg.parentElement!, () => draw());
-  draw();
-}
-
-/** Full attention matrix: shade = weight under the pattern, empty = masked, blank = future. */
-function matrix(pattern: Pattern, focus: number, budget: number, pick: (row: number) => void) {
-  const size = LENGTH * CELL;
-  const figure = svg('svg', { viewBox: `0 0 ${LABEL + size + 4} ${TOP + size + 4}`, class: 'attn', role: 'img', 'aria-label': `Ma trận attention ${LENGTH}×${LENGTH}; hàng ${focus + 1} đang chọn` });
-  axisLabels(figure, focus);
-  for (let i = 0; i < LENGTH; i++) {
-    const keep = allowed(pattern, i, budget);
-    const row = weights(i, keep);
-    const group = svg('g', { class: 'row', 'data-row': i });
-    for (let j = 0; j <= i; j++) {
-      const on = keep.includes(j);
-      const rect = svg('rect', { x: LABEL + j * CELL + 1, y: TOP + i * CELL + 1, width: CELL - 2, height: CELL - 2, rx: 2, class: on ? 'cell' : 'cell masked' });
-      if (on) rect.setAttribute('style', `--w:${Math.round(Math.min(1, Math.sqrt(row[j])) * 100)}%`);
-      group.append(rect);
-    }
-    group.append(svg('rect', { x: 0, y: TOP + i * CELL, width: LABEL + size, height: CELL, class: 'row-hit' }));
-    group.addEventListener('click', () => pick(i));
-    figure.append(group);
-  }
-  for (let b = 1; b < BLOCKS; b++) figure.append(svg('line', { x1: LABEL + b * BLOCK * CELL, x2: LABEL + b * BLOCK * CELL, y1: TOP, y2: TOP + size, class: 'block-line' }));
-  figure.append(svg('rect', { x: LABEL - 1, y: TOP + focus * CELL, width: (focus + 1) * CELL + 2, height: CELL, class: 'row-focus' }));
-  return wrap(figure, 'Nhấp một hàng để chọn query. Đường dọc mờ chia micro-block 4 token; ô viền nhạt là key bị mask.');
-}
-
-/** Compressed indexer mask: query rows × key blocks. */
-function compressed(focus: number, budget: number, pick: (row: number) => void) {
-  const width = BLOCKS * CELL * BLOCK;
-  const figure = svg('svg', { viewBox: `0 0 ${LABEL + width + 4} ${TOP + LENGTH * CELL + 4}`, class: 'attn', role: 'img', 'aria-label': 'Mask nén của indexer: hàng là query, cột là block 4 token' });
-  axisLabels(figure, focus, true);
-  for (let i = 0; i < LENGTH; i++) {
-    const scores = indexerScores(i);
-    const picked = topBlocks(i, budget);
-    const max = Math.max(1e-9, ...scores.map(score => score ?? 0));
-    const group = svg('g', { class: 'row' });
-    scores.forEach((score, b) => {
-      const x = LABEL + b * BLOCK * CELL + 1, y = TOP + i * CELL + 1;
-      if (score !== null) {
-        group.append(svg('rect', { x, y, width: BLOCK * CELL - 2, height: CELL - 2, rx: 2, class: picked.includes(b) ? 'cell picked' : 'cell', style: `--w:${Math.round(score / max * 85)}%` }));
-      } else if (b * BLOCK <= i) {
-        group.append(svg('rect', { x, y, width: (i - b * BLOCK + 1) * CELL - 2, height: CELL - 2, rx: 2, class: 'cell tail' }));
-      }
-    });
-    group.append(svg('rect', { x: 0, y: TOP + i * CELL, width: LABEL + width, height: CELL, class: 'row-hit' }));
-    group.addEventListener('click', () => pick(i));
-    figure.append(group);
-  }
-  figure.append(svg('rect', { x: LABEL - 1, y: TOP + focus * CELL, width: (focus + 1) * CELL + 2, height: CELL, class: 'row-focus' }));
-  return wrap(figure, 'Mỗi ô rộng là một block 4 key. Màu cam: block lọt top-k của hàng đó. Ô sọc: phần đuôi chưa đủ block, luôn giữ.');
-}
-
-function axisLabels(figure: SVGSVGElement, focus: number, blocks = false) {
-  TOKENS.forEach((token, index) => {
-    figure.append(svg('text', { x: LABEL - 6, y: TOP + index * CELL + CELL / 2 + 3.5, class: index === focus ? 'lbl on' : 'lbl', 'text-anchor': 'end' }, `${token.text} ${index + 1}`));
-    if (!blocks) figure.append(svg('text', { x: 0, y: 0, class: blockOf(index) % 2 ? 'lbl col alt' : 'lbl col', transform: `translate(${LABEL + index * CELL + CELL / 2 + 3}, ${TOP - 6}) rotate(-60)` }, token.text));
+  TOKENS.forEach((tok, j) => {
+    const x = ox + j * cw + cw / 2, on = keep.includes(j);
+    g.text(tok.text, x, y0 + 16, { size: Math.min(12, cw * 0.8), color: on || s2 === 0 ? C.ink : C.faint, align: 'center', mono: true });
+    const h = 60 * w[j] * s3 * 2;
+    g.ctx.fillStyle = C.amber; g.ctx.fillRect(x - cw * 0.3, y0 + 210 - h, cw * 0.6, h);
   });
-  if (blocks) for (let b = 0; b < BLOCKS; b++) figure.append(svg('text', { x: LABEL + (b + 0.5) * BLOCK * CELL, y: TOP - 8, class: 'lbl', 'text-anchor': 'middle' }, `B${b}`));
+  g.text('điểm indexer từng block (q · trung bình key)', ox, y0 + 58, { size: 11, color: C.violet, alpha: s1 });
+  g.text('attention sau khi mở block đã chọn', ox, y0 + 150, { size: 11, color: C.amber, alpha: s3 });
+  g.text(`query: “${TOKENS[Q].text}” (token cuối)`, ox + rect.w - 30, y0 - 18, { size: 11.5, color: C.ink, align: 'right' });
 }
+const chapter4: Scene = {
+  title: 'QSA từng bước: chấm điểm block, chọn top-k, mở ra token',
+  duration: 11,
+  beats: () => [
+    { at: 0, text: 'Ví dụ nhỏ 32 token code (def area(r): return PI*r*r …). Qwen Sparse Attention không chấm từng token mà gộp key thành micro-block 4 token.' },
+    { at: 2, text: 'Bước 1: indexer (vài head nhỏ, ReLU) chấm điểm mỗi block hoàn chỉnh bằng tích vô hướng với key trung bình của block. Rẻ: số block ít hơn số token 4 lần, head nhỏ hơn.' },
+    { at: 4.5, text: `Bước 2: giữ ${state.toyBudget} block điểm cao nhất (khung xanh) cùng block đang dở của chính query. Token ngoài block bị bỏ qua hoàn toàn.` },
+    { at: 7, text: `Bước 3: attention đầy đủ chỉ trên các token đã chọn (cột vàng). Độ phủ so với dense: ${pct(coverage('qsa', Q, state.toyBudget))}. Qwen3.8 dùng ngân sách 2 048 token mỗi query.` },
+  ],
+  formula: 'điểm(b) = Σ_h ReLU(q_hᴵ · k̄_b),   k̄_b = trung bình 4 key của block b,   tập đọc = top-k block ∪ block hiện tại',
+  render(f) {
+    const { t } = f; currentT = t;
+    f.g.panel(f.safe.x, f.safe.y, f.safe.w, f.safe.h, 'Ví dụ 32 token · mô phỏng', C.lime);
+    toyStrip(f, f.safe, t);
+  },
+  metrics: () => [{ label: 'Block chọn', value: `${state.toyBudget} / ${completeBlocks(Q)}`, tone: 'lime' }, { label: 'Độ phủ', value: pct(coverage('qsa', Q, state.toyBudget)), tone: 'amber' }],
+};
 
-const wrap = (figure: SVGSVGElement, caption: string) => el('figure', { class: 'attn-figure' }, figure as unknown as Node, el('figcaption', { class: 'hint' }, caption));
+// ---------- Chapter 5: measured coverage by budget and layer ----------
+const chapter5: Scene = {
+  title: 'Đo thật: chọn block theo nội dung giữ được bao nhiêu?',
+  duration: 12,
+  beats: () => {
+    const B = state.budget;
+    return [
+      { at: 0, text: `Cùng phép đo trên Qwen2.5-0.5B, chọn block 4 token theo điểm q · key trung bình như QSA (chưa huấn luyện indexer riêng), ngân sách ${B} token mỗi query.` },
+      { at: 3, text: `Chọn theo nội dung giữ ${pct(O[`index${B}`])} khối lượng; chọn hoàn hảo theo khối lượng thật (giới hạn trên) ${pct(O[`oracle${B}`])}; sink + cửa sổ cùng ngân sách ${pct(O[`sink${B}`])}.` },
+      { at: 6.5, text: `Ngân sách 256 token (25% chuỗi 1 024): chọn theo nội dung đạt ${pct(O.index256)}. Ở chuỗi dài, cùng ngân sách là một phần rất nhỏ, nên chất lượng indexer quyết định tất cả: QSA huấn luyện riêng indexer để bắt chước attention dense.` },
+      { at: 9.5, text: 'Theo layer: hai layer cuối khó làm thưa nhất (attention trải rộng), các layer giữa phần lớn là sink + vài block. Mô hình hybrid chỉ dùng attention ở 1/4 số layer.' },
+    ];
+  },
+  formula: () => `ngân sách ${state.budget}: theo nội dung ${pct(O[`index${state.budget}`], 1)}  ·  giới hạn trên ${pct(O[`oracle${state.budget}`], 1)}  ·  sink + cửa sổ ${pct(O[`sink${state.budget}`], 1)}`,
+  render(f) {
+    const { t, narrow } = f; currentT = t;
+    const [left, right] = split(f.safe, [1, 1.3], narrow);
+    categoryChart(f, left, 'Độ phủ theo ngân sách token', REAL.budgets.map(String), [
+      { label: 'sink + cửa sổ', values: REAL.budgets.map(b => O[`sink${b}`]), color: C.amber, format: v => pct(v) },
+      { label: 'top-k block (q·k̄)', values: REAL.budgets.map(b => O[`index${b}`]), color: C.lime, format: v => pct(v) },
+      { label: 'giới hạn trên', values: REAL.budgets.map(b => O[`oracle${b}`]), color: C.white, format: v => pct(v) },
+    ], [0.4, 1], REAL.budgets.indexOf(state.budget), seg(t, 1, 6), v => pct(v), 'ngân sách token');
+    const layers = REAL.perLayer.map((_, i) => String(i + 1));
+    categoryChart(f, right, 'Theo layer, ngân sách 64', layers.map((l, i) => (i % 4 === 0 || i === layers.length - 1 ? l : '')), [
+      { label: 'cửa sổ 64', values: REAL.perLayer.map(l => l.local64), color: C.red, format: v => pct(v) },
+      { label: 'sink + cửa sổ', values: REAL.perLayer.map(l => l.sink64), color: C.amber, format: v => pct(v) },
+      { label: 'top-k block', values: REAL.perLayer.map(l => l.index64), color: C.lime, format: v => pct(v) },
+    ], [0, 1], null, seg(t, 9.5, 11.5), v => pct(v), 'layer');
+  },
+  metrics: () => [{ label: `Top-k block, ${state.budget}`, value: pct(O[`index${state.budget}`], 1), tone: 'lime' }, { label: 'Giới hạn trên', value: pct(O[`oracle${state.budget}`], 1), tone: 'violet' }],
+  table: () => ({ headers: ['Layer', 'Cửa sổ 64', 'Sink + cửa sổ 64', 'Top-k block 64', 'Giới hạn trên 64', 'Top-k block 256'], rows: REAL.perLayer.map((l, i) => [i + 1, pct(l.local64, 1), pct(l.sink64, 1), pct(l.index64, 1), pct(l.oracle64, 1), pct(l.index256, 1)]), caption: 'Trung bình 14 head × 512 query (vị trí 512–1023).' }),
+};
 
-export const initSparseAttentionLab = () => boot('sparse-attention', start);
+export const initSparseAttentionLab = () => glassLab('sparse-attention', [chapter1, chapter2, chapter3, chapter4, chapter5], lab => {
+  lab.on('[data-pic]', 'click', el => { state.pic = Number(el.dataset.pic); document.querySelectorAll<HTMLElement>('[data-pic]').forEach(b => b.setAttribute('aria-pressed', String(b === el))); lab.invalidate(); });
+  lab.range('window', v => `${REAL.windows[v]} token`, v => { state.window = REAL.windows[v]; lab.invalidate(); });
+  lab.range('budget', v => `${REAL.budgets[v]} token`, v => { state.budget = REAL.budgets[v]; lab.invalidate(); });
+  lab.range('toy', v => `${v} block`, v => { state.toyBudget = v; lab.invalidate(); });
+});

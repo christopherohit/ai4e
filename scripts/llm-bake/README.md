@@ -1,6 +1,6 @@
 # LLM bake scripts
 
-Real measurements behind the LLM-systems labs (tools/kien-thuc/{jev,paged-attention,inference-engineering,moe,quantization,lora}-explainer).
+Real measurements behind the LLM-systems labs (tools/kien-thuc/{jev,paged-attention,inference-engineering,moe,quantization,lora,sparse-attention}-explainer).
 
 ```sh
 python -m venv .venv
@@ -11,6 +11,7 @@ python -m venv .venv
 .venv/bin/python scripts/llm-bake/moe.py        # small MoE on UCI digits: router, top-2, load-balancing loss (teaching model)
 .venv/bin/python scripts/llm-bake/quantize.py   # Qwen2.5-0.5B-Instruct: RTN INT8/4/3/2, per-tensor/channel/group, WikiText-2 perplexity
 .venv/bin/python scripts/llm-bake/lora.py       # Qwen2.5-0.5B-Instruct on SST-2: LoRA, rsLoRA, DoRA, PiSSA, VeRA, LoHa, QLoRA-style (resumable)
+.venv/bin/python scripts/llm-bake/sparse_attention.py  # Qwen2.5-0.5B-Instruct: real attention coverage of window / sink / block top-k
 ```
 
 Times are wall-clock on the machine that ran the script (recorded in each JSON as `device`); the labs say so.
