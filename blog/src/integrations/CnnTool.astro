@@ -1,13 +1,16 @@
 ---
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const bulma = readFileSync(resolve('public/vendor/cnn/bulma.min.css'), 'utf8');
-const globalStyles = readFileSync(resolve('public/viz/cnn-explainer/global.css'), 'utf8')
+// The CNN Explainer bundle is built locally (npm run build:viz); a checkout without it renders the tool's fallback.
+const read = (path: string) => (existsSync(resolve(path)) ? readFileSync(resolve(path), 'utf8') : '');
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const bulma = read('public/vendor/cnn/bulma.min.css');
+const globalStyles = read('public/viz/cnn-explainer/global.css')
   .replace(':root', '#cnn-tool-root')
   .replace('html, body', '#cnn-tool-root')
   .replace('body {', '#cnn-tool-root {');
-const bundleStyles = readFileSync(resolve('public/viz/cnn-explainer/bundle.css'), 'utf8');
+const bundleStyles = read('public/viz/cnn-explainer/bundle.css');
 const styles = `${globalStyles}\n@scope (#cnn-tool-root) { ${bulma}\n${bundleStyles} }`;
 ---
 
@@ -29,14 +32,14 @@ const styles = `${globalStyles}\n@scope (#cnn-tool-root) { ${bulma}\n${bundleSty
       <li><span class="step-number">3</span><div><strong>Nối với kiến thức</strong><span>Nhấp tên lớp để đọc phần giải thích.</span></div></li>
     </ol>
   </section>
-  <script is:inline>
+  <script is:inline define:vars={{ base }}>
     (async function () {
       const status = document.getElementById('cnn-status');
       const root = document.getElementById('cnn-tool-root');
       function loadScript(src) {
         return new Promise((resolve, reject) => {
           const script = document.createElement('script');
-          script.src = src;
+          script.src = base + src;
           script.onload = resolve;
           script.onerror = () => reject(new Error('Không tải được ' + src));
           document.head.appendChild(script);

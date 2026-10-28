@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "npm run build:native-transformer && node scripts/prepare-native.mjs && astro build",
+    "build:site": "node scripts/prepare-native.mjs --optional && astro build && node scripts/rebase-dist.mjs",
     "build:native-transformer": ".viz-build/transformer-explainer/node_modules/.bin/vite build --config scripts/transformer-native/vite.config.mjs",
     "preview": "astro preview",
     "check": "astro check",

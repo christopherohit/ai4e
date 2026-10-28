@@ -4,6 +4,8 @@ import { parse, serialize } from 'parse5';
 
 const slugs = ['dodrio', 'fairvis', 'energyvis', 'viscuit', 'ganlab', 'transformer-explainer', 'diffusion-explainer'];
 const publicDir = resolve('public');
+// --optional: skip tools whose external build is absent (CI and fresh checkouts); their pages show the tool fallback.
+const optional = process.argv.includes('--optional');
 
 function files(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -28,8 +30,10 @@ for (const slug of slugs) {
   const sourceDir = join(publicDir, 'viz', slug);
   const outputDir = join(publicDir, 'native', slug);
   mkdirSync(outputDir, { recursive: true });
+  const built = slug === 'transformer-explainer' ? existsSync(join(outputDir, 'standalone/entry.js')) : existsSync(sourceDir);
+  if (!built && optional) { console.warn(`Native adapter skipped (not built): ${slug}`); continue; }
   if (slug === 'transformer-explainer') {
-    if (!existsSync(join(outputDir, 'standalone/entry.js'))) throw new Error('Run npm run build:native-transformer first.');
+    if (!built) throw new Error('Run npm run build:native-transformer first.');
     const stylesheet = readFileSync(join(outputDir, 'standalone/main.css'), 'utf8');
     writeFileSync(join(outputDir, 'adapter.json'), JSON.stringify({ html: '', scripts: [{ src: '/native/transformer-explainer/standalone/entry.js', type: 'module' }], css: css(stylesheet, new URL('https://local/native/transformer-explainer/standalone/main.css')) }));
     console.log(`Native adapter prepared: ${slug}`);

@@ -173,6 +173,7 @@
 <script>
   import { highlight, loadSearch, search, snippet, type SearchHit } from '../scripts/search';
   import { CATEGORIES, isCategorySlug } from '../lib/site';
+  import { withBase } from '../lib/base';
 
   const dialog = document.getElementById('search-palette') as HTMLDialogElement | null;
   const input = dialog?.querySelector<HTMLInputElement>('[data-search-input]');
@@ -210,7 +211,7 @@
     input.setAttribute('aria-expanded', String(hits.length > 0));
     if (!query) hint.innerHTML = defaultHint;
     else if (hits.length === 0) hint.textContent = `Không có kết quả cho “${query}”. Nhấn Enter để tìm trên trang tìm kiếm.`;
-    else hint.innerHTML = `${hits.length} kết quả hàng đầu · <kbd>Enter</kbd> mở · <a href="/tim-kiem/?q=${encodeURIComponent(query)}">Xem tất cả</a>`;
+    else hint.innerHTML = `${hits.length} kết quả hàng đầu · <kbd>Enter</kbd> mở · <a href="${withBase('/tim-kiem/')}?q=${encodeURIComponent(query)}">Xem tất cả</a>`;
     setActive(-1);
   }
 

@@ -19,7 +19,7 @@ Blog va cong cu tuong tac, tach thanh hai nhom: Kien thuc va Du an.
 - `tools/_shared/`: code va dataset dung chung cho visualize.
 - `docs/architecture/`: kien truc va ban do chuyen muc.
 - `docs/development/`: quy trinh build va kiem tra.
-- `docs/deployment/`: preview va tunnel.
+- `docs/deployment/`: preview, tunnel va GitHub Pages (`.github/workflows/deploy.yml`, https://christopherohit.github.io/ai4e/).
 - `scripts/`: lenh quan ly workspace.
 
 ## Lenh chung
