@@ -17,7 +17,7 @@ The schema validates that each topic belongs to the selected category.
 | du-an | giai-thich-mo-hinh | dodrio |
 | du-an | danh-gia-thien-lech | FairVis, VisCUIT |
 | du-an | nang-luong-ai | EnergyVis |
-| du-an | nhan-vat-so | synctalk, instag |
+| du-an | nhan-vat-so | synctalk, instag, synctalk-pipeline, instag-pipeline |
 | du-an | medlab | medlab-body-atlas |
 
 Topics organize articles; tags link related concepts across these groups.

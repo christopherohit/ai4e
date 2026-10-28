@@ -24,6 +24,8 @@ export const nativeTools = {
   'hypothesis-testing-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/hypothesis-testing-explainer', article: 'p-value' },
   'quantization-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/quantization-explainer', article: 'quantization' },
   'classifier-metrics-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/classifier-metrics-explainer', article: 'danh-gia-bo-phan-loai' },
+  'synctalk-pipeline': { category: 'du-an', source: 'tools/du-an/synctalk-pipeline', article: 'synctalk-tung-buoc' },
+  'instag-pipeline': { category: 'du-an', source: 'tools/du-an/instag-pipeline', article: 'instag-tung-buoc' },
 };
 
 export function validToolName(category, slug) {

@@ -19,6 +19,8 @@ const tools = [
   ['kien-thuc', 'quantization', '.glass-screen canvas'],
   ['kien-thuc', 'p-value', '.glass-screen canvas'],
   ['kien-thuc', 'danh-gia-bo-phan-loai', '.glass-screen canvas'],
+  ['du-an', 'synctalk-tung-buoc', '.glass-screen canvas'],
+  ['du-an', 'instag-tung-buoc', '.glass-screen canvas'],
   ['du-an', 'sdvx-modeler', '.pipe'],
   ['du-an', 'ban-do-co-the-nguoi', '.ml-stage canvas[data-canvas]'],
   ['du-an', 'dodrio', '.graph-container svg'],
