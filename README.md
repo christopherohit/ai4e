@@ -10,6 +10,7 @@ Blog va cong cu tuong tac, tach thanh hai nhom: Kien thuc va Du an.
 - `tools/kien-thuc/{nerf-explainer,gaussian-splatting-explainer}/`: visualize kien thuc moi.
 - `tools/du-an/{synctalk,instag}/`: visualize du an talking-head.
 - `tools/kien-thuc/{gradient-descent,mini-batch-sgd,naive-bayes,svm,bias-variance,regularization}-explainer/`: hoat canh hoc may co ban tren du lieu that (chuyen muc Nen tang), khung chung o `tools/_shared/glass-lab/`.
+- `tools/du-an/medlab-body-atlas/`: MedLab, ban do co the nguoi 3D (WebGL2, BodyParts3D + Human Reference Atlas), du lieu sinh boi `scripts/medlab-atlas/build.mjs`.
 - `scripts/ml-datasets/prepare.py`: tai du lieu cong khai (Auto MPG, California Housing, SMS Spam, Iris, Diabetes) va sinh JSON cho cac lab.
 - `tools/_shared/`: code va dataset dung chung cho visualize.
 - `docs/architecture/`: kien truc va ban do chuyen muc.

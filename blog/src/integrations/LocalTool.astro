@@ -5,6 +5,7 @@ import SyncTalk from '../../../tools/du-an/synctalk/Tool.astro';
 import InsTaG from '../../../tools/du-an/instag/Tool.astro';
 import SdvxModeler from '../../../tools/du-an/sdvx-modeler/Tool.astro';
 import Bswmd from '../../../tools/du-an/bswmd/Tool.astro';
+import MedlabBodyAtlas from '../../../tools/du-an/medlab-body-atlas/Tool.astro';
 import QwenExplainer from '../../../tools/kien-thuc/qwen3-8-flash-next-explainer/Tool.astro';
 import GatedDeltaNetExplainer from '../../../tools/kien-thuc/gated-delta-net-explainer/Tool.astro';
 import SparseAttentionExplainer from '../../../tools/kien-thuc/sparse-attention-explainer/Tool.astro';
@@ -31,6 +32,7 @@ const components = {
   instag: InsTaG,
   'sdvx-modeler': SdvxModeler,
   bswmd: Bswmd,
+  'medlab-body-atlas': MedlabBodyAtlas,
 };
 interface Props { slug: string }
 const { slug } = Astro.props;

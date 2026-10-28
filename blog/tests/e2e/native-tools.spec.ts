@@ -11,6 +11,7 @@ const tools = [
   ['kien-thuc', 'bias-variance', '.glass-screen canvas'],
   ['kien-thuc', 'l1-l2-regularization', '.glass-screen canvas'],
   ['du-an', 'sdvx-modeler', '.pipe'],
+  ['du-an', 'ban-do-co-the-nguoi', '.ml-stage canvas[data-canvas]'],
   ['du-an', 'dodrio', '.graph-container svg'],
   ['du-an', 'fairvis', '#root button'],
   ['du-an', 'energyvis', '#energymap svg'],

@@ -14,6 +14,7 @@ export const nativeTools = {
   bswmd: { category: 'du-an', source: 'tools/du-an/bswmd', article: 'bswmd' },
   synctalk: { category: 'du-an', source: 'tools/du-an/synctalk', article: 'synctalk' },
   instag: { category: 'du-an', source: 'tools/du-an/instag', article: 'instag' },
+  'medlab-body-atlas': { category: 'du-an', source: 'tools/du-an/medlab-body-atlas', article: 'ban-do-co-the-nguoi' },
 };
 
 export function validToolName(category, slug) {
