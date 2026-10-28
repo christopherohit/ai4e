@@ -52,7 +52,7 @@ async function noHorizontalScroll(page: Page) {
 }
 
 test('all built routes return 200, with a working 404 page', async ({ request }) => {
-  expect(postRoutes).toHaveLength(24);
+  expect(postRoutes).toHaveLength(26);
   expect(vizRoutes.map((route) => route.split('/')[2]).sort()).toEqual(Object.keys(vizSelectors).sort());
   for (const route of routes) {
     const response = await request.get(route);
@@ -61,7 +61,7 @@ test('all built routes return 200, with a working 404 page', async ({ request })
   }
   const index = await request.get('/search-index.json');
   expect(index.status()).toBe(200);
-  expect(await index.json()).toHaveLength(24);
+  expect(await index.json()).toHaveLength(26);
   expect((await request.get('/missing-smoke-route/')).status()).toBe(404);
 });
 

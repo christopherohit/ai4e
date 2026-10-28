@@ -9,7 +9,7 @@ The schema validates that each topic belongs to the selected category.
 
 | Category | Topic | Tools |
 | --- | --- | --- |
-| kien-thuc | nen-tang | gradient-descent-explainer, mini-batch-sgd-explainer, naive-bayes-explainer, svm-explainer, bias-variance-explainer, regularization-explainer |
+| kien-thuc | nen-tang | gradient-descent-explainer, mini-batch-sgd-explainer, naive-bayes-explainer, svm-explainer, bias-variance-explainer, regularization-explainer, activation-explainer, pca-explainer |
 | kien-thuc | thi-giac-may-tinh | cnn-explainer, nerf-explainer, gaussian-splatting-explainer |
 | kien-thuc | xu-ly-ngon-ngu | transformer-explainer |
 | kien-thuc | mo-hinh-sinh | diffusion-explainer, ganlab |

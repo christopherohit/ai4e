@@ -15,7 +15,7 @@ describe('project structure', () => {
     expect(validToolName('du-an', 'synctalk')).toBe(true);
   });
   it('keeps native visualization entries in tools with knowledge naming conventions', () => {
-    expect(Object.keys(nativeTools)).toHaveLength(16);
+    expect(Object.keys(nativeTools)).toHaveLength(18);
     for (const [slug, tool] of Object.entries(nativeTools)) {
       expect(tool.source).toBe(`tools/${tool.category}/${slug}`);
       if (tool.category === 'kien-thuc') expect(slug).toMatch(/-explainer$/);
@@ -44,7 +44,7 @@ describe('project structure', () => {
   it('stores every article under its category/topic with a unique public slug', () => {
     const directory = resolve('src/content/posts');
     const articles = readdirSync(directory, { recursive: true }).map(String).filter(path => path.endsWith('.mdx'));
-    expect(articles).toHaveLength(24);
+    expect(articles).toHaveLength(26);
     const slugs = new Set<string>();
     for (const file of articles) {
       const [category, topic, filename] = file.split('/');

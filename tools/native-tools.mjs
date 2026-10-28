@@ -15,6 +15,8 @@ export const nativeTools = {
   synctalk: { category: 'du-an', source: 'tools/du-an/synctalk', article: 'synctalk' },
   instag: { category: 'du-an', source: 'tools/du-an/instag', article: 'instag' },
   'medlab-body-atlas': { category: 'du-an', source: 'tools/du-an/medlab-body-atlas', article: 'ban-do-co-the-nguoi' },
+  'activation-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/activation-explainer', article: 'ham-kich-hoat' },
+  'pca-explainer': { category: 'kien-thuc', source: 'tools/kien-thuc/pca-explainer', article: 'pca' },
 };
 
 export function validToolName(category, slug) {

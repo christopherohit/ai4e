@@ -16,6 +16,8 @@ import SvmExplainer from '../../../tools/kien-thuc/svm-explainer/Tool.astro';
 import BiasVarianceExplainer from '../../../tools/kien-thuc/bias-variance-explainer/Tool.astro';
 import RegularizationExplainer from '../../../tools/kien-thuc/regularization-explainer/Tool.astro';
 
+import ActivationExplainer from '../../../tools/kien-thuc/activation-explainer/Tool.astro';
+import PcaExplainer from '../../../tools/kien-thuc/pca-explainer/Tool.astro';
 const components = {
   'qwen3-8-flash-next-explainer': QwenExplainer,
   'gated-delta-net-explainer': GatedDeltaNetExplainer,
@@ -33,6 +35,8 @@ const components = {
   'sdvx-modeler': SdvxModeler,
   bswmd: Bswmd,
   'medlab-body-atlas': MedlabBodyAtlas,
+  'activation-explainer': ActivationExplainer,
+  'pca-explainer': PcaExplainer,
 };
 interface Props { slug: string }
 const { slug } = Astro.props;

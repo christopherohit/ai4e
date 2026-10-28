@@ -10,6 +10,8 @@ const tools = [
   ['kien-thuc', 'svm', '.glass-screen canvas'],
   ['kien-thuc', 'bias-variance', '.glass-screen canvas'],
   ['kien-thuc', 'l1-l2-regularization', '.glass-screen canvas'],
+  ['kien-thuc', 'ham-kich-hoat', '.glass-screen canvas'],
+  ['kien-thuc', 'pca', '.glass-screen canvas'],
   ['du-an', 'sdvx-modeler', '.pipe'],
   ['du-an', 'ban-do-co-the-nguoi', '.ml-stage canvas[data-canvas]'],
   ['du-an', 'dodrio', '.graph-container svg'],

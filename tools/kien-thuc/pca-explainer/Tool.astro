@@ -1,0 +1,19 @@
+---
+import GlassLab from '../../_shared/glass-lab/GlassLab.astro';
+---
+<GlassLab id="pca" title="PCA · tìm hướng giữ lại nhiều thông tin nhất" label="Hoạt cảnh phân tích thành phần chính trên dữ liệu xe Auto MPG và ảnh chữ số viết tay"
+  chapters={['Chuẩn hóa', 'Xoay trục', 'Vector riêng', 'Giảm chiều', 'Ảnh chữ số']}
+  data="Auto MPG (UCI, Quinlan 1993): khối lượng và mã lực của 392 xe. Chữ số viết tay 8×8 (UCI Optical Recognition of Handwritten Digits, bản đi kèm scikit-learn): 1 797 ảnh."
+  scope="Ma trận hiệp phương sai và phân rã trị riêng 2×2 tính lại trong trình duyệt; giá trị khớp sklearn.decomposition.PCA (λ₁ = 1,8645, λ₂ = 0,1355). PCA 64 chiều của ảnh chữ số tính sẵn bằng scikit-learn; trình duyệt chỉ cộng các thành phần để tái tạo.">
+  <Fragment slot="controls">
+    <label class="field" data-chapters="1 2"><span class="field-row"><span>Hướng u</span><output data-value="angle"></output></span><input type="range" name="angle" min="-90" max="90" step="1" value="45" /></label>
+    <p class="hint" data-chapters="1 2">Kéo để tự xoay hướng; bấm ↺ để xem lại hoạt cảnh quét mọi góc.</p>
+    <label class="field" data-chapters="4"><span class="field-row"><span>Số thành phần k</span><output data-value="k"></output></span><input type="range" name="k" min="1" max="64" step="1" value="10" /></label>
+    <div class="field" data-chapters="4">Chữ số<div class="chips"><button type="button" data-sample="0">0</button><button type="button" data-sample="2">2</button><button type="button" data-sample="3">3</button><button type="button" data-sample="5">5</button><button type="button" data-sample="7">7</button><button type="button" data-sample="11">8</button></div></div>
+    <div class="actions" data-chapters="1 2 4"><button type="button" data-autoplay>Xem lại hoạt cảnh tự động</button></div>
+  </Fragment>
+</GlassLab>
+<script>
+  import { initPcaLab } from './render';
+  initPcaLab();
+</script>
